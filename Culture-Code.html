@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Work out which ESKAPE pathogen grew in each of five outbreak samples, using peg clues and real lab tests.">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Culture Code</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: a bench tray. Covered sample plates pinned at the top, rows of agar dishes for guesses, the bug rack pinned at the bottom; lab reference beside the board on wide screens, below it on phones. */
+:root{
+  --bg:#E9EEF0; --paper:#F8FAFB; --ink:#14232B; --muted:#55666E; --line:#C6D2D6;
+  --accent:#6A3FC4; --accent-ink:#FFFFFF; --good:#21805A; --warn:#B24A1F;
+  --agar:#F1EAD2; --rim:#B3C2C8; --lid:#D3DEE2; --lid-hi:#F4F8F9;
+  --gpos:#55299F; --gpos-bg:#E7DEF8; --gneg:#A42C59; --gneg-bg:#F8DDE7;
+  --scrim:rgba(14,24,30,.55);
+  --font-display:"Bricolage Grotesque","Arial Narrow",system-ui,sans-serif;
+  --font-body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  --bench-h:230px; --top-h:110px;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0E1619; --paper:#152127; --ink:#E3EBED; --muted:#93A4AB; --line:#2A3B42;
+  --accent:#A98CF1; --accent-ink:#170C30; --good:#4CC28A; --warn:#EE8F60;
+  --agar:#2B2A22; --rim:#3A535C; --lid:#1F3038; --lid-hi:#2F4651;
+  --gpos:#C7B2F8; --gpos-bg:#2C2248; --gneg:#F3A0BF; --gneg-bg:#3D1E2B;
+  --scrim:rgba(0,0,0,.62);
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0E1619; --paper:#152127; --ink:#E3EBED; --muted:#93A4AB; --line:#2A3B42;
+  --accent:#A98CF1; --accent-ink:#170C30; --good:#4CC28A; --warn:#EE8F60;
+  --agar:#2B2A22; --rim:#3A535C; --lid:#1F3038; --lid-hi:#2F4651;
+  --gpos:#C7B2F8; --gpos-bg:#2C2248; --gneg:#F3A0BF; --gneg-bg:#3D1E2B;
+  --scrim:rgba(0,0,0,.62);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.5;-webkit-tap-highlight-color:transparent}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+#app{max-width:1040px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px 32px;display:grid;grid-template-columns:minmax(0,1fr);gap:32px}
+@media (min-width:860px){ #app{grid-template-columns:minmax(0,460px) minmax(0,1fr);gap:48px;align-items:start} .side{padding-top:6px} }
+.play{display:flex;flex-direction:column;gap:12px;min-width:0;width:100%;max-width:460px;margin-inline:auto}
+
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.eyebrow,.label{font-family:var(--font-mono);font-size:11px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0}
+h1{font-family:var(--font-display);font-weight:800;font-size:clamp(32px,9vw,42px);line-height:.92;letter-spacing:-.025em;margin:4px 0 0;font-variation-settings:"opsz" 96}
+h1 span{color:var(--accent)}
+
+.btn{appearance:none;font:inherit;font-weight:700;font-size:14px;border-radius:10px;border:1px solid var(--line);background:var(--paper);color:var(--ink);padding:9px 12px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn .count{font-family:var(--font-mono);font-weight:600;background:var(--bg);border-radius:6px;padding:0 6px;font-size:13px}
+button:focus-visible,.opt input:focus-visible+span{outline:3px solid var(--accent);outline-offset:2px}
+
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:4px}
+.modes button{appearance:none;border:0;background:transparent;border-radius:9px;padding:6px;font:inherit;font-weight:700;font-size:14px;color:var(--ink);cursor:pointer;display:flex;flex-direction:column;align-items:center;line-height:1.25}
+.modes button small{font-weight:400;font-size:12px;color:var(--muted)}
+.modes button[aria-checked="true"]{background:var(--accent);color:var(--accent-ink)}
+.modes button[aria-checked="true"] small{color:inherit;opacity:.85}
+
+.grid5{display:grid;grid-template-columns:24px repeat(5,minmax(0,1fr)) 34px;gap:6px;align-items:center}
+.samples{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:8px 10px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:4px}
+.status{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+#status{color:var(--ink)}
+.nums span{font-family:var(--font-mono);font-size:11px;color:var(--muted);text-align:center}
+.lid{appearance:none;font:inherit;color:var(--muted);aspect-ratio:1;width:100%;max-width:56px;justify-self:center;border-radius:50%;border:2px solid var(--rim);
+  background:radial-gradient(circle at 34% 28%,var(--lid-hi) 0 16%,var(--lid) 62%);display:flex;flex-wrap:wrap;align-content:center;justify-content:center;gap:1px;padding:4px;overflow:hidden}
+button.lid{cursor:pointer}
+button.lid:hover{border-color:var(--accent)}
+.lid .q{font-family:var(--font-display);font-weight:800;font-size:clamp(16px,4.6vw,21px);line-height:1}
+.lid img{display:block;height:auto}
+.lid.c1 img{width:74%} .lid.c2 img{width:44%} .lid.c3 img,.lid.c4 img{width:38%} .lid.c5 img,.lid.c6 img{width:29%}
+.lid.open{background:var(--agar);padding:0;align-content:center}
+.lid.open img{width:86%}
+.lid.open.anim img{animation:pop .45s cubic-bezier(.3,1.6,.5,1) backwards;animation-delay:calc(var(--d) * 90ms)}
+
+.rows{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.row{padding-block:4px;border-radius:14px}
+.row.current{background:var(--paper);box-shadow:inset 0 0 0 1px var(--line);padding-block:7px;scroll-margin-top:calc(var(--top-h) + 8px);scroll-margin-bottom:calc(var(--bench-h) + 8px)}
+.rn{font-family:var(--font-mono);font-size:12px;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums}
+.dish{appearance:none;font:inherit;color:var(--muted);aspect-ratio:1;width:100%;max-width:56px;justify-self:center;border-radius:50%;background:var(--agar);border:2px solid var(--rim);display:grid;place-items:center;padding:0;overflow:hidden}
+.dish img{width:86%;height:auto;display:block}
+button.dish{cursor:pointer}
+button.dish.empty{background:transparent;border-style:dashed}
+button.dish.target{box-shadow:0 0 0 3px var(--accent)}
+.pegs{display:grid;grid-template-columns:repeat(3,9px);gap:3px;justify-content:center;align-content:center}
+.peg{display:block;width:9px;height:9px;border-radius:50%;position:relative;font-style:normal}
+.peg.hit{background:var(--ink)}
+.peg.near{box-shadow:inset 0 0 0 2px var(--ink)}
+.peg.miss::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--rim)}
+.peg.inline{display:inline-block;vertical-align:-1px;margin:0 2px 0 1px}
+.row.fresh .peg{animation:pop .32s cubic-bezier(.3,1.6,.5,1) backwards}
+.row.fresh .peg:nth-child(2){animation-delay:.07s} .row.fresh .peg:nth-child(3){animation-delay:.14s}
+.row.fresh .peg:nth-child(4){animation-delay:.21s} .row.fresh .peg:nth-child(5){animation-delay:.28s}
+@keyframes pop{from{transform:scale(0)}}
+
+.bench{position:sticky;bottom:0;z-index:5;background:var(--bg);border-top:1px solid var(--line);padding-block:8px max(10px,env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:8px}
+.ticker{margin:0;min-height:42px;font-size:14px;line-height:1.45;color:var(--muted);text-wrap:pretty}
+.ticker b{color:var(--ink)}
+.linkbtn{appearance:none;background:none;border:0;padding:0;font:inherit;color:var(--accent);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.palette{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.bug{appearance:none;position:relative;border:1px solid var(--line);background:var(--paper);border-radius:12px;padding:5px 4px 6px;display:flex;flex-direction:column;align-items:center;gap:1px;font:inherit;color:var(--ink);cursor:pointer;min-width:0}
+.bug img{width:30px;height:30px}
+.bug .bn{font-size:12.5px;font-style:italic;line-height:1.2;text-align:center}
+.bug .key{display:none;position:absolute;top:3px;left:7px;font-family:var(--font-mono);font-size:10px;color:var(--muted)}
+@media (hover:hover){ .bug .key{display:block} .bug:not(:disabled):hover{border-color:var(--accent)} }
+.bug:disabled{opacity:.38;cursor:not-allowed}
+.actions{display:grid;grid-template-columns:1.25fr 1fr 1.25fr;gap:6px}
+.actions.end{grid-template-columns:1fr 1.5fr}
+
+.side{display:flex;flex-direction:column;gap:24px;min-width:0;width:100%;max-width:560px;margin-inline:auto}
+.side h2{font-family:var(--font-display);font-weight:800;font-size:21px;margin:0 0 8px;letter-spacing:-.01em}
+.side p{margin:0 0 10px;max-width:62ch}
+.legend{list-style:none;margin:0 0 10px;padding:0;display:flex;flex-direction:column;gap:4px}
+.legend li{display:flex;align-items:center;gap:10px}
+.legend .peg{width:13px;height:13px;flex:none}
+.legend .peg.miss::after{inset:4.5px}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--paper);margin-bottom:10px}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:380px}
+th,td{padding:7px 10px;text-align:left;border-top:1px solid var(--line);vertical-align:middle;font-weight:400}
+thead th{border-top:0;font-family:var(--font-mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500;white-space:nowrap}
+.rb{display:flex;align-items:center;gap:8px;font-style:italic;white-space:nowrap}
+.rb img{width:26px;height:26px;flex:none}
+.pill{font-size:12.5px;padding:1px 8px;border-radius:999px;display:inline-block;white-space:nowrap}
+.gpos{background:var(--gpos-bg);color:var(--gpos)} .gneg{background:var(--gneg-bg);color:var(--gneg)}
+.uniq{font-weight:700}
+.note{font-size:13px;color:var(--muted)}
+.stats{font-size:14px;margin:0}
+
+.overlay{position:fixed;inset:0;background:var(--scrim);display:flex;align-items:center;justify-content:center;z-index:20;
+  padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.dialog{background:var(--paper);color:var(--ink);border:1px solid var(--line);border-radius:18px;max-width:420px;width:100%;padding:20px;display:flex;flex-direction:column;gap:12px;max-height:100%;overflow:auto;box-shadow:0 24px 60px -24px rgba(0,0,0,.45)}
+.dialog h2{font-family:var(--font-display);font-weight:800;font-size:28px;margin:0;line-height:1.05;letter-spacing:-.015em;text-wrap:balance}
+.dialog p{margin:0}
+.dialog .small{font-size:13px;color:var(--muted);line-height:1.4}
+.dialog .actions{grid-template-columns:1fr 1fr}
+.dialog .actions .btn{padding:11px 14px;font-size:15px}
+.fs{border:0;margin:0;padding:0;min-width:0}
+.fs legend{font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:0;margin-bottom:6px}
+.seg{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.tlist{display:flex;flex-direction:column;gap:6px}
+.opt{position:relative;cursor:pointer;display:block}
+.opt input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+.opt>span{display:flex;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:8px 11px}
+.opt.num>span{justify-content:center;font-family:var(--font-mono);font-weight:600;font-size:16px;padding:8px 0}
+.opt input:checked+span{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:var(--paper)}
+.opt input:disabled+span{opacity:.5;cursor:not-allowed}
+.opt.test>span{flex-direction:column;gap:1px}
+.opt.test small{color:var(--muted);font-size:13px;line-height:1.35}
+.opt.done b::after{content:" · already run";font-weight:400;color:var(--muted)}
+.reveal{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.reveal li{display:grid;grid-template-columns:44px minmax(0,1fr);gap:12px;align-items:start}
+.reveal img{width:44px;height:44px}
+.reveal div{display:flex;flex-direction:column;gap:1px;min-width:0}
+@media (prefers-reduced-motion: reduce){ .row.fresh .peg,.lid.open.anim img{animation:none} }
+</style>
+
+</head>
+<body>
+<div id="app">
+  <main class="play">
+    <header class="top">
+      <div><p class="eyebrow">ESKAPE outbreak puzzle</p><h1>Culture <span>Code</span></h1></div>
+      <button class="btn" id="newBtn">New outbreak</button>
+    </header>
+    <div class="modes" id="modes" role="radiogroup" aria-label="Mode">
+      <button role="radio" aria-checked="true" data-mode="std">Five different<small>one bug is missing</small></button>
+      <button role="radio" aria-checked="false" data-mode="exp">Repeats allowed<small>harder</small></button>
+    </div>
+
+    <section class="samples" id="samples" aria-label="Outbreak samples">
+      <div class="status"><span class="label">Outbreak samples</span><span class="label" id="status">Round 1 of 10</span></div>
+      <div class="grid5 nums" aria-hidden="true"><span></span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span></span></div>
+      <div class="grid5" id="lids"></div>
+    </section>
+
+    <ol class="rows" id="rows" aria-label="Rounds"></ol>
+
+    <section class="bench" id="bench" aria-label="Controls">
+      <p class="ticker" id="ticker" role="status" aria-live="polite"></p>
+      <div class="palette" id="palette"></div>
+      <div class="actions" id="actions"></div>
+    </section>
+  </main>
+
+  <aside class="side">
+    <section id="how">
+      <h2>How to play</h2>
+      <p>Five samples from a hospital outbreak have grown bacteria. Work out which ESKAPE pathogen is in each sample, in ten rounds or fewer.</p>
+      <p>Tap a bug to put it in the next dish, then tap <b>Check</b>. Each round gives you one peg per bug:</p>
+      <ul class="legend">
+        <li><i class="peg hit" aria-hidden="true"></i>Right bug in the right sample</li>
+        <li><i class="peg near" aria-hidden="true"></i>Right bug in the wrong sample</li>
+        <li><i class="peg miss" aria-hidden="true"></i>No match</li>
+      </ul>
+      <p>The pegs are not in dish order, so you have to work out which bugs they refer to.</p>
+      <p>Each outbreak also gives you three lab tests. Tap a covered sample to test it. The lid then shows which bugs still fit.</p>
+    </section>
+    <section>
+      <h2>Lab tests</h2>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th scope="col">Bug</th><th scope="col">Gram stain</th><th scope="col">Catalase</th><th scope="col">Oxidase</th><th scope="col">Motile</th></tr></thead>
+          <tbody id="refBody"></tbody>
+        </table>
+      </div>
+      <p class="note">Bold marks a result that only one of the six gives. Hospital labs now often identify bacteria by mass spectrometry (MALDI-TOF), but these quick tests are still the classic first steps.</p>
+    </section>
+    <p class="stats" id="stats"></p>
+    <p class="note">ESKAPE stands for <i>Enterococcus faecium</i>, <i>Staphylococcus aureus</i>, <i>Klebsiella pneumoniae</i>, <i>Acinetobacter baumannii</i>, <i>Pseudomonas aeruginosa</i> and <i>Enterobacter</i> species.</p>
+  </aside>
+</div>
+<div class="overlay" id="overlay" hidden></div>
+
+<script>
+(function(){
+'use strict';
+const SLOTS=5, MAX=10, TESTS_PER=3, KEY='culture-code-v1';
+const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $=s=>document.querySelector(s);
+const plural=(n,w,p)=>`${n} ${n===1?w:(p||w+'s')}`;
+
+const SP=[
+ {short:'E. faecium',name:'<i>Enterococcus faecium</i>',color:'#7B4FD6',gram:'pos',shape:'cocci',cat:0,ox:0,mot:0,
+  note:'Lives in the gut. Vancomycin-resistant strains (VRE) can survive on bed rails for weeks.'},
+ {short:'S. aureus',name:'<i>Staphylococcus aureus</i>',color:'#F0B400',gram:'pos',shape:'cocci',cat:1,ox:0,mot:0,
+  note:'About 30% of people carry it in their nose. MRSA strains resist methicillin and most other beta-lactam antibiotics.'},
+ {short:'K. pneumoniae',name:'<i>Klebsiella pneumoniae</i>',color:'#E0559A',gram:'neg',shape:'rods',cat:1,ox:0,mot:0,
+  note:'Hides inside a thick sugar capsule. Some strains make KPC, an enzyme that destroys carbapenems.'},
+ {short:'A. baumannii',name:'<i>Acinetobacter baumannii</i>',color:'#2F8FD8',gram:'neg',shape:'coccobacilli',cat:1,ox:0,mot:0,
+  note:'Its name means non-moving rod. It can survive for months on dry hospital surfaces.'},
+ {short:'P. aeruginosa',name:'<i>Pseudomonas aeruginosa</i>',color:'#2BA36B',gram:'neg',shape:'rods',cat:1,ox:1,mot:1,
+  note:'Loves water, from sink drains to shower heads. It is the only oxidase-positive bug of the six.'},
+ {short:'Enterobacter',name:'<i>Enterobacter</i> spp.',color:'#D9541E',gram:'neg',shape:'rods',cat:1,ox:0,mot:1,
+  note:'Can switch on its AmpC enzyme during treatment, so a drug that was working stops working.'}
+];
+const TESTS=[
+ {id:'gram',name:'Gram stain',label:'Gram stain',how:'Stain the cells and look under the microscope. Purple means Gram-positive, pink means Gram-negative, and you can see the cell shape.',
+  key:t=>SP[t].gram+SP[t].shape,res:t=>`Gram-${SP[t].gram==='pos'?'positive':'negative'} ${SP[t].shape}`},
+ {id:'cat',name:'Catalase',label:'catalase test',how:'Drop hydrogen peroxide on a colony. Bubbles mean catalase-positive.',
+  key:t=>SP[t].cat,res:t=>SP[t].cat?'bubbles, so catalase-positive':'no bubbles, so catalase-negative'},
+ {id:'ox',name:'Oxidase',label:'oxidase test',how:'Smear a colony onto an oxidase strip. It turns dark purple within seconds if positive.',
+  key:t=>SP[t].ox,res:t=>SP[t].ox?'the strip turned purple, so oxidase-positive':'no colour change, so oxidase-negative'},
+ {id:'mot',name:'Motility',label:'motility test',how:'Stab the bug into soft agar. If it can swim, it spreads out and the agar turns cloudy.',
+  key:t=>SP[t].mot,res:t=>SP[t].mot?'it spread through the agar, so it is motile':'it stayed on the stab line, so it is non-motile'}
+];
+const PEG={hit:'<i class="peg hit inline" aria-hidden="true"></i>',near:'<i class="peg near inline" aria-hidden="true"></i>'};
+
+// ---------- sprites
+function hexRgb(h){const n=parseInt(h.slice(1),16);return[n>>16,n>>8&255,n&255];}
+function shade(h,f){let[r,g,b]=hexRgb(h);if(f<0){r*=1+f;g*=1+f;b*=1+f;}else{r+=(255-r)*f;g+=(255-g)*f;b+=(255-b)*f;}return`rgb(${r|0},${g|0},${b|0})`;}
+function rgba(h,a){const[r,g,b]=hexRgb(h);return`rgba(${r},${g},${b},${a})`;}
+function capsule(g,len,w){const r=w/2,h=len/2-r;g.beginPath();g.moveTo(-h,-r);g.lineTo(h,-r);g.arc(h,0,r,-Math.PI/2,Math.PI/2);g.lineTo(-h,r);g.arc(-h,0,r,Math.PI/2,Math.PI*1.5);g.closePath();}
+function rod(g,x,y,len,w,ang,col,lw){g.save();g.translate(x,y);g.rotate(ang);capsule(g,len,w);const r=w/2;const gr=g.createLinearGradient(0,-r,0,r);gr.addColorStop(0,shade(col,.45));gr.addColorStop(.5,col);gr.addColorStop(1,shade(col,-.28));g.fillStyle=gr;g.fill();g.lineWidth=lw;g.strokeStyle=shade(col,-.5);g.stroke();g.beginPath();g.moveTo(-len/2+r,-r*.45);g.lineTo(len/2-r*1.3,-r*.45);g.lineCap='round';g.lineWidth=r*.34;g.strokeStyle='rgba(255,255,255,.5)';g.stroke();g.restore();}
+function coccus(g,x,y,rx,ry,ang,col,lw){g.save();g.translate(x,y);g.rotate(ang);g.beginPath();g.ellipse(0,0,rx,ry,0,0,Math.PI*2);const m=Math.max(rx,ry);const gr=g.createRadialGradient(-rx*.35,-ry*.4,m*.08,0,0,m*1.05);gr.addColorStop(0,shade(col,.5));gr.addColorStop(.55,col);gr.addColorStop(1,shade(col,-.3));g.fillStyle=gr;g.fill();g.lineWidth=lw;g.strokeStyle=shade(col,-.5);g.stroke();g.beginPath();g.ellipse(-rx*.32,-ry*.42,rx*.3,ry*.18,-.4,0,Math.PI*2);g.fillStyle='rgba(255,255,255,.55)';g.fill();g.restore();}
+function wave(g,x,y,ux,uy,L,A,k,color,lw){const nx=-uy,ny=ux;g.beginPath();for(let i=0;i<=24;i++){const t=i/24;const w=Math.sin(t*k*Math.PI*2)*A*Math.min(1,t*3);const X=x+ux*L*t+nx*w,Y=y+uy*L*t+ny*w;i?g.lineTo(X,Y):g.moveTo(X,Y);}g.strokeStyle=color;g.lineWidth=lw;g.lineCap='round';g.lineJoin='round';g.stroke();}
+function drawSpecies(g,t,s){
+  const c=s/2,lw=Math.max(1,s*.026),col=SP[t].color,P=v=>c+v*s;
+  if(t===0){[[-.27,-.19],[-.1,-.07],[.11,.07],[.28,.19]].forEach(([x,y])=>coccus(g,P(x),P(y),s*.125,s*.1,.6,col,lw));}
+  else if(t===1){const pts=[[0,0]];for(let i=0;i<6;i++){const a=i*Math.PI/3+.35;pts.push([Math.cos(a)*.215,Math.sin(a)*.215]);}pts.sort((a,b)=>a[1]-b[1]).forEach(([x,y])=>coccus(g,P(x),P(y),s*.122,s*.122,0,col,lw));}
+  else if(t===2){g.save();g.translate(c,c);g.rotate(-.55);capsule(g,s*.8,s*.5);g.fillStyle=rgba(col,.26);g.fill();g.setLineDash([s*.03,s*.03]);g.lineWidth=lw;g.strokeStyle=rgba(col,.75);g.stroke();g.restore();rod(g,c,c,s*.56,s*.27,-.55,col,lw);}
+  else if(t===3){coccus(g,P(-.13),P(.07),s*.17,s*.135,-.45,col,lw);coccus(g,P(.13),P(-.07),s*.17,s*.135,-.45,col,lw);}
+  else if(t===4){const ang=-.75,ux=Math.cos(ang),uy=Math.sin(ang),cx=c+s*.08,cy=c-s*.07,L=s*.5;wave(g,cx-ux*L/2,cy-uy*L/2,-ux,-uy,s*.36,s*.045,2.2,shade(col,-.35),lw*1.3);rod(g,cx,cy,L,s*.23,ang,col,lw);}
+  else{const fl=shade(col,-.35),L=s*.48,W=s*.23;g.save();g.translate(c,c);g.rotate(-.5);for(const x of[-.14,0,.14])for(const sd of[-1,1]){const dx=x*.9,m=Math.hypot(dx,sd);wave(g,x*s,sd*W*.45,dx/m,sd/m,s*.17,s*.025,1.5,fl,lw*1.1);}wave(g,L*.47,0,1,0,s*.13,s*.025,1.3,fl,lw*1.1);wave(g,-L*.47,0,-1,0,s*.13,s*.025,1.3,fl,lw*1.1);g.restore();rod(g,c,c,L,W,-.5,col,lw);}
+}
+const urlCache={};
+function spriteURL(t){
+  if(urlCache[t])return urlCache[t];
+  const px=128,tmp=document.createElement('canvas');tmp.width=tmp.height=px;drawSpecies(tmp.getContext('2d'),t,px);
+  const out=document.createElement('canvas');out.width=out.height=px;const o=out.getContext('2d');o.shadowColor='rgba(10,20,25,.3)';o.shadowBlur=px*.05;o.shadowOffsetY=px*.03;o.drawImage(tmp,0,0);
+  return urlCache[t]=out.toDataURL();
+}
+const img=(t,extra='')=>`<img src="${spriteURL(t)}" alt="" ${extra}>`;
+const it=t=>`<i>${SP[t].short}</i>`;
+function orList(ts){const n=ts.map(it);return n.length<2?n.join(''):n.slice(0,-1).join(', ')+' or '+n[n.length-1];}
+function andList(a){return a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];}
+
+// ---------- state
+let S=null, stats={played:0,won:0,best:{std:0,exp:0}};
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function fresh(mode){return{mode,
+  code:mode==='std'?shuffle([0,1,2,3,4,5]).slice(0,SLOTS):Array.from({length:SLOTS},()=>Math.floor(Math.random()*6)),
+  rows:[],cur:Array(SLOTS).fill(null),order:[],target:0,tests:TESTS_PER,found:Array.from({length:SLOTS},()=>[]),
+  over:false,won:false,newBest:false,fresh:-1,reveal:false,msg:''};}
+function loadStats(){try{const s=JSON.parse(localStorage.getItem(KEY)||'null');if(s&&typeof s.played==='number'){stats=Object.assign(stats,s);stats.best=Object.assign({std:0,exp:0},s.best||{});}}catch(e){}}
+function saveStats(){try{localStorage.setItem(KEY,JSON.stringify(Object.assign({},stats,{mode:S?S.mode:'std'})));}catch(e){}}
+function loadMode(){try{const s=JSON.parse(localStorage.getItem(KEY)||'null');if(s&&s.mode==='exp')return'exp';}catch(e){}return'std';}
+function introMsg(){return(S.mode==='std'?'Five samples, five different bugs. One of the six is missing. ':'Five samples, and any bug can turn up more than once. ')+'Fill a row, then tap <b>Check</b>. <button class="linkbtn" data-a="how">How to play</button>';}
+function cands(i){return[0,1,2,3,4,5].filter(c=>S.found[i].every(id=>{const T=TESTS.find(x=>x.id===id);return T.key(c)===T.key(S.code[i]);}));}
+function score(g,c){let hit=0;const cg=Array(6).fill(0),cc=Array(6).fill(0);for(let i=0;i<SLOTS;i++){if(g[i]===c[i])hit++;else{cg[g[i]]++;cc[c[i]]++;}}let near=0;for(let t=0;t<6;t++)near+=Math.min(cg[t],cc[t]);return{hit,near};}
+function nextEmpty(i){for(let k=1;k<=SLOTS;k++){const j=(i+k)%SLOTS;if(S.cur[j]==null)return j;}return -1;}
+
+// ---------- render
+function renderStatus(){
+  let s;if(S.over)s=S.won?`Solved in ${plural(S.rows.length,'round')}`:'Out of rounds';
+  else s=`Round ${S.rows.length+1} of ${MAX} · ${plural(S.tests,'test')} left`;
+  $('#status').textContent=s;
+}
+function renderLids(){
+  const can=S.tests>0&&!S.over;
+  let h='<span></span>';
+  S.code.forEach((t,i)=>{
+    if(S.over){h+=`<span class="lid open${S.reveal?' anim':''}" style="--d:${i}" role="img" aria-label="Sample ${i+1}: ${SP[t].short}">${img(t)}</span>`;return;}
+    let inner,label,cls='';
+    if(S.found[i].length){const c=cands(i);inner=c.map(x=>img(x)).join('');cls=' c'+c.length;label=`Sample ${i+1}: could be ${c.map(x=>SP[x].short).join(', ')}`;}
+    else{inner='<span class="q" aria-hidden="true">?</span>';label=`Sample ${i+1}: unknown`;}
+    h+=can?`<button class="lid${cls}" data-lid="${i}" aria-label="${label}. Run a lab test">${inner}</button>`:`<span class="lid${cls}" role="img" aria-label="${label}">${inner}</span>`;
+  });
+  $('#lids').innerHTML=h+'<span></span>';S.reveal=false;
+}
+function pegs(r){const a=[...Array(r.hit).fill('hit'),...Array(r.near).fill('near'),...Array(SLOTS-r.hit-r.near).fill('miss')];
+  return`<span class="pegs" role="img" aria-label="${r.hit} right sample, ${r.near} wrong sample">${a.map(c=>`<i class="peg ${c}"></i>`).join('')}</span>`;}
+function renderRows(){
+  let h=S.rows.map((r,k)=>`<li class="row grid5${k===S.fresh?' fresh':''}"><span class="rn">${k+1}</span>${r.g.map((t,i)=>`<span class="dish" role="img" aria-label="Sample ${i+1}: ${SP[t].short}">${img(t)}</span>`).join('')}${pegs(r)}</li>`).join('');
+  if(!S.over){
+    h+=`<li class="row grid5 current" id="curRow"><span class="rn">${S.rows.length+1}</span>${S.cur.map((t,i)=>`<button class="dish${t==null?' empty':''}${i===S.target?' target':''}" data-slot="${i}" aria-label="Sample ${i+1}: ${t==null?'empty':SP[t].short+'. Tap to remove'}">${t==null?'':img(t)}</button>`).join('')}<span></span></li>`;
+  }
+  $('#rows').innerHTML=h;S.fresh=-1;
+}
+function renderPalette(){
+  $('#palette').innerHTML=SP.map((s,i)=>{const dis=S.over||(S.mode==='std'&&S.cur.includes(i));
+    return`<button class="bug" data-bug="${i}" ${dis?'disabled':''} aria-label="${s.short}"><span class="key" aria-hidden="true">${i+1}</span>${img(i)}<span class="bn">${s.short}</span></button>`;}).join('');
+}
+function renderActions(){
+  const a=$('#actions');
+  if(S.over){a.className='actions end';a.innerHTML='<button class="btn" data-a="results">Results</button><button class="btn primary" data-a="new">New outbreak</button>';return;}
+  a.className='actions';
+  const full=!S.cur.includes(null),empty=S.cur.every(x=>x==null);
+  a.innerHTML=`<button class="btn" data-a="test" ${S.tests>0?'':'disabled'}>Lab test <span class="count">${S.tests}</span></button><button class="btn" data-a="undo" ${empty?'disabled':''}>Undo</button><button class="btn primary" data-a="check" ${full?'':'disabled'}>Check</button>`;
+}
+function renderModes(){document.querySelectorAll('#modes [data-mode]').forEach(b=>b.setAttribute('aria-checked',String(b.dataset.mode===S.mode)));}
+function renderStats(){const f=n=>n?plural(n,'round'):'none yet';
+  $('#stats').textContent=stats.played?`Solved ${stats.won} of ${plural(stats.played,'outbreak')} on this device. Best: ${f(stats.best.std)} with five different, ${f(stats.best.exp)} with repeats.`:'Your results on this device will appear here.';}
+function render(){
+  const a=document.activeElement,ds=a&&a.dataset;let sel=null;
+  if(ds){if(ds.bug!=null)sel=`[data-bug="${ds.bug}"]`;else if(ds.slot!=null)sel=`[data-slot="${ds.slot}"]`;else if(ds.lid!=null)sel=`[data-lid="${ds.lid}"]`;else if(ds.a)sel=`[data-a="${ds.a}"]`;}
+  renderStatus();renderLids();renderRows();renderPalette();renderActions();renderModes();renderStats();
+  $('#ticker').innerHTML=S.msg||'';
+  if(sel&&ov.hidden){const el=document.querySelector(sel);if(el&&!el.disabled)el.focus({preventScroll:true});}
+}
+function buildRef(){
+  $('#refBody').innerHTML=SP.map((s,t)=>`<tr><th scope="row"><span class="rb">${img(t,'width="26" height="26"')}${s.short}</span></th><td><span class="pill ${s.gram==='pos'?'gpos':'gneg'}${t===3?' uniq':''}">${s.gram==='pos'?'+':'−'} ${s.shape}</span></td><td class="${t===0?'uniq':''}">${s.cat?'+':'−'}</td><td class="${t===4?'uniq':''}">${s.ox?'+':'−'}</td><td>${s.mot?'Yes':'No'}</td></tr>`).join('');
+}
+function scrollCur(){requestAnimationFrame(()=>{const el=$('#curRow')||$('#rows').lastElementChild;if(el)el.scrollIntoView({block:'nearest',behavior:RM?'auto':'smooth'});});}
+
+// ---------- actions
+function place(t){
+  if(S.over)return;
+  if(S.mode==='std'&&S.cur.includes(t)){S.msg=`${it(t)} is already in this row. In this mode each bug is in only one sample.`;render();return;}
+  let i=S.target;if(i<0||S.cur[i]!=null)i=S.cur.indexOf(null);
+  if(i<0){S.msg='This row is full. Tap <b>Check</b>, or tap a dish to empty it.';render();return;}
+  S.cur[i]=t;S.order.push(i);S.target=nextEmpty(i);render();
+}
+function tapSlot(i){if(S.over)return;if(S.cur[i]!=null){S.cur[i]=null;S.order=S.order.filter(x=>x!==i);}S.target=i;render();}
+function undo(){if(S.over)return;while(S.order.length){const i=S.order.pop();if(S.cur[i]!=null){S.cur[i]=null;S.target=i;render();return;}}}
+function feedbackMsg(r,n){
+  let m=`Round ${n}: <b>${r.hit}</b> ${PEG.hit}right bug, right sample. <b>${r.near}</b> ${PEG.near}right bug, wrong sample.`;
+  const tot=r.hit+r.near;
+  if(S.mode==='std')m+=tot===SLOTS?' All five bugs are in the outbreak, so now get the order right.':' One of your five is not in the outbreak.';
+  else if(tot===0)m+=' None of these bugs is in the outbreak.';
+  return m;
+}
+function check(){
+  if(S.over)return;
+  if(S.cur.includes(null)){S.msg=`Fill all five dishes first. ${plural(S.cur.filter(x=>x==null).length,'dish','dishes')} still empty.`;render();return;}
+  const g=S.cur.slice(),r=Object.assign({g},score(g,S.code));
+  S.rows.push(r);S.fresh=S.rows.length-1;S.cur=Array(SLOTS).fill(null);S.order=[];S.target=0;
+  if(r.hit===SLOTS)return end(true);
+  if(S.rows.length>=MAX)return end(false);
+  S.msg=feedbackMsg(r,S.rows.length);render();scrollCur();
+}
+function end(won){
+  S.over=true;S.won=won;S.reveal=true;stats.played++;
+  if(won){stats.won++;const n=S.rows.length,b=stats.best[S.mode];if(!b||n<b){stats.best[S.mode]=n;S.newBest=true;}}
+  saveStats();
+  S.msg=won?`Solved in ${plural(S.rows.length,'round')}. The samples are uncovered above.`:'Out of rounds. The samples are uncovered above.';
+  render();scrollCur();setTimeout(showEnd,RM?120:800);
+}
+function showEnd(){
+  if(!S.over)return;
+  const groups=[];S.code.forEach((t,i)=>{let g=groups.find(x=>x.t===t);if(!g){g={t,s:[]};groups.push(g);}g.s.push(String(i+1));});
+  const list=groups.map(g=>`<li>${img(g.t)}<div><span class="label">${g.s.length>1?'Samples '+andList(g.s):'Sample '+g.s[0]}</span><b>${SP[g.t].name}</b><span class="small">${SP[g.t].note}</span></div></li>`).join('');
+  const missing=S.mode==='std'?[0,1,2,3,4,5].find(t=>!S.code.includes(t)):-1;
+  const used=TESTS_PER-S.tests;
+  const head=S.won
+    ?`<p class="label">Outbreak identified</p><h2>Solved in ${plural(S.rows.length,'round')}</h2><p>${used?`You used ${plural(used,'lab test')}.`:'You used no lab tests.'}${S.newBest?' That is your best yet in this mode.':''}</p>`
+    :`<p class="label">Out of rounds</p><h2>The outbreak got away</h2><p>Here is what grew in each sample.</p>`;
+  openDialog(head+`<ul class="reveal">${list}</ul>`+(missing>=0?`<p class="small">Not in this outbreak: ${SP[missing].name}.</p>`:'')+
+    `<div class="actions"><button class="btn primary" data-act="new" data-focus>New outbreak</button><button class="btn" data-act="close">Close</button></div>`);
+}
+function newGame(mode){S=fresh(mode);S.msg=introMsg();saveStats();render();window.scrollTo({top:0});}
+function askNew(mode){
+  if(S.rows.length&&!S.over){openDialog(`<p class="label">Outbreak in progress</p><h2>Start a new outbreak?</h2><p>This one will be dropped and won't count in your results.</p><div class="actions"><button class="btn primary" data-act="confirmNew" data-mode="${mode}" data-focus>Start new</button><button class="btn" data-act="close">Keep playing</button></div>`);}
+  else newGame(mode);
+}
+
+// ---------- lab tests
+function openTest(pre){
+  if(S.over)return;
+  if(S.tests<=0){S.msg='No lab tests left for this outbreak.';render();return;}
+  openDialog(`<p class="label">${plural(S.tests,'lab test')} left</p><h2>Run a lab test</h2>
+    <fieldset class="fs"><legend>Sample</legend><div class="seg">${[0,1,2,3,4].map(i=>`<label class="opt num"><input type="radio" name="ts" value="${i}" id="ts${i}" ${i===pre?'checked':''}><span>${i+1}</span></label>`).join('')}</div></fieldset>
+    <fieldset class="fs"><legend>Test</legend><div class="tlist">${TESTS.map((t,k)=>`<label class="opt test"><input type="radio" name="tt" value="${k}" id="tt${k}"><span><b>${t.name}</b><small>${t.how}</small></span></label>`).join('')}</div></fieldset>
+    <div class="actions"><button class="btn primary" data-act="run" id="runBtn" data-focus>Run test</button><button class="btn" data-act="close">Cancel</button></div>`);
+  syncTest();
+}
+function syncTest(){
+  const si=ov.querySelector('input[name=ts]:checked');if(!si)return;const s=+si.value;let first=-1;
+  TESTS.forEach((t,k)=>{const inp=$('#tt'+k),d=S.found[s].includes(t.id);inp.disabled=d;inp.closest('label').classList.toggle('done',d);if(!d&&first<0)first=k;});
+  const cur=ov.querySelector('input[name=tt]:checked');if((!cur||cur.disabled)&&first>=0)$('#tt'+first).checked=true;
+  if(cur&&cur.disabled&&first<0)cur.checked=false;
+  $('#runBtn').disabled=first<0;
+}
+function runTest(){
+  const si=ov.querySelector('input[name=ts]:checked'),ti=ov.querySelector('input[name=tt]:checked');
+  if(!si||!ti||ti.disabled||S.tests<=0)return;
+  const s=+si.value,t=TESTS[+ti.value];if(S.found[s].includes(t.id))return;
+  S.found[s].push(t.id);S.tests--;const c=cands(s);
+  S.msg=`Sample ${s+1}, ${t.label}: <b>${t.res(S.code[s])}</b>. ${c.length===1?`It must be ${it(c[0])}.`:`It could be ${orList(c)}.`}`;
+  closeDialog();render();
+}
+
+// ---------- dialogs
+const ov=$('#overlay');let lastFocus=null;
+function openDialog(html){lastFocus=document.activeElement;ov.innerHTML=`<div class="dialog" role="dialog" aria-modal="true">${html}</div>`;ov.hidden=false;const b=ov.querySelector('[data-focus]')||ov.querySelector('button');if(b)b.focus();}
+function closeDialog(){ov.hidden=true;ov.innerHTML='';if(lastFocus&&document.contains(lastFocus))lastFocus.focus({preventScroll:true});lastFocus=null;}
+ov.addEventListener('change',e=>{if(e.target.name==='ts')syncTest();});
+ov.addEventListener('click',e=>{
+  if(e.target===ov){closeDialog();return;}
+  const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act;
+  if(a==='close')closeDialog();
+  else if(a==='run')runTest();
+  else if(a==='new'){closeDialog();newGame(S.mode);}
+  else if(a==='confirmNew'){closeDialog();newGame(b.dataset.mode);}
+});
+
+// ---------- input
+$('#palette').addEventListener('click',e=>{const b=e.target.closest('[data-bug]');if(b&&!b.disabled)place(+b.dataset.bug);});
+$('#rows').addEventListener('click',e=>{const b=e.target.closest('[data-slot]');if(b)tapSlot(+b.dataset.slot);});
+$('#lids').addEventListener('click',e=>{const b=e.target.closest('[data-lid]');if(b)openTest(+b.dataset.lid);});
+function onAction(e){const b=e.target.closest('[data-a]');if(!b||b.disabled)return;const a=b.dataset.a;
+  if(a==='test')openTest(S.target>=0?S.target:0);
+  else if(a==='undo')undo();
+  else if(a==='check')check();
+  else if(a==='results')showEnd();
+  else if(a==='new')newGame(S.mode);
+  else if(a==='how'){const h=$('#how');h.scrollIntoView({behavior:RM?'auto':'smooth',block:'start'});}
+}
+$('#actions').addEventListener('click',onAction);
+$('#ticker').addEventListener('click',onAction);
+$('#modes').addEventListener('click',e=>{const b=e.target.closest('[data-mode]');if(!b||b.dataset.mode===S.mode)return;askNew(b.dataset.mode);});
+$('#newBtn').addEventListener('click',()=>askNew(S.mode));
+document.addEventListener('keydown',e=>{
+  if(!ov.hidden){if(e.key==='Escape')closeDialog();return;}
+  if(e.metaKey||e.ctrlKey||e.altKey)return;
+  if(/^[1-6]$/.test(e.key)){e.preventDefault();place(+e.key-1);}
+  else if(e.key==='Backspace'){e.preventDefault();undo();}
+  else if(e.key==='Enter'){const a=document.activeElement;if(a&&(a.tagName==='BUTTON'||a.tagName==='INPUT'))return;e.preventDefault();check();}
+});
+if(window.ResizeObserver){const ro=new ResizeObserver(()=>{const r=document.documentElement.style;r.setProperty('--bench-h',$('#bench').offsetHeight+'px');r.setProperty('--top-h',$('#samples').offsetHeight+'px');});ro.observe($('#bench'));ro.observe($('#samples'));}
+
+// ---------- boot
+function start(data){
+  loadStats();
+  if(data&&data.S&&Array.isArray(data.S.code)&&data.S.code.length===SLOTS){S=data.S;S.fresh=-1;S.reveal=false;if(data.stats)stats=data.stats;}
+  else{S=fresh(loadMode());S.msg=introMsg();}
+  buildRef();render();
+  if(window.claude&&window.claude.hot&&window.claude.hot.snapshot)window.claude.hot.snapshot(()=>({S,stats}));
+}
+window.claude?.hot?.ready?window.claude.hot.ready(start):start(window.claude?.hot?.data??{});
+})();
+</script>
+
+</body>
+</html>
