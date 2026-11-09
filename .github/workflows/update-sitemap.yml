@@ -1,0 +1,56 @@
+name: Update sitemap
+
+# Rebuilds sitemap.xml (the list of pages for Google) whenever a page is
+# added or changed, and every Monday after the publications update.
+on:
+  schedule:
+    - cron: "47 5 * * 1"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "*.html"
+      - .github/scripts/build_sitemap.py
+      - .github/workflows/update-sitemap.yml
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: site-bot
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history, for each page's last-changed date
+
+      - name: Rebuild sitemap.xml
+        run: python3 .github/scripts/build_sitemap.py
+
+      - name: Commit the new sitemap
+        id: commit
+        run: |
+          if git diff --quiet; then
+            echo "Nothing changed."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Update sitemap"
+          git pull --rebase
+          git push
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      # Pushes made by this workflow may not start a Pages rebuild on their own.
+      - name: Rebuild GitHub Pages
+        if: steps.commit.outputs.changed == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${{ github.repository }}/pages/builds"

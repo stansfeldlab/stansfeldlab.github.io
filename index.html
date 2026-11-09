@@ -11,10 +11,65 @@
   <meta property="og:site_name" content="Stansfeld Research Group">
   <link rel="canonical" href="https://stansfeldlab.github.io/">
   <link rel="icon" href="images/2015/12/cropped-mrmembraneprotein-1.png">
+  <link rel="apple-touch-icon" href="images/apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Source+Serif+4:opsz,wght@8..60,600&display=swap">
   <link rel="stylesheet" href="style.css">
+  <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://stansfeldlab.github.io/#website",
+        "name": "Stansfeld Research Group",
+        "alternateName": "Stansfeld Lab",
+        "url": "https://stansfeldlab.github.io/",
+        "publisher": {
+          "@id": "https://stansfeldlab.github.io/#group"
+        },
+        "inLanguage": "en-GB"
+      },
+      {
+        "@type": "ResearchOrganization",
+        "@id": "https://stansfeldlab.github.io/#group",
+        "name": "Stansfeld Research Group",
+        "alternateName": [
+          "Stansfeld Lab",
+          "Stansfeld Group"
+        ],
+        "url": "https://stansfeldlab.github.io/",
+        "logo": "https://stansfeldlab.github.io/images/logo-512.png",
+        "image": "https://stansfeldlab.github.io/images/group/group-2026.jpg",
+        "description": "Computational studies of membrane protein structure and dynamics at the University of Warwick.",
+        "parentOrganization": {
+          "@type": "CollegeOrUniversity",
+          "name": "University of Warwick",
+          "url": "https://warwick.ac.uk/"
+        },
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "School of Life Sciences, Gibbet Hill Campus, University of Warwick",
+          "addressLocality": "Coventry",
+          "postalCode": "CV4 7AL",
+          "addressCountry": "GB"
+        },
+        "founder": {
+          "@id": "https://stansfeldlab.github.io/pi.html#phill"
+        },
+        "member": {
+          "@type": "Person",
+          "@id": "https://stansfeldlab.github.io/pi.html#phill",
+          "name": "Phillip Stansfeld"
+        },
+        "sameAs": [
+          "https://github.com/stansfeldlab"
+        ]
+      }
+    ]
+  }
+  </script>
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
@@ -52,7 +107,7 @@
       <section class="story">
         <p>Membrane proteins are the cell’s gatekeepers, enzymes, channels and drug targets, yet they are among the hardest molecules to study experimentally. We combine AI-based structure prediction with multiscale molecular dynamics simulations to model membrane proteins and their complexes in realistic membranes, and to watch how they move and interact with lipids, drugs and each other. Much of this work is done together with experimental colleagues in structural biology, microbiology and chemistry.</p>
         <figure class="photo">
-          <img src="images/2023/05/elongasome-hero.jpg" width="1296" height="733" alt="Model of the bacterial elongasome complex">
+          <img src="images/2023/05/elongasome-hero.jpg" srcset="images/2023/05/elongasome-hero-800.jpg 800w, images/2023/05/elongasome-hero.jpg 1296w" sizes="(min-width: 1180px) 1130px, 100vw" width="1296" height="733" alt="Model of the bacterial elongasome complex">
           <figcaption>The elongasome, the protein machinery that builds the bacterial cell wall</figcaption>
         </figure>
       </section>
@@ -84,11 +139,11 @@
       <h2 class="section-title">How we work</h2>
       <section class="story">
         <p>We use multiscale molecular dynamics (MD) simulations to assemble a membrane protein into a membrane at the coarse-grained level, before careful assessment of its structure at atomic resolution. This workflow forms a springboard to studying the dynamics of experimentally solved and predicted structures through MD simulations.</p>
-        <figure><img src="images/2020/02/memprotmd-workflow.png" alt="MemProtMD multiscale simulation workflow" loading="lazy"></figure>
+        <figure><img src="images/2020/02/memprotmd-workflow.webp" alt="MemProtMD multiscale simulation workflow" loading="lazy"></figure>
       </section>
       <section class="story split flip">
         <div><p>We also maintain <a href="http://memprotmd.bioch.ox.ac.uk">MemProtMD</a>, a pipeline and database that inserts experimentally solved membrane protein structures into their native bilayer environment. It allows the stability, dynamics and lipid interactions of every structure to be analysed.</p></div>
-        <figure><a href="http://memprotmd.bioch.ox.ac.uk"><img src="images/2020/02/memprotmd-1.png" alt="MemProtMD database" loading="lazy"></a></figure>
+        <figure><a href="http://memprotmd.bioch.ox.ac.uk"><img src="images/2020/02/memprotmd-1.webp" alt="MemProtMD database" loading="lazy"></a></figure>
       </section>
 
       <h2 class="section-title">Latest papers</h2>

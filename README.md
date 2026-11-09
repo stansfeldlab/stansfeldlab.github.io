@@ -23,3 +23,10 @@ Structure images are in `images/complexes/`. The Mol* views and downloads come f
 ## Games
 
 `Dont-Get-Solubilised-XR.html`, `Dont-Get-Solubilised.html`, `Active-Site-Sorter.html` (uses `levels/`), `Culture-Code.html`, `Drop-the-Dose.html`, `ESKAPE-Chase.html`, `ESKAPE-Containment.html`, `ESKAPE-Invaders.html`, `Galaxy-ESKAPE.html`, `SuperBugs.html`, `Superbug-Showdown.html`, `Superbug-Smackdown.html`. `MD-example.molx` and `Elongasome.molx` are used by the VR demos.
+
+## Search engines and visitor counts
+
+- `sitemap.xml` lists every top-level page for Google. It is rebuilt automatically (`.github/workflows/update-sitemap.yml`) whenever a page is added or changed, so don't edit it by hand. `robots.txt` points search engines to it.
+- `index.html` and `pi.html` carry structured data (the `application/ld+json` blocks) describing the group and the PI for Google.
+- `google1f4e1a8725accb95.html` verifies the site in Google Search Console; leave it in place.
+- Visits are counted by GoatCounter (https://pstansfeld.goatcounter.com); the script is at the bottom of each page.

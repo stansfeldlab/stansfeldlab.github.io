@@ -21,7 +21,7 @@ permissions:
   pages: write
 
 concurrency:
-  group: update-publications
+  group: site-bot
   cancel-in-progress: false
 
 jobs:

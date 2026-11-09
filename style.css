@@ -42,6 +42,10 @@ h3 { font-size: 1.15rem; margin: 0 0 .25em; }
   background: #2b2b2b center/cover no-repeat;
   color: #fff;
 }
+/* phones get a lighter copy of the header photo */
+@media (max-width: 700px) {
+  .site-header[style*="cropped-dji_0702-pano.jpg"] { background-image: url("images/2021/04/cropped-dji_0702-pano-1000.jpg") !important; }
+}
 .site-header::before {
   content: "";
   position: absolute; inset: 0;
@@ -74,13 +78,13 @@ h3 { font-size: 1.15rem; margin: 0 0 .25em; }
 .site-nav ul {
   list-style: none; margin: 0 auto; padding: 0 12px;
   max-width: var(--wrap);
-  display: flex; gap: 4px;
+  display: flex; gap: 2px;
   overflow-x: auto; scrollbar-width: none;
 }
 .site-nav ul::-webkit-scrollbar { display: none; }
 .site-nav a {
   display: block; white-space: nowrap;
-  padding: 14px 12px 12px;
+  padding: 14px 8px 12px;
   color: var(--muted); text-decoration: none; font-weight: 600; font-size: .95rem;
   border-bottom: 3px solid transparent;
 }
@@ -149,7 +153,7 @@ figure a { display: block; }
 .alum img { width: 68px; height: 68px; object-fit: cover; border-radius: 50%; background: var(--tint); }
 .alum h3 { font-size: 1.05rem; }
 .alum p { margin: 0; font-size: .92rem; line-height: 1.45; color: var(--muted); }
-.alum .dates { font-size: .82rem; letter-spacing: .02em; color: var(--muted); opacity: .85; margin-top: 2px; }
+.alum .dates { font-size: .82rem; letter-spacing: .02em; color: var(--muted); margin-top: 2px; }
 .alum .now { color: var(--accent); margin-top: 6px; }
 
 /* ---------- PI ---------- */
@@ -350,3 +354,6 @@ figure a { display: block; }
 .themes .card a.go { display: block; margin-top: 4px; }
 .themes .card a.go:first-of-type { margin-top: auto; padding-top: 6px; }
 [id] { scroll-margin-top: 70px; }
+
+/* hidden on screen, read by screen readers */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
