@@ -84,7 +84,7 @@ def in_group(last, initials, year):
 def eutils(endpoint, **params):
     params.update(tool="stansfeld-group-site")
     url = EUTILS + endpoint + "?" + urllib.parse.urlencode(params)
-    req = urllib.request.Request(url, headers={"User-Agent": "stansfeld-group-site (+https://pstansfeld.github.io/)"})
+    req = urllib.request.Request(url, headers={"User-Agent": "stansfeld-group-site (+https://stansfeldlab.github.io/)"})
     for attempt in range(5):
         try:
             with urllib.request.urlopen(req, timeout=60) as r:
@@ -321,7 +321,7 @@ def clean_title(s):
 
 def epmc_get(params):
     url = EPMC + "?" + urllib.parse.urlencode(params)
-    req = urllib.request.Request(url, headers={"User-Agent": "stansfeld-group-site (+https://pstansfeld.github.io/)"})
+    req = urllib.request.Request(url, headers={"User-Agent": "stansfeld-group-site (+https://stansfeldlab.github.io/)"})
     for attempt in range(4):
         try:
             with urllib.request.urlopen(req, timeout=90) as r:

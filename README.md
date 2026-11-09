@@ -1,6 +1,6 @@
-# pstansfeld.github.io
+# stansfeldlab.github.io
 
-Website of the Stansfeld Research Group, University of Warwick: https://pstansfeld.github.io/
+Website of the Stansfeld Research Group, University of Warwick: https://stansfeldlab.github.io/
 
 Static site for GitHub Pages (no build step).
 
