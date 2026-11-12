@@ -238,3 +238,6 @@ footer.foot h3 { font-size: 0.875rem; color: var(--ink); margin-bottom: 0.4rem; 
 .stats-histograms .head-line { stroke:black;stroke-width:1px;stroke-dasharray:5;opacity:0.5 }
 .stats-histograms .legend-entry text { font-size:11px;font-weight:500 }
 .stats-histograms .legend-entry line { stroke-width:1.5px }
+.prose pre { margin: 0; padding: 0.9rem 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; font-size: 0.875rem; line-height: 1.5; }
+.prose pre code { background: none; padding: 0; }
+.prose .tbl td.id { font-family: var(--mono); font-size: 0.8125rem; overflow-wrap: anywhere; min-width: 11rem; }

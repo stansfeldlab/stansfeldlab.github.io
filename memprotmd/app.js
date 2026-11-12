@@ -3,7 +3,7 @@
   'use strict';
   var CFG = window.MPM_CFG || {};
   var STORE = CFG.storage || 'https://memprotmd.bioch.ox.ac.uk/data/memprotmd/';
-  var DB = null, LOCAL = {}, byId = {}, colById = {}, kids = {}, memberOf = null, searchRecs = null, ALL = null;
+  var DB = null, byId = {}, colById = {}, kids = {}, memberOf = null, searchRecs = null, ALL = null, NOT = {}, NOG = {}, GROUPS = {};
   var app = document.getElementById('mpm-app');
   var DBNAMES = { mpm: 'MemProtMD groups', TCDB: 'TCDB', mpstruc: 'mpstruc', Pfam: 'Pfam', PDB: 'PDB' };
 
@@ -18,19 +18,23 @@
   function num(n) { return Number(n).toLocaleString('en-GB'); }
   var PH = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#fff"/><rect y="38" width="100" height="24" fill="#eaf0fb"/><g fill="#1f499e" opacity=".45"><rect x="33" y="24" width="8" height="52" rx="4"/><rect x="46" y="20" width="8" height="60" rx="4"/><rect x="59" y="24" width="8" height="52" rx="4"/></g></svg>');
   window.mpmPh = function (el) { el.onerror = null; el.src = PH; };
-  var REMOTE = {
-    pdb100: function (a) { return 'databases/PDB/thumbs/' + a + '_100.jpg'; },
-    pdbhero: function (a) { return 'databases/PDB/thumbs/' + a + '_250.jpg'; },
-    col100: function (a) { var p = a.split('/'); return 'databases/' + p[0] + '/thumbs/' + p.slice(1).join('/') + '_100.jpg'; },
-    colhero: function (a) { var p = a.split('/'); return 'databases/' + p[0] + '/thumbs/' + p.slice(1).join('/') + '.jpg'; },
-    sim: function (a) { var p = a.split('/'); return 'simulations/' + p[0] + '_default_dppc/images/' + p[1] + '.jpg'; }
-  };
+  /* Thumbnails are hosted with the site. Full-size renders stay on file storage and fall back to the thumbnail. */
+  function pdbThumb(id) { return NOT[id] ? null : 'thumbs/pdb/' + id + '.jpg'; }
+  function colThumb(db, acc) { return NOG[db + '|' + acc] ? null : 'thumbs/' + db + '/' + enc(acc) + '.jpg'; }
+  function remote(path) { return CFG.remoteImages === false ? null : STORE + path; }
   function imgUrl(kind, a) {
-    var key = kind + '/' + a;
-    if (LOCAL[key]) return 'img/' + key.replace(/\//g, '__') + '.jpg';
-    return CFG.remoteImages === false ? null : STORE + REMOTE[kind](a);
+    var p = a.split('/');
+    if (kind === 'pdb100') return pdbThumb(a);
+    if (kind === 'pdbhero' || kind === 'pdbtile') return remote('databases/PDB/thumbs/' + a + '.jpg') || pdbThumb(a);
+    if (kind === 'col100') return colThumb(p[0], p.slice(1).join('/'));
+    if (kind === 'colhero') return remote('databases/' + p[0] + '/thumbs/' + encodeURIComponent(p.slice(1).join('/')) + '.jpg');
+    if (kind === 'sim') return remote('simulations/' + p[0] + '_default_dppc/images/' + p[1] + '.jpg');
+    return null;
   }
-  function imgTag(kind, a, cls, alt) { return '<img' + (cls ? ' class="' + cls + '"' : '') + ' src="' + (imgUrl(kind, a) || PH) + '" alt="' + esc(alt || '') + '" loading="lazy" onerror="mpmPh(this)">'; }
+  function fallback(kind, a) { return kind === 'pdbhero' || kind === 'pdbtile' ? pdbThumb(a) : null; }
+  window.mpmFb = function (el) { var f = el.getAttribute('data-fb'); el.removeAttribute('data-fb'); if (f === 'hide') { el.closest('.well').hidden = true; return; } if (f) { el.src = f; return; } el.onerror = null; el.src = PH; };
+  function fbAttr(kind, a) { var f = fallback(kind, a); return f ? ' data-fb="' + esc(f) + '"' : ''; }
+  function imgTag(kind, a, cls, alt) { return '<img' + (cls ? ' class="' + cls + '"' : '') + ' src="' + (imgUrl(kind, a) || PH) + '"' + fbAttr(kind, a) + ' alt="' + esc(alt || '') + '" loading="lazy" onerror="mpmFb(this)">'; }
   function ago(d) {
     if (!d) return '';
     var days = (Date.now() - new Date(d).getTime()) / 864e5;
@@ -48,7 +52,7 @@
   /* ---------- data ---------- */
   function load() {
     return getJSON('data/index.json').then(function (d) {
-      DB = d; d.img.forEach(function (k) { LOCAL[k] = 1; });
+      DB = d; (d.noThumb || []).forEach(function (k) { NOT[k] = 1; }); (d.noGroupThumb || []).forEach(function (k) { NOG[k] = 1; });
       d.pdb.forEach(function (r) { byId[r[0]] = r; });
       Object.keys(d.cols).forEach(function (db) {
         d.cols[db].forEach(function (c) { colById[db + '|' + c[0]] = { db: db, acc: c[0], title: c[1], n: c[2], parent: c[3] || null, sub: c[4] || '', mem: c[5] }; });
@@ -56,6 +60,8 @@
       Object.keys(colById).forEach(function (id) { var p = colById[id].parent; if (p) (kids[p] = kids[p] || []).push(id); });
     });
   }
+  function groupInfo(db) { if (!GROUPS[db]) GROUPS[db] = getJSON('data/groups/' + db + '.json').catch(function () { return {}; }); return GROUPS[db]; }
+  function pdbTitle(t, acc) { return t ? sentence(t) : 'PDB ' + String(acc).toUpperCase(); }
   function members(c) { return c.mem ? c.mem.split(' ') : []; }
   function lineage(id) { var out = [], g = 0; while (id && colById[id] && g++ < 20) { out.unshift(id); id = colById[id].parent; } return out; }
   function collectionsOf(pdb) {
@@ -88,12 +94,12 @@
   function rowLink(r) {
     var isP = r.db === 'PDB';
     return '<a class="rowlink" href="' + refHref(r.db, r.acc) + '">' + imgTag(isP ? 'pdb100' : 'col100', isP ? r.acc : r.db + '/' + r.acc) +
-      '<span><span class="t">' + ttl(sentence(r.title)) + '</span><span class="k">' + esc(isP ? 'PDB ' + r.acc : (DBNAMES[r.db] || r.db) + ' · ' + r.acc) + '</span></span>' +
+      '<span><span class="t">' + ttl(isP ? pdbTitle(r.title, r.acc) : sentence(r.title)) + '</span><span class="k">' + esc(isP ? 'PDB ' + r.acc : (DBNAMES[r.db] || r.db) + ' · ' + r.acc) + '</span></span>' +
       '<span class="m">' + (isP ? esc(ago(r.date)) : num(r.size) + ' structures') + '</span></a>';
   }
 
   /* ---------- chrome ---------- */
-  var NAV = [['search/text', 'Search'], ['about', 'About'], ['stats', 'Statistics'], ['status', 'Status'], ['api', 'API']];
+  var NAV = [['search/text', 'Search'], ['about', 'About'], ['stats', 'Statistics'], ['status', 'Status'], ['data', 'Data'], ['api', 'API']];
   function chrome(active, main) {
     return '<header class="bar"><div class="wrap"><a class="logo" href="' + href('home') + '" aria-label="MemProtMD home"><img src="logo.svg" alt="MemProtMD"></a>' +
       '<nav class="nav" aria-label="Main">' + NAV.map(function (n) { return '<a href="' + href(n[0]) + '"' + (active === n[0] ? ' aria-current="page"' : '') + '>' + n[1] + '</a>'; }).join('') + '</nav>' +
@@ -130,7 +136,7 @@
       '<div class="figures"><div><b>' + num(DB.pdb.length) + '</b><span>simulated structures</span></div><div><b>' + num(ncol) + '</b><span>families and groups</span></div><div><b>' + esc(fmtDate(latest[0][5])) + '</b><span>most recent structure</span></div></div></section>' +
       '<section><div class="head-row"><h2>Browse by family</h2><a href="' + refHref('mpm', 'membrane_proteins') + '">All MemProtMD groups</a></div><div class="tiles">' + tiles.map(function (t) {
         var c = colById['mpm|' + t[0]];
-        return '<a class="tile" href="' + refHref('mpm', t[0]) + '"><div class="well">' + imgTag('pdbhero', t[1], '', 'PDB ' + t[1]) + '</div><span class="t">' + t[2] + '</span><span class="k">' + (c ? num(c.n) + ' structures' : '') + '</span></a>';
+        return '<a class="tile" href="' + refHref('mpm', t[0]) + '"><div class="well">' + imgTag('pdbtile', t[1], '', 'PDB ' + t[1]) + '</div><span class="t">' + t[2] + '</span><span class="k">' + (c ? num(c.n) + ' structures' : '') + '</span></a>';
       }).join('') + '</div></section>' +
       '<section><div class="head-row"><h2>Latest simulations</h2></div><div class="panel"><div class="grid2">' + [latest.slice(0, 4), latest.slice(4)].map(function (g) { return '<div class="rowlist">' + g.map(function (r) { return rowLink({ db: 'PDB', acc: r[0], title: r[1], date: r[5] }); }).join('') + '</div>'; }).join('') + '</div></div></section>' +
       '<section><div class="head-row"><h2>Browse by classification</h2></div><div class="grid2" style="gap:1rem">' + roots.map(function (r) {
@@ -244,13 +250,14 @@
       var h = '<div class="stack-lg"><div class="pagehead">' + crumbs([['Home', href('home')]].concat(line.slice(0, -1).map(function (l) { return [ttl(colById[l].title), refHref(colById[l].db, colById[l].acc)]; })).concat([[ttl(c.title), null]])) +
         '<h1>' + ttl(c.title) + '</h1><div class="idline"><span class="tag">' + esc((DBNAMES[db] || db) + ' · ' + acc) + '</span><span>' + num(c.n) + ' simulated structures</span>' + (c.sub ? '<span>' + esc(c.sub) + '</span>' : '') + '</div>' +
         (f.description ? '<p style="max-width:46rem">' + esc(f.description) + (f.description_copyright ? ' <span class="small muted">Text by ' + esc(f.description_copyright.owner) + ', ' + extA(f.description_copyright.origin, 'original') + ', ' + extA(f.description_copyright.terms, 'terms') + '.</span>' : '') + '</p>' : '') +
-        (f.keywords_string ? '<p class="small muted">Keywords: ' + esc(f.keywords_string) + '</p>' : '') + '</div>' +
+        (f.keywords_string || f.auto_keywords ? '<p class="small muted">Keywords: ' + esc(f.keywords_string || f.auto_keywords) + '</p>' : '') +
+        (f.href ? '<p class="small">' + extA(f.href, 'View this group at ' + esc((f.copyright && f.copyright.owner) || 'its source') + ' ↗') + '</p>' : '') + '</div>' +
         '<div class="cols"><div class="stack">' +
         (children.length ? '<section class="panel"><h2>Subgroups</h2><div class="rowlist">' + kshow.map(function (k) { var kc = colById[k]; return rowLink({ db: kc.db, acc: kc.acc, title: kc.title, size: kc.n }); }).join('') + '</div>' + (children.length > 10 ? '<p style="margin-top:.9rem"><button class="btn ghost" type="button" data-act="kids">' + (st.kidsAll ? 'Show fewer' : 'Show all ' + children.length + ' subgroups') + '</button></p>' : '') + '</section>' : '') +
         (mem.length ? '<section class="panel"><h2>Structures in this group</h2><div class="scroll"><table class="tbl"><thead><tr>' + th('id', 'PDB') + '<th>Title</th>' + th('date', 'Published', 'opt') + '<th class="opt">Method</th>' + th('res', 'Å', 'num') + '</tr></thead><tbody>' +
-          list.slice(0, st.n).map(function (m) { var e = byId[m]; return '<tr><td class="id"><a href="' + refHref('PDB', m) + '">' + m + '</a></td><td>' + ttl(sentence(e[1])) + '</td><td class="nw opt">' + esc(e[5] || '') + '</td><td class="opt small muted method">' + esc(sentence(e[3] || '')) + '</td><td class="num">' + (e[4] ? Number(e[4]).toFixed(1) : '') + '</td></tr>'; }).join('') +
+          list.slice(0, st.n).map(function (m) { var e = byId[m]; return '<tr><td class="id"><a href="' + refHref('PDB', m) + '">' + m + '</a></td><td>' + ttl(pdbTitle(e[1], m)) + '</td><td class="nw opt">' + esc(e[5] || '') + '</td><td class="opt small muted method">' + esc(sentence(e[3] || '')) + '</td><td class="num">' + (e[4] ? Number(e[4]).toFixed(1) : '') + '</td></tr>'; }).join('') +
           '</tbody></table></div>' + (mem.length > st.n ? '<p style="margin-top:1rem"><button class="btn ghost" type="button" data-act="more">Show 25 more of ' + num(mem.length) + '</button></p>' : '') + '</section>' : '') +
-        '</div><aside class="stack">' + (hero ? '<div class="well"><img class="heroimg" src="' + hero + '" alt="Example structures from this group in their bilayers" onerror="mpmPh(this)"></div>' : '') +
+        '</div><aside class="stack">' + (hero ? '<div class="well"><img class="heroimg" src="' + hero + '" data-fb="hide" alt="Example structures from this group in their bilayers" onerror="mpmFb(this)"></div>' : '') +
         '<section class="panel stack"><h2>How this group compares</h2><div class="legend"><span><i class="s"></i>This group</span><span><i></i>All entries</span></div><div class="hists">' +
         hist('Publication year', ALL.year, mine.year) + hist('Experimental method', ALL.method, mine.method) + hist('Resolution (Å)', ALL.res, mine.res) +
         (db === 'mpm' && DB.thick[acc] ? hist('Membrane thickness (Å)', DB.thick.membrane_proteins, DB.thick[acc]) : '') + '</div><p class="small muted">Each set is normalised separately.</p></section></aside></div></div>';
@@ -260,7 +267,7 @@
     }
     function keep() { var y = window.scrollY; render(); window.scrollTo(0, y); }
     render();
-    if (DB.full.indexOf(id) !== -1) getJSON('data/full/' + enc(id) + '.json').then(function (f) { st.full = f; if (route.current === 'ref/' + db + '/' + acc) keep(); }).catch(function () {});
+    groupInfo(db).then(function (g) { if (g[id]) { st.full = g[id]; if (route.current === 'ref/' + db + '/' + acc) keep(); } });
   }
 
   /* ---------- entry ---------- */
@@ -280,6 +287,24 @@
     return '<div class="gauge"><svg width="196" height="' + H + '" viewBox="0 0 196 ' + H + '" role="img" aria-label="Bilayer thickness in bulk and next to the protein, drawn to scale">' + slab(0, bulk, 'Bulk') + slab(112, ann, 'At protein') + '</svg>' +
       '<dl class="facts"><dt>Bulk bilayer</dt><dd>' + bulk.toFixed(1) + ' Å</dd><dt>Next to the protein</dt><dd>' + ann.toFixed(1) + ' Å</dd><dt>Change</dt><dd>' + (t.thickness_diff > 0 ? '+' : '−') + Math.abs(t.thickness_diff).toFixed(1) + ' Å</dd></dl></div>';
   }
+  function uniprot(r) {
+    var seen = {}, out = [];
+    (r.entities || []).forEach(function (en) { (en.refs || []).forEach(function (x) { if (x.db === 'UniProt' && !seen[x.accession]) { seen[x.accession] = 1; out.push(extA('https://www.uniprot.org/uniprotkb/' + x.accession, esc(x.accession))); } }); });
+    return out.join(', ');
+  }
+  /* Residue density along the bilayer normal for one chain: all residues, helices and strands. */
+  function violin(prof, chain, t) {
+    var d = prof && prof.c[chain]; if (!d) return '';
+    var n = d[0].length, mx = Math.max.apply(null, d[0].concat([1e-9])), Z = Math.max(Math.abs(prof.lo), Math.abs(prof.lo + n * prof.w), 25) * 1.04;
+    function y(z) { return (50 - z / Z * 50).toFixed(1); }
+    function shape(v, cls) {
+      var L = [], R = [];
+      for (var i = 0; i < n; i++) { var z = prof.lo + (i + 0.5) * prof.w, h = v[i] / mx * 44; L.push((50 - h).toFixed(1) + ',' + y(z)); R.unshift((50 + h).toFixed(1) + ',' + y(z)); }
+      return '<polygon class="' + cls + '" points="' + L.concat(R).join(' ') + '"/>';
+    }
+    var half = (t && t.bulk_thickness ? t.bulk_thickness : 40) / 2;
+    return '<svg viewBox="0 0 100 100" aria-hidden="true"><rect x="-5" width="110" y="' + y(half) + '" height="' + (half / Z * 100).toFixed(1) + '"/>' + shape(d[0], 'all-density') + shape(d[1], 'alpha-density') + shape(d[2], 'beta-density') + '</svg>';
+  }
   function pageEntry(pdb, chainSel) {
     var e = byId[pdb];
     if (!e) return notFound('PDB ' + pdb);
@@ -291,7 +316,7 @@
     }
     function render() {
       var r = (st.rec && st.rec.ref) || {}, s = (st.rec && st.rec.sim) || {}, cit = r.primary_citation || {}, sv = s.sim_validate || {};
-      var hasImgs = !!LOCAL['sim/' + pdb + '/front-cartoon'] || CFG.remoteImages !== false;
+      var hasImgs = CFG.remoteImages !== false;
       var byDb = {}; collectionsOf(pdb).forEach(function (g) { var c = colById[g]; (byDb[c.db] = byDb[c.db] || []).push(c); });
       var groups = ['mpm', 'TCDB', 'mpstruc', 'Pfam'].map(function (d) {
         var l = (byDb[d] || []).sort(function (a, b) { return b.n - a.n; }); if (!l.length) return '';
@@ -300,11 +325,11 @@
       }).join('');
       var ch = s.chains || [], selc = ch.filter(function (c) { return c.chainID === chainSel; })[0];
       var contactImgs = []; CONTACTS.forEach(function (cn) { REPS.forEach(function (rp) { contactImgs.push([cn[0] + ', ' + rp[0].toLowerCase(), 'front-contacts-' + cn[1] + '-' + rp[1]]); }); });
-      var h = '<div class="stack-lg"><div class="cols entry"><div class="well"><img class="heroimg" src="' + (imgUrl('pdbhero', pdb) || PH) + '" alt="' + esc(pdb.toUpperCase()) + ' in its simulated bilayer" onerror="mpmPh(this)"></div>' +
+      var h = '<div class="stack-lg"><div class="cols entry"><div class="well"><img class="heroimg" src="' + (imgUrl('pdbhero', pdb) || PH) + '"' + fbAttr('pdbhero', pdb) + ' alt="' + esc(pdb.toUpperCase()) + ' in its simulated bilayer" onerror="mpmFb(this)"></div>' +
         '<div class="stack"><div class="pagehead">' + crumbs([['Home', href('home')], ['Structures', refHref('mpm', 'membrane_proteins')], [pdb.toUpperCase(), null]]) +
-        '<h1>' + ttl(sentence(r.title || e[1])) + '</h1><div class="idline"><span class="tag">PDB ' + pdb + '</span>' + ((r.subtitle || e[2]) ? '<span>' + esc(sentence(r.subtitle || e[2])) + '</span>' : '') + '</div></div>' +
+        '<h1>' + ttl(pdbTitle(r.title || e[1], pdb)) + '</h1><div class="idline"><span class="tag">PDB ' + pdb + '</span>' + ((r.subtitle || e[2]) ? '<span>' + esc(sentence(r.subtitle || e[2])) + '</span>' : '') + '</div></div>' +
         '<dl class="facts">' + [['Published', fmtDate(e[5])], ['Method', esc(sentence(e[3] || ''))], ['Resolution', e[4] ? Number(e[4]).toFixed(2).replace(/0$/, '') + ' Å' : ''], ['Organism', r.organism && r.organism.scientific_name ? '<i>' + esc(r.organism.scientific_name) + '</i>' : ''],
-          ['Ligands', esc((r.ligands || []).map(function (l) { return sentence(l.description); }).join(', '))], ['Keywords', esc((r.keywords || []).join(', '))]].filter(function (p) { return p[1]; }).map(function (p) { return '<dt>' + p[0] + '</dt><dd>' + p[1] + '</dd>'; }).join('') + '</dl>' +
+          ['UniProt', uniprot(r)], ['Ligands', esc((r.ligands || []).map(function (l) { return sentence(l.description); }).join(', '))], ['Keywords', esc((r.keywords || []).join(', '))]].filter(function (p) { return p[1]; }).map(function (p) { return '<dt>' + p[0] + '</dt><dd>' + p[1] + '</dd>'; }).join('') + '</dl>' +
         (cit.title ? '<p class="cite">' + esc(cit.title) + ' <span class="muted">' + esc((r.primary_authors || []).slice(0, 4).join(', ') + ((r.primary_authors || []).length > 4 ? ' et al.' : '')) + '. ' + esc([cit.journal, cit.year].filter(Boolean).join(' ')) + '.</span> ' + (cit.DOI ? extA('https://doi.org/' + cit.DOI, 'doi:' + esc(cit.DOI)) : '') + '</p>' : '') +
         '<div class="btns">' + extA('https://molstar.org/viewer/?structure-url=' + encodeURIComponent(base + 'files/structures/at.pdb') + '&structure-url-format=pdb', 'Open in Mol* ↗', 'btn') + extA(base + 'files/structures/at.pdb', 'Atomistic PDB ↓', 'btn ghost') + extA('https://www.rcsb.org/structure/' + pdb, 'RCSB ↗', 'btn ghost') + extA('https://www.ebi.ac.uk/pdbe/entry/pdb/' + pdb, 'PDBe ↗', 'btn ghost') + extA('https://pdbj.org/mine/summary/' + pdb, 'PDBj ↗', 'btn ghost') + '</div></div></div>' +
         (groups ? '<section class="panel"><h2>Member of</h2><div class="groups">' + groups + '</div></section>' : '') +
@@ -312,12 +337,12 @@
         (s.thinning ? '<div class="panel stack"><h3>Bilayer thickness</h3>' + gauge(s.thinning) + (sv.n_lipid_molecules ? '<p class="small muted">' + num(sv.n_lipid_molecules) + ' ' + esc(Object.keys(s.composition || { lipid: 1 }).join('/')) + ' lipids around ' + num(sv.n_protein_residues) + ' protein residues.</p>' : '') + '</div>' : '') +
         (hasImgs ? '<div class="panel"><div class="views">' + view(VIEWS[0][0], VIEWS[0][1], st.v[0], 'v0', VIEWS[0][3]) + view(VIEWS[1][0], VIEWS[1][1], st.v[1], 'v1', VIEWS[1][3]) +
           view('Lipid contacts', contactImgs, st.contact * 2 + st.rep, 'none', 'Average occupancy of the chosen group within 6 Å of the protein over the final 800 ns.', '').replace(/<div class="seg"[\s\S]*?<\/div>/, '<div class="btns"><div class="seg" role="group" aria-label="Contact group">' + CONTACTS.map(function (c, i) { return '<button type="button" data-contact="' + i + '" aria-pressed="' + (st.contact === i) + '">' + c[0] + '</button>'; }).join('') + '</div><div class="seg" role="group" aria-label="Representation">' + REPS.map(function (c, i) { return '<button type="button" data-rep="' + i + '" aria-pressed="' + (st.rep === i) + '">' + c[0] + '</button>'; }).join('') + '</div></div>') + '</div></div>'
-          : '<p class="small muted">Rendered images for this entry load from file storage on the live site. This preview includes them for 1a0s.</p>') + '</section>' +
-        '<section class="panel stack"><h2>Polypeptide chains</h2>' + (!st.tried ? '<p class="muted">Loading…</p>' : !ch.length ? '<p class="muted">Chain analysis is in this entry\'s full record, which this preview holds for ' + DB.entries.length + ' sample entries.</p>' :
+          : '<p class="small muted">Rendered images load from file storage, which this preview cannot reach.</p>') + '</section>' +
+        '<section class="panel stack"><h2>Polypeptide chains</h2>' + (!st.tried ? '<p class="muted">Loading…</p>' : !ch.length ? '<p class="muted">No chain analysis is recorded for this entry.</p>' :
           '<div class="chainpick">' + ch.map(function (c) {
             var tm = c.tm_alpha ? c.tm_alpha + ' TM helices' : c.tm_beta ? c.tm_beta + ' TM strands' : c.type;
-            return '<a href="' + href('ref/PDB/' + pdb + '/chain/' + c.chainID) + '"' + (c.chainID === chainSel ? ' aria-current="true"' : '') + '>' + (st.violins && st.violins[c.chainID] ? '<span class="chainsvg">' + st.violins[c.chainID] + '</span>' : '') + '<span>Chain ' + esc(c.chainID) + '<small>' + esc(tm) + '</small></span></a>';
-          }).join('') + '</div>' + (st.violins ? '<p class="small muted">Each icon is a violin plot of residue density along the bilayer normal: all residues in white, helices in blue, strands in green.</p>' : '') +
+            return '<a href="' + href('ref/PDB/' + pdb + '/chain/' + c.chainID) + '"' + (c.chainID === chainSel ? ' aria-current="true"' : '') + '>' + (st.rec && st.rec.prof && st.rec.prof.c[c.chainID] ? '<span class="chainsvg">' + violin(st.rec.prof, c.chainID, s.thinning) + '</span>' : '') + '<span>Chain ' + esc(c.chainID) + '<small>' + esc(tm) + '</small></span></a>';
+          }).join('') + '</div>' + (st.rec && st.rec.prof ? '<p class="small muted">Each icon shows where the chain\'s residues sit along the bilayer normal: all residues in white, helices in blue, strands in green. The shaded band is the bulk bilayer.</p>' : '') +
           (selc ? '<dl class="facts"><dt>Placement</dt><dd>' + esc(sentence(selc.type.toUpperCase())) + '</dd><dt>Membrane-spanning helices</dt><dd>' + selc.tm_alpha + '</dd><dt>Membrane-spanning strands</dt><dd>' + selc.tm_beta + '</dd><dt>Lipid-facing elements</dt><dd>' + (selc.tm_alpha_lipid + selc.tm_beta_lipid) + '</dd></dl>' +
             (st.topo && st.topo.chain === chainSel ? '<h3>Topology of chain ' + esc(chainSel) + '</h3><p class="small muted">Helices and strands of at least five residues, arranged relative to the bilayer.</p><div class="well topology scroll">' + st.topo.svg + '</div>' : '') : '<p class="small muted">Choose a chain for its membrane placement.</p>')) + '</section>' +
         '<section class="panel stack"><h2>Downloads</h2><p class="small muted">Files are served from file storage. Licensed under Creative Commons Attribution 4.0.</p><div class="files">' + FILES.map(function (g) {
@@ -330,10 +355,9 @@
     function keep() { var y = window.scrollY; render(); window.scrollTo(0, y); }
     render();
     var jobs = [];
-    if (DB.entries.indexOf(pdb) !== -1) jobs.push(getJSON('data/entries/' + pdb + '.json').then(function (j) { st.rec = j; }).catch(function () {}));
+    jobs.push(getJSON('data/entries/' + pdb + '.json').then(function (j) { st.rec = j; }).catch(function () {}));
     if (DB.snap[pdb]) jobs.push(getText('pages/chains_' + pdb + '.html').then(function (t) {
-      var d = document.createElement('div'); d.innerHTML = t; st.violins = {};
-      Array.prototype.forEach.call(d.querySelectorAll('[data-violin]'), function (n) { st.violins[n.getAttribute('data-violin')] = n.innerHTML; });
+      var d = document.createElement('div'); d.innerHTML = t;
       var tp = d.querySelector('[data-topology]'); if (tp) st.topo = { chain: tp.getAttribute('data-topology'), svg: tp.innerHTML };
     }).catch(function () {}));
     Promise.all(jobs).then(function () { st.tried = true; if (route.current.indexOf('ref/PDB/' + pdb) === 0) keep(); });
@@ -348,7 +372,7 @@
     route.current = p;
     if (p === 'home') pageHome();
     else if (p === 'search/text') pageSearch();
-    else if (p === 'about' || p === 'stats' || p === 'api') pageStatic(p, p, { about: 'About', stats: 'Statistics', api: 'API' }[p]);
+    else if (p === 'about' || p === 'stats' || p === 'api' || p === 'data') pageStatic(p, p, { about: 'About', stats: 'Statistics', api: 'API', data: 'Data files' }[p]);
     else if (p === 'status') pageStatus();
     else if ((m = p.match(/^ref\/PDB\/([0-9a-z]{4})(?:\/chain\/(\w+))?$/i))) pageEntry(m[1].toLowerCase(), m[2] || null);
     else if ((m = p.match(/^ref\/([A-Za-z]+)\/(.+)$/))) pageCollection(m[1], m[2]);
