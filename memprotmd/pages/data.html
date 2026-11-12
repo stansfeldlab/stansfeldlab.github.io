@@ -83,16 +83,23 @@ ensembles/
 <tr><td class="id">ensembles/statistics/resname_hists.latest.yml</td><td>Abundance of each amino acid by depth in the membrane, across all simulations.</td></tr>
 </tbody></table></div>
 
-<h2>Index of entries</h2>
-<p>This site reads one index file, <code>data/index.json</code>, which lists every entry and group. It can be fetched directly to enumerate the dataset.</p>
-<div class="scroll"><table class="tbl"><thead><tr><th>Key</th><th>Contents</th></tr></thead><tbody>
-<tr><td class="id">pdb</td><td>One array per entry: PDB code, title, subtitle, experimental method, resolution in ångströms, release date.</td></tr>
-<tr><td class="id">cols</td><td>For each collection, one array per group: accession, title, number of simulations, parent group, subtitle, and the member PDB codes separated by spaces.</td></tr>
+<h2>Files hosted with this site</h2>
+<p>The index, a record for every entry and the thumbnails are also served from this site, at</p>
+<pre><code>https://stansfeldlab.github.io/memprotmd/</code></pre>
+<div class="scroll"><table class="tbl"><thead><tr><th>File</th><th>Contents</th></tr></thead><tbody>
+<tr><td class="id">data/index.json</td><td>Every entry and group. <code>pdb</code> holds one array per entry: PDB code, title, subtitle, experimental method, resolution in ångströms and release date. <code>cols</code> holds, for each classification, one array per group: accession, title, number of simulations, parent group, subtitle, and the member PDB codes separated by spaces.</td></tr>
+<tr><td class="id">data/entries/&lt;pdb&gt;.json</td><td>The full record for one entry. <code>ref</code> is the PDB metadata: title, keywords, ligands, entities with their UniProt accessions, citation and authors, per-chain membrane placement, and mean bilayer thickness. <code>sim</code> is the simulation summary: chains with their membrane-spanning helices and strands, bilayer thinning, lipid composition, leaflet counts and simulation checks. <code>prof</code> is each chain's residue density along the bilayer normal.</td></tr>
+<tr><td class="id">data/groups/&lt;collection&gt;.json</td><td>Descriptions, keywords and source links for the groups in one classification: mpm, TCDB, mpstruc or Pfam.</td></tr>
+<tr><td class="id">thumbs/pdb/&lt;pdb&gt;.jpg</td><td>A 250-pixel image of each entry in its bilayer.</td></tr>
+<tr><td class="id">thumbs/&lt;collection&gt;/&lt;accession&gt;.jpg</td><td>A 100-pixel montage for each group. Characters other than letters and digits in the accession are written as a hyphen and two hex digits, so <code>1.A</code> becomes <code>1-2eA</code>.</td></tr>
 </tbody></table></div>
+<h3>Chain profiles</h3>
+<p>In <code>prof</code>, <code>lo</code> is the lower edge of the first bin and <code>w</code> the bin width, both in ångströms from the bilayer centre. For each chain, <code>c</code> holds three arrays of equal length: the density of all residues, of helix residues and of strand residues in each bin.</p>
 
 <h2>Example</h2>
-<p>Download the atomistic snapshot and the per-residue analysis for 1A0S:</p>
-<pre><code>BASE=https://memprotmd.bioch.ox.ac.uk/data/memprotmd
+<p>Download the record, the atomistic snapshot and the per-residue analysis for 1A0S:</p>
+<pre><code>curl -O https://stansfeldlab.github.io/memprotmd/data/entries/1a0s.json
+BASE=https://memprotmd.bioch.ox.ac.uk/data/memprotmd
 curl -O $BASE/simulations/1a0s_default_dppc/files/structures/at.pdb
 curl -O $BASE/simulations/1a0s_default_dppc/files/contacts/by_resid_postprocess.csv</code></pre>
 
