@@ -1,0 +1,101 @@
+<article class="prose" style="max-width:52rem">
+<h1>Data files and layout</h1>
+<p>Everything in MemProtMD is available as plain files over HTTPS. No account or API key is needed, and all files are licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">Creative Commons Attribution 4.0</a>. This page describes where each file lives and what it contains.</p>
+
+<h2>Base address</h2>
+<p>All paths below are relative to one base address. At present this is:</p>
+<pre><code>https://memprotmd.bioch.ox.ac.uk/data/memprotmd/</code></pre>
+<p>Each simulation has an identifier made from the lower-case PDB code and the simulation set-up, for example <code>1a0s_default_dppc</code>: PDB entry 1A0S, default protocol, DPPC bilayer.</p>
+
+<h2>Folder layout</h2>
+<pre><code>simulations/
+  &lt;pdb&gt;_default_dppc/
+    images/                     rendered views (JPEG)
+    files/structures/           coordinate files (PDB)
+    files/contacts/             per-residue analysis (CSV)
+    files/run/                  ready-to-run simulation inputs (ZIP)
+    *.latest.yml                analysis results (YAML)
+databases/
+  &lt;collection&gt;/thumbs/          thumbnails for PDB entries and groups
+  mpm/stats.csv                 histograms for each MemProtMD group
+ensembles/
+  statistics/                   statistics across all simulations</code></pre>
+
+<h2>Files for one simulation</h2>
+<h3>Structures</h3>
+<div class="scroll"><table class="tbl"><thead><tr><th>File</th><th>Contents</th></tr></thead><tbody>
+<tr><td class="id">files/structures/ready.pdb</td><td>The protein structure as prepared for simulation.</td></tr>
+<tr><td class="id">files/structures/at.pdb</td><td>Final snapshot at atomistic resolution: protein, lipids, water and ions, converted from coarse-grained with CG2AT.</td></tr>
+<tr><td class="id">files/structures/cg.pdb</td><td>Final snapshot in coarse-grained (MARTINI) representation.</td></tr>
+<tr><td class="id">files/structures/web_vis.pdb</td><td>A reduced atomistic snapshot for viewing in a web browser.</td></tr>
+<tr><td class="id">files/structures/distortions.pdb</td><td>The average membrane surface, written as PDB so it can be opened alongside the protein.</td></tr>
+<tr><td class="id">files/structures/group_head.contacts.pdb<br>group_tail.contacts.pdb<br>group_solvent.contacts.pdb</td><td>The protein with lipid head-group, acyl-tail or solvent contacts written into the temperature-factor column, ready for colouring in a molecular viewer.</td></tr>
+</tbody></table></div>
+
+<h3>Simulation inputs</h3>
+<div class="scroll"><table class="tbl"><thead><tr><th>File</th><th>Contents</th></tr></thead><tbody>
+<tr><td class="id">files/run/at.zip</td><td>GROMACS input files to continue the simulation at atomistic resolution.</td></tr>
+<tr><td class="id">files/run/cg.zip</td><td>GROMACS input files for the coarse-grained simulation.</td></tr>
+</tbody></table></div>
+
+<h3>Analysis</h3>
+<div class="scroll"><table class="tbl"><thead><tr><th>File</th><th>Contents</th></tr></thead><tbody>
+<tr><td class="id">files/contacts/by_resid_postprocess.csv</td><td>One row per residue. See the column list below.</td></tr>
+<tr><td class="id">files/contacts/relative_z_histogram.csv</td><td>For each chain, the density of each amino acid type, and of helix, strand and other residues, in slices along the bilayer normal.</td></tr>
+<tr><td class="id">thinning.latest.yml</td><td>Bilayer thickness in the bulk and next to the protein, and the difference between them, in ångströms.</td></tr>
+<tr><td class="id">build_ss_topology.latest.yml</td><td>For each chain, the helices and strands with their start and end residues and their path relative to the bilayer. This drives the topology view.</td></tr>
+<tr><td class="id">align_sim_structure.latest.yml</td><td>The mapping between residues in the simulation and residues in the original PDB entry, with secondary structure.</td></tr>
+</tbody></table></div>
+
+<h3>Images</h3>
+<p>Rendered with VMD and Tachyon. All are in <code>images/</code>.</p>
+<div class="scroll"><table class="tbl"><thead><tr><th>File</th><th>Contents</th></tr></thead><tbody>
+<tr><td class="id">thumb_50.jpg, thumb_100.jpg, thumb_250.jpg</td><td>Thumbnails of the protein in its bilayer.</td></tr>
+<tr><td class="id">front-cartoon.jpg, top-cartoon.jpg, bottom-cartoon.jpg</td><td>The protein alone, from the side, from above and from below.</td></tr>
+<tr><td class="id">front-cg_lipids.jpg, front-at_lipids.jpg</td><td>The protein with coarse-grained or atomistic lipids.</td></tr>
+<tr><td class="id">front-distortions.jpg, top-distortions.jpg, bottom-distortions.jpg</td><td>The average membrane surface, coloured red where the bilayer is thinner than bulk and blue where it is thicker.</td></tr>
+<tr><td class="id">front-contacts-{head,tail,solvent}-{cartoon,surface}.jpg</td><td>The protein coloured by contact with lipid head groups, acyl tails or solvent, as cartoon or surface.</td></tr>
+</tbody></table></div>
+
+<h2>Columns in by_resid_postprocess.csv</h2>
+<p>Contact values are the fraction of frames, from 0 to 1, in which the group is within 6 Å of the residue over the final 800 ns of the simulation.</p>
+<div class="scroll"><table class="tbl"><thead><tr><th>Column</th><th>Meaning</th></tr></thead><tbody>
+<tr><td class="id">chainID, chainInstance, resSeq, iCode, resName</td><td>Residue identity, matching the PDB entry.</td></tr>
+<tr><td class="id">DSSP, ss</td><td>Secondary structure: the DSSP code, and a summary of alpha, beta or none.</td></tr>
+<tr><td class="id">aligned</td><td>Whether the residue could be matched to the original PDB entry.</td></tr>
+<tr><td class="id">tempFactor</td><td>Temperature factor from the original structure.</td></tr>
+<tr><td class="id">leaflet=a;resname=DPPC;bead=Phosphate<br>and similar</td><td>Contact with one lipid bead type in one leaflet. Leaflets are <code>a</code> and <code>b</code>; <code>flip</code> is lipid that changed leaflet. Beads are Choline, Phosphate, Glycerol and Tail_1 to Tail_4.</td></tr>
+<tr><td class="id">leaflet=sol;resname=W;bead=Water<br>leaflet=sol;resname=ION;bead=Sodium, Chloride</td><td>Contact with water and with each ion.</td></tr>
+<tr><td class="id">group=Head, group=Tail, group=Solvent</td><td>Contact summed over head-group beads, tail beads, or water and ions.</td></tr>
+<tr><td class="id">leaflet=a, leaflet=b, leaflet=flip, leaflet=sol</td><td>Contact summed by leaflet.</td></tr>
+<tr><td class="id">x, y, z</td><td>Average position of the residue, in ångströms.</td></tr>
+<tr><td class="id">rel_z_annular, rel_z_20</td><td>Position along the bilayer normal relative to the bilayer centre, measured against the lipids next to the protein.</td></tr>
+<tr><td class="id">leaflet_upper, leaflet_lower</td><td>Position relative to the upper and lower leaflet.</td></tr>
+<tr><td class="id">surface, pore_inner_surface</td><td>Solvent or lipid exposure of the residue, and whether it lines an internal pore.</td></tr>
+</tbody></table></div>
+
+<h2>Shared files</h2>
+<div class="scroll"><table class="tbl"><thead><tr><th>File</th><th>Contents</th></tr></thead><tbody>
+<tr><td class="id">databases/PDB/thumbs/&lt;pdb&gt;.jpg, &lt;pdb&gt;_250.jpg, &lt;pdb&gt;_100.jpg</td><td>Image of each entry at full size and as thumbnails.</td></tr>
+<tr><td class="id">databases/&lt;collection&gt;/thumbs/&lt;accession&gt;.jpg</td><td>Montage for each group, for the collections mpm, TCDB, mpstruc and Pfam.</td></tr>
+<tr><td class="id">databases/mpm/stats.csv</td><td>Histograms of publication date, method, resolution and membrane thickness for each MemProtMD group.</td></tr>
+<tr><td class="id">ensembles/statistics/contact_scales.latest.yml</td><td>Contact preference of each amino acid for solvent, head groups and tails, across all simulations.</td></tr>
+<tr><td class="id">ensembles/statistics/resname_hists.latest.yml</td><td>Abundance of each amino acid by depth in the membrane, across all simulations.</td></tr>
+</tbody></table></div>
+
+<h2>Index of entries</h2>
+<p>This site reads one index file, <code>data/index.json</code>, which lists every entry and group. It can be fetched directly to enumerate the dataset.</p>
+<div class="scroll"><table class="tbl"><thead><tr><th>Key</th><th>Contents</th></tr></thead><tbody>
+<tr><td class="id">pdb</td><td>One array per entry: PDB code, title, subtitle, experimental method, resolution in ångströms, release date.</td></tr>
+<tr><td class="id">cols</td><td>For each collection, one array per group: accession, title, number of simulations, parent group, subtitle, and the member PDB codes separated by spaces.</td></tr>
+</tbody></table></div>
+
+<h2>Example</h2>
+<p>Download the atomistic snapshot and the per-residue analysis for 1A0S:</p>
+<pre><code>BASE=https://memprotmd.bioch.ox.ac.uk/data/memprotmd
+curl -O $BASE/simulations/1a0s_default_dppc/files/structures/at.pdb
+curl -O $BASE/simulations/1a0s_default_dppc/files/contacts/by_resid_postprocess.csv</code></pre>
+
+<h2>Citing</h2>
+<p>Newport TD, Sansom MSP, Stansfeld PJ. The MemProtMD database: a resource for membrane-embedded protein structures and their lipid interactions. <i>Nucleic Acids Research</i> (2019). <a href="https://doi.org/10.1093/nar/gky1047" target="_blank" rel="noopener">doi:10.1093/nar/gky1047</a></p>
+</article>

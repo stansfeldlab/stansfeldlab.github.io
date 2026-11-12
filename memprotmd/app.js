@@ -93,7 +93,7 @@
   }
 
   /* ---------- chrome ---------- */
-  var NAV = [['search/text', 'Search'], ['about', 'About'], ['stats', 'Statistics'], ['status', 'Status'], ['api', 'API']];
+  var NAV = [['search/text', 'Search'], ['about', 'About'], ['stats', 'Statistics'], ['status', 'Status'], ['data', 'Data'], ['api', 'API']];
   function chrome(active, main) {
     return '<header class="bar"><div class="wrap"><a class="logo" href="' + href('home') + '" aria-label="MemProtMD home"><img src="logo.svg" alt="MemProtMD"></a>' +
       '<nav class="nav" aria-label="Main">' + NAV.map(function (n) { return '<a href="' + href(n[0]) + '"' + (active === n[0] ? ' aria-current="page"' : '') + '>' + n[1] + '</a>'; }).join('') + '</nav>' +
@@ -348,7 +348,7 @@
     route.current = p;
     if (p === 'home') pageHome();
     else if (p === 'search/text') pageSearch();
-    else if (p === 'about' || p === 'stats' || p === 'api') pageStatic(p, p, { about: 'About', stats: 'Statistics', api: 'API' }[p]);
+    else if (p === 'about' || p === 'stats' || p === 'api' || p === 'data') pageStatic(p, p, { about: 'About', stats: 'Statistics', api: 'API', data: 'Data files' }[p]);
     else if (p === 'status') pageStatus();
     else if ((m = p.match(/^ref\/PDB\/([0-9a-z]{4})(?:\/chain\/(\w+))?$/i))) pageEntry(m[1].toLowerCase(), m[2] || null);
     else if ((m = p.match(/^ref\/([A-Za-z]+)\/(.+)$/))) pageCollection(m[1], m[2]);
