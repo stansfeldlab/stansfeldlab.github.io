@@ -24,14 +24,14 @@
   function remote(path) { return CFG.remoteImages === false ? null : STORE + path; }
   function imgUrl(kind, a) {
     var p = a.split('/');
-    if (kind === 'pdb100' || kind === 'pdbtile') return pdbThumb(a);
+    if (kind === 'pdb100') return pdbThumb(a);
+    if (kind === 'pdbhero' || kind === 'pdbtile') return remote('simulations/' + a + '_default_dppc/images/front-contacts-head-cartoon.jpg') || pdbThumb(a);
     if (kind === 'col100') return colThumb(p[0], p.slice(1).join('/'));
-    if (kind === 'pdbhero') return remote('databases/PDB/thumbs/' + a + '.jpg') || pdbThumb(a);
     if (kind === 'colhero') return remote('databases/' + p[0] + '/thumbs/' + encodeURIComponent(p.slice(1).join('/')) + '.jpg');
     if (kind === 'sim') return remote('simulations/' + p[0] + '_default_dppc/images/' + p[1] + '.jpg');
     return null;
   }
-  function fallback(kind, a) { return kind === 'pdbhero' ? pdbThumb(a) : null; }
+  function fallback(kind, a) { return kind === 'pdbhero' || kind === 'pdbtile' ? pdbThumb(a) : null; }
   window.mpmFb = function (el) { var f = el.getAttribute('data-fb'); el.removeAttribute('data-fb'); if (f === 'hide') { el.closest('.well').hidden = true; return; } if (f) { el.src = f; return; } el.onerror = null; el.src = PH; };
   function fbAttr(kind, a) { var f = fallback(kind, a); return f ? ' data-fb="' + esc(f) + '"' : ''; }
   function imgTag(kind, a, cls, alt) { return '<img' + (cls ? ' class="' + cls + '"' : '') + ' src="' + (imgUrl(kind, a) || PH) + '"' + fbAttr(kind, a) + ' alt="' + esc(alt || '') + '" loading="lazy" onerror="mpmFb(this)">'; }
