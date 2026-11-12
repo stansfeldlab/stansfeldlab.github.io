@@ -25,7 +25,7 @@
   function imgUrl(kind, a) {
     var p = a.split('/');
     if (kind === 'pdb100') return pdbThumb(a);
-    if (kind === 'pdbhero' || kind === 'pdbtile') return remote('simulations/' + a + '_default_dppc/images/front-contacts-head-cartoon.jpg') || pdbThumb(a);
+    if (kind === 'pdbhero' || kind === 'pdbtile') return remote('databases/PDB/thumbs/' + a + '.jpg') || pdbThumb(a);
     if (kind === 'col100') return colThumb(p[0], p.slice(1).join('/'));
     if (kind === 'colhero') return remote('databases/' + p[0] + '/thumbs/' + encodeURIComponent(p.slice(1).join('/')) + '.jpg');
     if (kind === 'sim') return remote('simulations/' + p[0] + '_default_dppc/images/' + p[1] + '.jpg');
