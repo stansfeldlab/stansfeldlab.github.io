@@ -2,3 +2,4 @@ User-agent: *
 Allow: /
 
 Sitemap: https://stansfeldlab.github.io/sitemap.xml
+Sitemap: https://stansfeldlab.github.io/memprotmd/sitemap.xml
