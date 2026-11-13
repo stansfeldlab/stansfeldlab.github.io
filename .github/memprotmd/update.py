@@ -357,7 +357,16 @@ def protein_name(desc):
     if ' - ' in d:
         d, species = d.rsplit(' - ', 1)
         species = re.sub(r'\s*\([^()]*\)\s*$', '', species.strip().rstrip('.')).strip()
+    m = re.search(r'\s+OS=(.+?)(?:\s+(?:OX|GN|PE|SV)=|$)', d)   # UniProt FASTA style: name OS=species GN=gene ...
+    if m:
+        species = species or m.group(1).strip()
+        d = d[:m.start()]
     d = re.sub(r'\s*\[(Cleaved into|Includes|Contains)[^\]]*\]', '', d)
+    if d.isupper() and len(d) > 4:   # old SwissProt names in capitals: sentence case, keeping common abbreviations
+        d = re.sub(r'\s+precursor$', '', d.lower())
+        d = d[:1].upper() + d[1:]
+        d = re.sub(r'\b(atpase|atp|adp|gtp|abc|gaba|nadh|nadph|cftr|hiv|dna|rna|ii|iii|iv|vi)\b',
+                   lambda x: 'ATPase' if x.group(1) == 'atpase' else x.group(1).upper(), d)
     name = d.strip()
     while True:   # drop trailing bracketed alternative names, allowing one level of brackets inside
         cut = re.sub(r'\s*\((?:[^()]|\([^()]*\))*\)\s*$', '', name).strip()
