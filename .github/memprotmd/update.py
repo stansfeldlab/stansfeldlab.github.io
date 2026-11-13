@@ -165,6 +165,8 @@ def rcsb_lookup(refs, pids):
                     if u.get('rcsb_id') and nm:
                         uni[u['rcsb_id']] = nm
             out[pid] = {'o': list(seen.values()), 'u': uni}
+        for pid in batch:
+            out.setdefault(pid.lower(), {'o': [], 'u': {}})   # obsolete or unreleased in the PDB
     return out
 
 
@@ -276,7 +278,8 @@ def derived_groups(ref_by, sim_by, rcsb, old_cols):
     for pid, ref in ref_by.items():
         for l in ref.get('ligands') or []:
             if l.get('ligand_id'):
-                e = lig.setdefault(l['ligand_id'], {'d': l.get('description') or l['ligand_id'], 'm': set()})
+                d = l.get('description') or l['ligand_id']
+                e = lig.setdefault(l['ligand_id'], {'d': d[:1] + d[1:].lower() if d.isupper() else d, 'm': set()})
                 e['m'].add(pid)
     for k, e in lig.items():
         if len(e['m']) >= 5:
