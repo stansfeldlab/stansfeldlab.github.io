@@ -852,7 +852,7 @@
     var base = growth(), years = [], data = { per: {}, cum: {} };
     for (var y = gj.years[0]; y <= gj.years[1]; y++) years.push(y);
     base.groups.forEach(function (g) { var c = 0, per = (gj[key].per[g[0]] || []).slice(); data.per[g[0]] = per; data.cum[g[0]] = per.map(function (v) { c += v; return c; }); });
-    return { groups: base.groups, years: years, data: data };
+    return { groups: base.groups.map(function (g) { return g[0] === 'all' ? ['all', key === 'uniprot' ? 'All proteins' : 'All Pfam families'] : g; }), years: years, data: data };
   }
   function pageStats() {
     show('stats', '<p class="muted">Loading…</p>', 'Statistics');
