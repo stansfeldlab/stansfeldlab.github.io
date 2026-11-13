@@ -1,0 +1,38 @@
+name: memprotmd-probe2
+on:
+  push:
+    branches: [memprotmd-tcdb-about]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: mpstruc
+        run: |
+          for u in https://blanco.biomol.uci.edu/mpstruc/listAll/mpstrucTblXml http://blanco.biomol.uci.edu/mpstruc/listAll/mpstrucTblXml https://blanco.biomol.uci.edu/mpstruc/listAll/mpstrucAlphaHlxTblXml; do
+            curl -sSL -m 180 "$u" -o /tmp/m.xml -w "$u %{http_code} %{size_download} %{content_type}\n" || true
+          done
+          curl -sSL -m 180 https://blanco.biomol.uci.edu/mpstruc/listAll/mpstrucTblXml -o /tmp/m.xml || true
+          head -c 1500 /tmp/m.xml; echo
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET, collections, re
+          try:
+              r = ET.parse('/tmp/m.xml').getroot()
+          except Exception as e:
+              print('parse failed', e); raise SystemExit
+          tags = collections.Counter(e.tag for e in r.iter()); print(tags.most_common(40))
+          def show(e, d=0, n=[0]):
+              if n[0] > 80: return
+              n[0] += 1; txt = (e.text or '').strip()[:70]
+              print('  ' * d + e.tag, repr(txt) if txt else '')
+              for c in list(e)[:3]: show(c, d + 1)
+          show(r)
+          codes = [e.text.strip().lower() for e in r.iter('pdbCode') if e.text]
+          print('pdb codes', len(codes), len(set(codes)))
+          dates = [e.text for e in r.iter() if e.tag.lower().endswith('date') and e.text]; print('dates sample', sorted(dates)[-5:] if dates else None)
+          print('updated', [ (e.tag, (e.text or '')[:40]) for e in r.iter() if 'update' in e.tag.lower() or 'version' in e.tag.lower()][:5])
+          PY
+      - name: tcdb fasta
+        run: |
+          curl -sSL -m 300 https://www.tcdb.org/public/tcdb -o /tmp/tcdb.faa -w "tcdb %{http_code} %{size_download}\n" || true
+          grep -c '^>' /tmp/tcdb.faa || true; grep -m8 '^>' /tmp/tcdb.faa || true
+          grep '^>' /tmp/tcdb.faa | grep -m5 -E '\|1\.A\.1\.2\.4[ |]' || true
