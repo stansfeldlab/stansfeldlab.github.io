@@ -1,0 +1,34 @@
+name: memprotmd-organism-test
+on:
+  push:
+    branches: [memprotmd-organism]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 1 }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install pyyaml==6.0.2
+      - run: python .github/memprotmd/update.py memprotmd
+      - name: Organism summary
+        run: |
+          python3 - <<'PY'
+          import json, collections
+          i = json.load(open('memprotmd/data/index.json'))
+          o = i['orgs']; rows = i['pdb']
+          print('distinct organisms', len(o), '| entries without', sum(1 for r in rows if not r[6]), '| with several', sum(1 for r in rows if len(r[6]) > 1))
+          c = collections.Counter(o[k][0] for r in rows for k in r[6])
+          print('top', c.most_common(15))
+          print('domains', collections.Counter(o[k][1] for r in rows for k in r[6]))
+          print('1a0s', [o[k] for k in next(r for r in rows if r[0] == '1a0s')[6]], '| 2rh1', [o[k] for k in next(r for r in rows if r[0] == '2rh1')[6]], '| 10ey', [o[k] for k in next(r for r in rows if r[0] == '10ey')[6]])
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: memprotmd-data
+          path: |
+            memprotmd/data/index.json
+            memprotmd/data/status.json
+            .github/memprotmd/organisms.json
+            .github/memprotmd/state.json
