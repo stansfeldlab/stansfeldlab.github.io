@@ -188,13 +188,13 @@ def species(name, domain):
 
 
 def topology(sim, ref):
-    """("alpha", most TM helices in one chain), ("beta", strands in the barrel), ("other", 0), or (None, 0)
-    when the chains were not analysed. A barrel built from several chains (TolC, α-haemolysin) is counted
-    by its strands in total; a chain marked as a β-barrel with fewer than eight strands found is a
-    β-barrel with no strand count (0)."""
+    """Classify an entry by its membrane chains: ("alpha", most TM helices in one chain), ("beta", strands
+    in the barrel; 0 if not all were found), ("unclassified", 0) when the chain analysis is missing or did
+    not count helices and strands, or ("other", 0) when no chain was placed across the membrane.
+    A barrel built from several chains (TolC, α-haemolysin) is counted by its strands in total."""
     ch = sim.get('chains') or []
     if not ch:
-        return None, 0
+        return 'unclassified', 0
     a = max(c.get('tm_alpha') or 0 for c in ch)
     b = max(c.get('tm_beta') or 0 for c in ch)
     tb = sum((c.get('tm_beta') or 0) * (c.get('count') or 1) for c in ch)
@@ -205,6 +205,8 @@ def topology(sim, ref):
         return 'beta', tb if tb >= 8 else 0
     if a >= 1:
         return 'alpha', a
+    if any(c.get('type') in IN_MEMBRANE for c in ch):
+        return 'unclassified', 0   # spans the membrane, but no helices or strands were counted
     return 'other', 0
 
 
@@ -274,18 +276,18 @@ def derived_groups(ref_by, sim_by, rcsb, old_cols):
     cols['organism'] = G
     details['organism'] = taxdet
 
-    # membrane topology, for entries whose chains were analysed (others are left out rather than guessed)
+    # membrane topology; entries the analysis could not classify get their own group so they can be checked
     G = {'topology': {'title': 'Membrane topology', 'parent': 0, 'sub': 'By transmembrane helices or β-strands per chain', 'm': set()},
          'alpha': {'title': 'α-helical', 'parent': 'topology|topology', 'sub': 0, 'm': set()},
          'beta': {'title': 'β-barrels', 'parent': 'topology|topology', 'sub': 0, 'm': set()},
-         'other': {'title': 'No transmembrane helices or strands found', 'parent': 'topology|topology',
-                   'sub': 'Peripheral proteins, and chains crossing the membrane without regular secondary structure', 'm': set()}}
+         'unclassified': {'title': 'Not yet classified', 'parent': 'topology|topology',
+                          'sub': 'The chain analysis is missing, or did not count helices and strands, for these entries', 'm': set()},
+         'other': {'title': 'Not placed in the membrane', 'parent': 'topology|topology',
+                   'sub': 'No chain crosses the bilayer in the simulation, so these entries may need checking', 'm': set()}}
     for pid, sim in sim_by.items():
         if pid not in ref_by:
             continue
         kind, n = topology(sim, ref_by[pid])
-        if not kind:
-            continue
         G['topology']['m'].add(pid)
         G[kind]['m'].add(pid)
         if kind == 'beta' and n:
@@ -487,7 +489,8 @@ def main(site, dry):
             return math.floor(v * 10 + 0.5) / 10 if isinstance(v, (int, float)) else None
         kind, n = topology(sim, r)
         stats = [f1(th.get('annular_thickness')), f1(th.get('thickness_diff')),
-                 (n if kind == 'alpha' else 0) if kind else None, ((n or 1) if kind == 'beta' else 0) if kind else None,   # None: chains not analysed
+                 None if kind == 'unclassified' else n if kind == 'alpha' else 0,   # None: helices and strands not counted
+                 None if kind == 'unclassified' else (n or 1) if kind == 'beta' else 0,
                  len(membrane_chains(r)) or len(ch)]
         return [pid, r.get('title') or 0, sub, r.get('experimental_method') or 0, r.get('resolution') or 0, r.get('first_published') or 0,
                 [at[o[0]] for o in orgs.get(pid) or []], stats]
