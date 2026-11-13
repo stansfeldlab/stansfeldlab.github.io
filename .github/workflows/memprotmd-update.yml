@@ -1,11 +1,12 @@
-# Weekly MemProtMD update: rebuilds memprotmd/ from the MemProtMD database at Oxford and publishes
-# it if anything changed. Run it by hand from the Actions tab ("Run workflow"); tick "dry run" to
-# check the database without publishing. The script is .github/memprotmd/update.py.
-name: MemProtMD weekly update
+# Daily MemProtMD update: rebuilds memprotmd/ from the MemProtMD database at Oxford and publishes it
+# only when an entry, group or the pipeline status has changed, so most days it does nothing.
+# Run it by hand from the Actions tab ("Run workflow"); tick "dry run" to check the database without
+# publishing. The script is .github/memprotmd/update.py.
+name: MemProtMD daily update
 
 on:
   schedule:
-    - cron: '41 6 * * 1'   # Mondays 06:41 UTC
+    - cron: '41 6 * * *'   # every day at 06:41 UTC
   workflow_dispatch:
     inputs:
       dry_run:
@@ -42,7 +43,7 @@ jobs:
         run: python .github/memprotmd/update.py memprotmd ${{ inputs.dry_run && '--dry-run' || '' }}
 
       - name: Publish
-        if: ${{ !inputs.dry_run }}
+        if: ${{ !inputs.dry_run && steps.update.outputs.publish == 'true' }}
         env:
           RELEASE: ${{ steps.update.outputs.release }}
           GH_TOKEN: ${{ github.token }}

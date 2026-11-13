@@ -1,4 +1,4 @@
-"""Weekly MemProtMD update: rebuild the site's data from the MemProtMD database at Oxford.
+"""Daily MemProtMD update: rebuild the site's data from the MemProtMD database at Oxford.
 
 Reads the Oxford API (refs and simulations) and a few shared files, then rewrites, inside
 memprotmd/:
@@ -8,8 +8,10 @@ memprotmd/:
   pdb/<pdb>/index.html, sitemap.xml, data/entries.tsv, data/release.json   (via pages_build)
 
 Entries whose simulation has not changed keep their chain profile; only new or updated
-simulations have their profile CSV and thumbnail fetched again. The run stops without writing
-anything if the database looks incomplete (far fewer entries than the site already has).
+simulations have their profile CSV and thumbnail fetched again. Nothing is written unless an
+entry, a group or the pipeline status has actually changed, so most daily runs publish nothing.
+The run also stops without writing anything if the database looks incomplete (far fewer entries
+than the site already has).
 
 Usage: python3 update.py <site_dir> [--dry-run]
 """
@@ -138,12 +140,13 @@ def main(site, dry):
     old = load(os.path.join(site, 'data', 'index.json'), {'pdb': [], 'cols': {}})
     state_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'state.json')
     state = load(state_path, {})
+    old_state = dict(state)
 
     refs = api('refs', {'db': 'PDB'}, REF_FIELDS + ('accession', 'in_collections', 'db_version'))
     sims = api('simulations', {}, SIM_FIELDS + ('accession', 'last_update_time'))
     groups = api('refs', {'db': {'$in': list(DBS)}}, ('db', 'accession', 'title', 'subtitle', 'parent', 'n_simulations', 'collection_members.accession') + GROUP_DETAIL)
     version = max((r.get('db_version') or '' for r in refs), default='')
-    release = version[:10] or datetime.date.today().isoformat()
+    release = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d')   # the date this release is published
 
     sim_by = {s['accession']: s for s in sims if s.get('accession') and s.get('sim_complete_time')}
     ref_by = {r['accession']: r for r in refs if r.get('accession') in sim_by}
@@ -155,7 +158,7 @@ def main(site, dry):
     old_ids = {r[0] for r in old.get('pdb') or []}
     new_ids, changed_ids, removed = sorted(set(ref_by) - old_ids), [], sorted(old_ids - set(ref_by))
     entries_dir = os.path.join(site, 'data', 'entries')
-    written = 0
+    written, pending = 0, {}
     for pid in sorted(ref_by):
         ref, sim = ref_by[pid], sim_by[pid]
         stamp = sim.get('last_update_time') or sim.get('sim_complete_time')
@@ -180,14 +183,11 @@ def main(site, dry):
         if p:
             rec['prof'] = p
         state[pid] = stamp
-        if not dry and dump(path, rec):
-            written += 1
-        elif dry and prev != json.loads(json.dumps(rec, ensure_ascii=False)):
-            written += 1
+        if prev != json.loads(json.dumps(rec, ensure_ascii=False)):
+            pending[path] = rec
+    written = len(pending)
     for pid in removed:
         state.pop(pid, None)
-        if not dry and os.path.exists(os.path.join(entries_dir, pid + '.json')):
-            os.remove(os.path.join(entries_dir, pid + '.json'))
 
     # groups: keep the existing order, add new ones at the end
     by_db = collections.defaultdict(dict)
@@ -269,7 +269,19 @@ def main(site, dry):
         status = {'written': datetime.datetime.fromtimestamp(wr, datetime.timezone.utc).strftime('%Y-%m-%d') if isinstance(wr, (int, float)) else release,
                   'jobs': sorted(jobs, key=lambda j: j['time'], reverse=True), 'stalled': sorted(stalled, key=lambda j: j['time'], reverse=True)}
 
+    # publish only when something real has changed, not just the database's date stamp
+    def strip(d, *keys):
+        return {k: v for k, v in (d or {}).items() if k not in keys}
+    old_status = load(os.path.join(site, 'data', 'status.json'), {})
+    groups_changed = any(load(os.path.join(site, 'data', 'groups', db + '.json'), None) != json.loads(json.dumps(d, ensure_ascii=False)) for db, d in details.items())
+    reasons = [x for x, c in (('entries', pending or new_ids or removed), ('index', strip(index, 'built') != strip(old, 'built')),
+                               ('groups', groups_changed), ('pipeline status', strip(status, 'written') != strip(old_status, 'written')),
+                               ('change tracking', state != old_state)) if c]
+    if not reasons:
+        index['built'] = release = old.get('built') or release
+
     summary = ['MemProtMD update, database version %s' % version,
+               ('Changed: %s, so this run publishes release %s' % (', '.join(reasons), release)) if reasons else 'Nothing has changed since release %s, so nothing is published' % release,
                '%d entries (%+d): %d new, %d updated, %d removed; %d entry records changed' % (len(ref_by), len(ref_by) - n_old, len(new_ids), len(changed_ids), len(removed), written),
                'New: ' + (', '.join(new_ids[:40]) + (' …' if len(new_ids) > 40 else '') if new_ids else 'none'),
                'Pipeline status (%s): %d in progress, %d stalled; %s' % (status.get('written'), len(status.get('jobs') or []), len(status.get('stalled') or []), dict(counts.most_common()))]
@@ -277,7 +289,12 @@ def main(site, dry):
         idx_diff = json.dumps(index, sort_keys=True) != json.dumps(old, sort_keys=True)
         cdiff = {db: sum(1 for a, b in zip(cols[db], (old.get('cols') or {}).get(db, [])) if a != b) + abs(len(cols[db]) - len((old.get('cols') or {}).get(db, []))) for db in DBS}
         summary.append('Dry run: index differs=%s; group rows differing per collection %s; thick same=%s' % (idx_diff, cdiff, thick == old.get('thick')))
-    else:
+    elif reasons:
+        for path, rec in pending.items():
+            dump(path, rec)
+        for pid in removed:
+            if os.path.exists(os.path.join(entries_dir, pid + '.json')):
+                os.remove(os.path.join(entries_dir, pid + '.json'))
         dump(os.path.join(site, 'data', 'index.json'), index)
         for db, d in details.items():
             dump(os.path.join(site, 'data', 'groups', db + '.json'), d)
@@ -296,7 +313,7 @@ def main(site, dry):
     gh = os.environ.get('GITHUB_OUTPUT')
     if gh:
         with open(gh, 'a') as f:
-            f.write('release=%s\nnew=%d\nchanged=%d\n' % (release, len(new_ids), len(changed_ids)))
+            f.write('release=%s\nnew=%d\nchanged=%d\npublish=%s\n' % (release, len(new_ids), len(changed_ids), 'true' if reasons else 'false'))
 
 
 if __name__ == '__main__':
