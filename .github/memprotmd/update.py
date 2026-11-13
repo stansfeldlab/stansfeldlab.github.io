@@ -353,6 +353,7 @@ def protein_name(desc):
     brackets and UniProt's [Cleaved into: ...] notes are dropped."""
     d = urllib.parse.unquote(desc).strip()
     d = re.sub(r'^Chain [^,]+,\s*', '', d)
+    d = re.sub(r'^[1-9]\.[A-Z]\.\d+\.\d+\.\d+\s+', '', d)   # some descriptions repeat a TC number first
     species = ''
     if ' - ' in d:
         d, species = d.rsplit(' - ', 1)
@@ -361,7 +362,9 @@ def protein_name(desc):
     if m:
         species = species or m.group(1).strip()
         d = d[:m.start()]
-    d = re.sub(r'\s*\[(Cleaved into|Includes|Contains)[^\]]*\]', '', d)
+    d = re.sub(r'\s*\[(Cleaved into|Includes|Contains)[^\]]*\]', '', d).strip().rstrip('.')
+    while d.count('(') > d.count(')') and '(' in d:   # a description cut off inside brackets
+        d = d[:d.rfind('(')].rstrip()
     name = d.strip()
     while True:   # drop trailing bracketed alternative names, allowing one level of brackets inside
         cut = re.sub(r'\s*\((?:[^()]|\([^()]*\))*\)\s*$', '', name).strip()
@@ -420,7 +423,21 @@ def tcdb_titles(cols, names, rcsb):
             kids = [k for k in systems if k[3] == 'TCDB|' + c[0]]
             named = sorted((k for k in kids if names.get(k[0])), key=lambda k: (-k[2], k[0]))
             if named:
-                c[1] = named[0][1] + (' and related proteins' if len(kids) > 1 else '')
+                c[1] = named[0][1] if len(kids) == 1 else shared_name([k[1] for k in named]) if len(named) > 1 and shared_name([k[1] for k in named]) else named[0][1] + ' and related proteins'
+
+
+def shared_name(names):
+    """The words that all the names start with, without trailing words such as 'subfamily' or 'member'
+    that only make sense with what followed; empty if fewer than two words are shared."""
+    pre = []
+    for ws in zip(*(n.split() for n in names)):
+        if any(w.lower() != ws[0].lower() for w in ws):
+            break
+        pre.append(ws[0])
+    loose = {'subfamily', 'member', 'subunit', 'type', 'family', 'isoform', 'of', 'and', 'the', 'chain', 'class', 'group', 'like', 'homolog', 'putative', 'protein,'}
+    while pre and (pre[-1].lower() in loose or len(pre[-1].strip(',;:')) <= 1 or pre[-1].strip(',;:').isdigit() or pre[-1].endswith((',', ';', ':'))):
+        pre.pop()
+    return ' '.join(pre) if len(pre) >= 2 else ''
 
 
 def slug(name):
