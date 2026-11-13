@@ -477,34 +477,57 @@ def mpstruc_tables(path, ref_by, refresh):
     return {'nodes': {k: nodes[k] for k in sorted(keep)}, 'pdb': pdb}
 
 
-def mpstruc_fill(cols, details, no_g, ref_by, ms):
-    """Place entries that have no mpstruc group from Oxford (its mapping stops in 2020) where mpstruc's
-    own list has them, keeping Oxford's tree for groups it already has. Returns the number placed."""
-    rows = {c[0]: c for c in cols.get('mpstruc') or []}
-    nodes, where = ms.get('nodes') or {}, ms.get('pdb') or {}
-    if 'mpstruc' not in rows:
+# Oxford's mpstruc tree is fixed (its mapping stopped in 2020); since then mpstruc has renamed four of its
+# subgroups and split G protein-coupled receptors by class. Renamed subgroups keep Oxford's key, so old
+# links still work, and the GPCR classes sit under Oxford's GPCR subgroup.
+MPSTRUC_RENAMED = {'bacterial-algal-viral-and-unusual-rhodopsins': 'bacterial-algal-and-viral-rhodopsins',
+                   'sec-translocase-and-insertase-proteins': 'sec-and-translocase-proteins',
+                   'mitochondrial-outer-membrane-beta-barrel-proteins': 'beta-barrel-membrane-proteins-mitochondrial-outer-membrane',
+                   'phospholipid-transferases': 'phosphoethanolamine-pea-transferases'}
+MPSTRUC_GPCR = 'g-protein-coupled-receptors-gpcrs'
+
+
+def mpstruc_build(cols, details, ref_by, ms):
+    """mpstruc groups from mpstruc's current list (ms, from mpstruc_tables), so recent entries are
+    placed and older ones follow mpstruc's current classification; entries mpstruc no longer lists
+    keep Oxford's placement. Keys stay Oxford's wherever the group still exists. Returns the number of
+    entries placed that Oxford had not placed."""
+    old = {c[0]: c for c in cols.get('mpstruc') or []}
+    if 'mpstruc' not in old or not ms.get('pdb'):
         return 0
-    placed = set()
-    for acc, c in rows.items():
-        if acc != 'mpstruc':
-            placed.update(c[5].split())
+    nodes = {}
+    for k, (title, parent) in (ms.get('nodes') or {}).items():
+        nodes[MPSTRUC_RENAMED.get(k, k)] = [title, MPSTRUC_RENAMED.get(parent, parent)]
+    if MPSTRUC_GPCR in old:
+        for k, v in nodes.items():
+            if k != MPSTRUC_GPCR and v[1] == 'transmembrane-proteins-alpha-helical' and re.match(r'g[ -]protein[ -]coupled receptors', v[0], re.I):
+                v[1] = MPSTRUC_GPCR
+        nodes.setdefault(MPSTRUC_GPCR, [old[MPSTRUC_GPCR][1], 'transmembrane-proteins-alpha-helical'])
 
     def parent(k):
-        return rows[k][3][len('mpstruc|'):] if k in rows and rows[k][3] else (nodes.get(k) or [0, None])[1]
-    add, n = collections.defaultdict(set), 0
-    for pid in sorted(ref_by):
-        if pid in placed or pid not in where:
-            continue
-        path, k = [], where[pid]
-        while k and k != 'mpstruc' and (k in rows or k in nodes) and len(path) < 8:
-            path.append(k)
-            k = parent(k)
+        if k in nodes:
+            return nodes[k][1]
+        return old[k][3][len('mpstruc|'):] if k in old and old[k][3] else None
+    oxford = collections.defaultdict(set)
+    for k, c in old.items():
         if k != 'mpstruc':
-            continue
-        n += 1
-        add['mpstruc'].add(pid)
-        for k in path:
-            add[k].add(pid)
+            for pid in c[5].split():
+                oxford[pid].add(k)
+    members, n = collections.defaultdict(set), 0
+    for pid in sorted(ref_by):
+        if pid in (ms.get('pdb') or {}):
+            leaves = [ms['pdb'][pid]]
+            leaves = [MPSTRUC_RENAMED.get(k, k) for k in leaves]
+            n += pid not in oxford
+        else:
+            leaves = sorted(oxford.get(pid) or [])
+        for k in leaves:
+            seen = 0
+            while k and k != 'mpstruc' and seen < 9:
+                members[k].add(pid)
+                k, seen = parent(k), seen + 1
+            if k == 'mpstruc':
+                members['mpstruc'].add(pid)
     note = next((v['copyright'] for v in (details.get('mpstruc') or {}).values() if v.get('copyright')), None)
 
     def depth(k):
@@ -512,18 +535,18 @@ def mpstruc_fill(cols, details, no_g, ref_by, ms):
         while k and k != 'mpstruc' and d < 9:
             k, d = parent(k), d + 1
         return d
-    for k in sorted(add, key=lambda x: (depth(x), x)):
-        if k in rows:
-            continue
-        rows[k] = [k, nodes[k][0], 0, 'mpstruc|' + nodes[k][1], 0, '']
-        cols['mpstruc'].append(rows[k])
-        no_g.append('mpstruc|' + k)
-        if note:
+    order = [k for k in old if k in members] + sorted((k for k in members if k not in old), key=lambda k: (depth(k), k))
+    rows = []
+    for k in order:
+        title = nodes[k][0] if k in nodes else old[k][1]
+        par = 0 if k == 'mpstruc' else 'mpstruc|' + parent(k)
+        m = sorted(members[k])
+        rows.append([k, title, len(m), par, old[k][4] if k in old else 0, ' '.join(m)])
+        if k not in old and note:
             details.setdefault('mpstruc', {})['mpstruc|' + k] = {'copyright': note}
-    for k, pids in add.items():
-        c = rows[k]
-        m = sorted(set(c[5].split()) | pids)
-        c[5], c[2] = ' '.join(m), len(m)
+    cols['mpstruc'] = rows
+    keep = {'mpstruc|' + k for k in members}
+    details['mpstruc'] = {k: v for k, v in (details.get('mpstruc') or {}).items() if k in keep}
     return n
 
 
@@ -868,7 +891,11 @@ def main(site, dry):
     # mpstruc: Oxford's mpstruc groups stop in 2020; place the entries without one from mpstruc's own list
     ms_path = os.path.join(here, 'mpstruc.json')
     ms = mpstruc_tables(ms_path, ref_by, daily)
-    print('mpstruc: %d entries without an Oxford mpstruc group placed from mpstruc\'s own list' % mpstruc_fill(cols, details, no_g, ref_by, ms))
+    print('mpstruc: %d entries without an Oxford mpstruc group placed from mpstruc\'s own list' % mpstruc_build(cols, details, ref_by, ms))
+    have = {db + '|' + c[0] for db, rows in cols.items() for c in rows}
+    old_thumbs = set(no_g)
+    no_g = [k for k in old_thumbs if k in have] + sorted(db + '|' + c[0] for db in ('mpstruc',) for c in cols.get(db) or []
+                                                     if not os.path.exists(os.path.join(site, 'thumbs', db, enc(c[0]) + '.jpg')) and db + '|' + c[0] not in old_thumbs)
 
     # groupings worked out from the records: proteins, organisms, topology, ligands
     dcols, ddetails = derived_groups(ref_by, sim_by, rcsb, old.get('cols'))
