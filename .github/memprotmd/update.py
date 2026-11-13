@@ -45,7 +45,8 @@ GROUP_DETAIL = ('description', 'description_copyright', 'keywords_string', 'auto
 RCSB_GQL = 'https://data.rcsb.org/graphql'
 ORG_QUERY = ('query($ids:[String!]!){entries(entry_ids:$ids){rcsb_id polymer_entities{'
              'rcsb_polymer_entity_container_identifiers{auth_asym_ids} '
-             'rcsb_entity_source_organism{scientific_name ncbi_taxonomy_id taxonomy_lineage{name}}}}}')
+             'rcsb_entity_source_organism{scientific_name ncbi_taxonomy_id taxonomy_lineage{name}} '
+             'uniprots{rcsb_id rcsb_uniprot_protein{name{value}}}}}}')
 DOMAINS = ('Bacteria', 'Archaea', 'Eukaryota', 'Viruses')
 IN_MEMBRANE = ('membrane spanning', 'membrane embedded', 'single leaflet')
 UA = {'User-Agent': 'memprotmd-site-update (+https://stansfeldlab.github.io/memprotmd/)'}
@@ -123,28 +124,34 @@ def profile(text):
     return {'lo': round(lo, 2), 'w': round(w, 3), 'c': out} if out else None
 
 
-def organisms(refs, pids):
-    """Source organisms of the membrane chains of each entry, from the RCSB PDB.
+def membrane_chains(ref):
+    return {c.get('chainID') for c in (ref or {}).get('sim_chains_meta') or [] if c.get('tm') in IN_MEMBRANE}
 
-    Returns {pdb: [[scientific name, NCBI taxonomy id, domain], ...]}. Only the polymer entities that
-    contain a chain placed in the membrane are used (so an antibody or nanobody bound to a human
-    protein does not add its species); if none qualify, all polymer entities are used."""
+
+def rcsb_lookup(refs, pids):
+    """Source organisms and UniProt protein names for each entry, from the RCSB PDB.
+
+    Returns {pdb: {"o": [[scientific name, NCBI taxonomy id, domain], ...], "u": {accession: name}}}.
+    Organisms come only from polymer entities that contain a chain placed in the membrane (so an
+    antibody or nanobody bound to a human protein does not add its species); if none qualify, all
+    polymer entities are used.
+    """
     out = {}
     for i in range(0, len(pids), 100):
         batch = [p.upper() for p in pids[i:i + 100]]
         try:
             r = json.loads(get(RCSB_GQL, json.dumps({'query': ORG_QUERY, 'variables': {'ids': batch}}).encode()))
         except (RuntimeError, ValueError) as e:
-            print('RCSB organism lookup failed for a batch, will retry next run:', e)
+            print('RCSB lookup failed for a batch, will retry next run:', e)
             continue
         for e in (r.get('data') or {}).get('entries') or []:
             if not e or not e.get('rcsb_id'):
                 continue
             pid = e['rcsb_id'].lower()
-            tm = {c.get('chainID') for c in (refs.get(pid) or {}).get('sim_chains_meta') or [] if c.get('tm') in IN_MEMBRANE}
+            tm = membrane_chains(refs.get(pid))
             ents = e.get('polymer_entities') or []
             chosen = [x for x in ents if tm & set((x.get('rcsb_polymer_entity_container_identifiers') or {}).get('auth_asym_ids') or [])] or ents
-            seen = {}
+            seen, uni = {}, {}
             for x in chosen:
                 for o in x.get('rcsb_entity_source_organism') or []:
                     name = (o.get('scientific_name') or '').strip()
@@ -152,8 +159,120 @@ def organisms(refs, pids):
                         continue
                     lineage = {l.get('name') for l in o.get('taxonomy_lineage') or []}
                     seen[name] = [name, o.get('ncbi_taxonomy_id') or 0, next((d for d in DOMAINS if d in lineage), '')]
-            out[pid] = list(seen.values())
+            for x in ents:
+                for u in x.get('uniprots') or []:
+                    nm = ((u.get('rcsb_uniprot_protein') or {}).get('name') or {}).get('value')
+                    if u.get('rcsb_id') and nm:
+                        uni[u['rcsb_id']] = nm
+            out[pid] = {'o': list(seen.values()), 'u': uni}
     return out
+
+
+def species(name, domain):
+    """Group strains with their species: "Escherichia coli K-12" -> "Escherichia coli" (not for viruses)."""
+    w = name.replace('(', ' ').split()
+    return ' '.join(w[:2]) if domain in ('Bacteria', 'Archaea', 'Eukaryota') and len(w) >= 2 and w[0][:1].isupper() and w[1][:1].islower() else name
+
+
+def derived_groups(ref_by, sim_by, rcsb, old_cols):
+    """Groupings worked out from the records themselves: protein (UniProt), organism, membrane topology
+    and bound ligand. Returns ({db: rows}, {db: details}) in the same shape as the curated groups."""
+    def add(groups, db, acc, title, parent, pid=None, sub=0):
+        g = groups.setdefault(acc, {'title': title, 'parent': parent, 'sub': sub, 'm': set()})
+        if pid:
+            g['m'].add(pid)
+        return g
+    cols, details = {}, {}
+
+    # proteins: UniProt accessions of the membrane chains, for proteins with at least two structures
+    G = {}
+    names = {}
+    for pid in ref_by:
+        for acc, nm in ((rcsb.get(pid) or {}).get('u') or {}).items():
+            names.setdefault(acc, nm)
+    for pid, ref in ref_by.items():
+        tm = membrane_chains(ref)
+        ents = ref.get('entities') or []
+        mine = [en for en in ents if tm & set(str(en.get('chains') or '').split(','))] or ents
+        for en in mine:
+            for x in en.get('refs') or []:
+                if x.get('db') == 'UniProt' and x.get('accession'):
+                    add(G, 'UniProt', x['accession'], names.get(x['accession']) or x['accession'], 'UniProt|UniProt', pid)
+    G = {k: v for k, v in G.items() if len(v['m']) >= 2}
+    root = set().union(*[v['m'] for v in G.values()]) if G else set()
+    G['UniProt'] = {'title': 'Proteins', 'parent': 0, 'sub': 'Structures of the same protein, by UniProt accession', 'm': root}
+    cols['UniProt'] = G
+    details['UniProt'] = {'UniProt|' + k: {'href': 'https://www.uniprot.org/uniprotkb/%s/entry' % k, 'copyright': {'owner': 'UniProt'}} for k in G if k != 'UniProt'}
+
+    # organisms: domain of life, then species with at least two structures
+    G = {'organism': {'title': 'Organisms', 'parent': 0, 'sub': 'Source species of the membrane chains', 'm': set()}}
+    DT = {'Eukaryota': 'Eukaryotes', 'Bacteria': 'Bacteria', 'Archaea': 'Archaea', 'Viruses': 'Viruses', 'other': 'Synthetic and unclassified'}
+    sp = {}
+    for pid in ref_by:
+        for name, taxid, dom in (rcsb.get(pid) or {}).get('o') or []:
+            d = dom or 'other'
+            add(G, 'organism', d, DT[d], 'organism|organism', pid)
+            G['organism']['m'].add(pid)
+            k = (d, species(name, dom))
+            e = sp.setdefault(k, {'m': set(), 'tax': {}})
+            e['m'].add(pid)
+            e['tax'][name] = taxid
+    taxdet = {}
+    for (d, nm), e in sp.items():
+        if len(e['m']) < 2:
+            continue
+        taxid = e['tax'].get(nm) or min(t for t in e['tax'].values() if t) if any(e['tax'].values()) else 0
+        acc = str(taxid) if taxid else re.sub(r'[^A-Za-z0-9]+', '_', nm)
+        G[acc] = {'title': nm, 'parent': 'organism|' + d, 'sub': 0, 'm': e['m']}
+        if taxid:
+            taxdet['organism|' + acc] = {'href': 'https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?id=%s' % taxid, 'copyright': {'owner': 'NCBI Taxonomy'}}
+    cols['organism'] = G
+    details['organism'] = taxdet
+
+    # membrane topology: most transmembrane helices, or strands, in any one membrane chain
+    G = {'topology': {'title': 'Membrane topology', 'parent': 0, 'sub': 'By transmembrane helices or β-strands per chain', 'm': set()},
+         'alpha': {'title': 'α-helical', 'parent': 'topology|topology', 'sub': 0, 'm': set()},
+         'beta': {'title': 'β-barrels', 'parent': 'topology|topology', 'sub': 0, 'm': set()},
+         'other': {'title': 'No transmembrane segments', 'parent': 'topology|topology', 'sub': 'Monotopic and peripheral proteins', 'm': set()}}
+    for pid, sim in sim_by.items():
+        if pid not in ref_by:
+            continue
+        ch = sim.get('chains') or []
+        a = max([c.get('tm_alpha') or 0 for c in ch] + [0])
+        b = max([c.get('tm_beta') or 0 for c in ch] + [0])
+        G['topology']['m'].add(pid)
+        if b >= 8:
+            G['beta']['m'].add(pid)
+            add(G, 'topology', 'beta-%d' % b, '%d-stranded β-barrels' % b, 'topology|beta', pid)
+        elif a >= 1:
+            G['alpha']['m'].add(pid)
+            k = a if a <= 24 else 25
+            add(G, 'topology', 'alpha-%d' % k, ('%d transmembrane helix' % k if k == 1 else '%d transmembrane helices' % k) if k <= 24 else '25 or more transmembrane helices', 'topology|alpha', pid)
+        else:
+            G['other']['m'].add(pid)
+    cols['topology'] = G
+
+    # bound ligands seen in at least five structures
+    G, lig = {}, {}
+    for pid, ref in ref_by.items():
+        for l in ref.get('ligands') or []:
+            if l.get('ligand_id'):
+                e = lig.setdefault(l['ligand_id'], {'d': l.get('description') or l['ligand_id'], 'm': set()})
+                e['m'].add(pid)
+    for k, e in lig.items():
+        if len(e['m']) >= 5:
+            G[k] = {'title': e['d'], 'parent': 'ligand|ligand', 'sub': 0, 'm': e['m']}
+    root = set().union(*[v['m'] for v in G.values()]) if G else set()
+    G['ligand'] = {'title': 'Bound ligands', 'parent': 0, 'sub': 'Structures sharing a ligand, lipid, detergent or ion', 'm': root}
+    cols['ligand'] = G
+    details['ligand'] = {'ligand|' + k: {'href': 'https://www.rcsb.org/ligand/%s' % k, 'copyright': {'owner': 'RCSB PDB'}} for k in G if k != 'ligand'}
+
+    rows = {}
+    for db, G in cols.items():
+        order = [c[0] for c in (old_cols or {}).get(db, []) if c[0] in G]
+        rest = sorted(set(G) - set(order), key=lambda k: (G[k]['parent'] != 0, -len(G[k]['m']), str(G[k]['title'])))
+        rows[db] = [[k, G[k]['title'], len(G[k]['m']), G[k]['parent'], G[k]['sub'], ' '.join(sorted(G[k]['m']))] for k in order + rest]
+    return rows, details
 
 
 def load(path, default):
@@ -262,6 +381,8 @@ def main(site, dry):
     no_t = sorted(pid for pid in ref_by if not os.path.exists(os.path.join(site, 'thumbs', 'pdb', pid + '.jpg')))
     no_g = []
     for db, rows in cols.items():
+        if db not in DBS:
+            continue   # worked-out groupings have no montage of their own; the site shows a member's image
         for c in rows:
             f = os.path.join(site, 'thumbs', db, enc(c[0]) + '.jpg')
             if os.path.exists(f):
@@ -274,20 +395,27 @@ def main(site, dry):
             else:
                 no_g.append(db + '|' + c[0])
 
-    # source organisms: looked up once per entry and kept in organisms.json
-    org_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'organisms.json')
-    orgs = load(org_path, {})
-    missing = sorted(p for p in ref_by if p not in orgs)
+    # organisms and UniProt names from the RCSB PDB: looked up once per entry and kept in rcsb.json
+    org_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rcsb.json')
+    rcsb = load(org_path, {})
+    missing = sorted(p for p in ref_by if p not in rcsb)
     if missing:
-        found = organisms(ref_by, missing)
-        orgs.update(found)
-        print('organisms: looked up %d entries, found %d' % (len(missing), len(found)))
-    for p in list(orgs):
+        found = rcsb_lookup(ref_by, missing)
+        rcsb.update(found)
+        print('RCSB: looked up %d entries, found %d' % (len(missing), len(found)))
+    for p in list(rcsb):
         if p not in ref_by:
-            del orgs[p]
+            del rcsb[p]
+    orgs = {p: v.get('o') or [] for p, v in rcsb.items()}
     count = collections.Counter(o[0] for p in ref_by for o in orgs.get(p) or [])
     dom = {o[0]: o[2] for p in ref_by for o in orgs.get(p) or []}
     tax = {o[0]: o[1] for p in ref_by for o in orgs.get(p) or []}
+
+    # groupings worked out from the records: proteins, organisms, topology, ligands
+    dcols, ddetails = derived_groups(ref_by, sim_by, rcsb, old.get('cols'))
+    cols.update(dcols)
+    for db, d in ddetails.items():
+        details[db] = d
     names = sorted(count, key=lambda n: (-count[n], n))
     at = {n: i for i, n in enumerate(names)}
 
@@ -304,8 +432,14 @@ def main(site, dry):
 
     def row(pid, r):
         sub = r.get('subtitle') if r.get('subtitle') and r.get('subtitle') != r.get('title') else 0
+        sim = sim_by.get(pid) or {}
+        th, ch = sim.get('thinning') or {}, sim.get('chains') or []
+        def f1(v):
+            return math.floor(v * 10 + 0.5) / 10 if isinstance(v, (int, float)) else None
+        stats = [f1(th.get('annular_thickness')), f1(th.get('thickness_diff')), max([c.get('tm_alpha') or 0 for c in ch] + [0]),
+                 max([c.get('tm_beta') or 0 for c in ch] + [0]), len(membrane_chains(r)) or len(ch)]
         return [pid, r.get('title') or 0, sub, r.get('experimental_method') or 0, r.get('resolution') or 0, r.get('first_published') or 0,
-                [at[o[0]] for o in orgs.get(pid) or []]]
+                [at[o[0]] for o in orgs.get(pid) or []], stats]
     index = {'pdb': [row(p, r3(ref_by[p])) for p in sorted(ref_by)], 'cols': cols, 'thick': thick, 'snap': old.get('snap') or {},
              'noThumb': no_t, 'noGroupThumb': sorted(no_g), 'built': release, 'updated': old.get('updated') or release,
              'orgs': [[n, dom[n], tax[n]] for n in names]}   # [scientific name, domain, NCBI taxonomy id]; pdb rows list indexes into this
@@ -374,7 +508,7 @@ def main(site, dry):
         for db, d in details.items():
             dump(os.path.join(site, 'data', 'groups', db + '.json'), d)
         dump(os.path.join(site, 'data', 'status.json'), status)
-        dump(org_path, orgs)
+        dump(org_path, rcsb)
         with open(state_path, 'w') as f:
             json.dump(state, f, sort_keys=True, separators=(',', ':'))
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

@@ -12,17 +12,17 @@ jobs:
         with: { python-version: '3.12' }
       - run: pip install pyyaml==6.0.2
       - run: python .github/memprotmd/update.py memprotmd
-      - name: Organism summary
+      - name: Summary
         run: |
           python3 - <<'PY'
           import json, collections
           i = json.load(open('memprotmd/data/index.json'))
           o = i['orgs']; rows = i['pdb']
-          print('distinct organisms', len(o), '| entries without', sum(1 for r in rows if not r[6]), '| with several', sum(1 for r in rows if len(r[6]) > 1))
-          c = collections.Counter(o[k][0] for r in rows for k in r[6])
-          print('top', c.most_common(15))
-          print('domains', collections.Counter(o[k][1] for r in rows for k in r[6]))
-          print('1a0s', [o[k] for k in next(r for r in rows if r[0] == '1a0s')[6]], '| 2rh1', [o[k] for k in next(r for r in rows if r[0] == '2rh1')[6]], '| 10ey', [o[k] for k in next(r for r in rows if r[0] == '10ey')[6]])
+          print('distinct organisms', len(o), '| entries without', sum(1 for r in rows if not r[6]))
+          print('row example', next(r for r in rows if r[0] == '2rh1'))
+          for db in ('UniProt', 'organism', 'topology', 'ligand'):
+              c = i['cols'][db]; print(db, len(c), 'groups;', [(x[0], str(x[1])[:28], x[2]) for x in sorted(c, key=lambda x: -x[2]) if x[3] != 0][:6])
+          import os; print('index KB', os.path.getsize('memprotmd/data/index.json') // 1024)
           PY
       - uses: actions/upload-artifact@v4
         with:
@@ -30,5 +30,6 @@ jobs:
           path: |
             memprotmd/data/index.json
             memprotmd/data/status.json
-            .github/memprotmd/organisms.json
+            memprotmd/data/groups/
+            .github/memprotmd/rcsb.json
             .github/memprotmd/state.json
