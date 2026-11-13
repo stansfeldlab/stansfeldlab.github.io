@@ -362,17 +362,18 @@ def protein_name(desc):
         species = species or m.group(1).strip()
         d = d[:m.start()]
     d = re.sub(r'\s*\[(Cleaved into|Includes|Contains)[^\]]*\]', '', d)
-    if d.isupper() and len(d) > 4:   # old SwissProt names in capitals: sentence case, keeping common abbreviations
-        d = re.sub(r'\s+precursor$', '', d.lower())
-        d = d[:1].upper() + d[1:]
-        d = re.sub(r'\b(atpase|atp|adp|gtp|abc|gaba|nadh|nadph|cftr|hiv|dna|rna|ii|iii|iv|vi)\b',
-                   lambda x: 'ATPase' if x.group(1) == 'atpase' else x.group(1).upper(), d)
     name = d.strip()
     while True:   # drop trailing bracketed alternative names, allowing one level of brackets inside
         cut = re.sub(r'\s*\((?:[^()]|\([^()]*\))*\)\s*$', '', name).strip()
         if cut == name or not cut:
             break
         name = cut
+    name = re.sub(r'\s+precursor$', '', name, flags=re.I)
+    if name.isupper() and len(name) > 4:   # old SwissProt names in capitals: sentence case, keeping common abbreviations
+        name = name.lower()
+        name = name[:1].upper() + name[1:]
+        name = re.sub(r'\b(atpase|atp|adp|gtp|abc|gaba|nadh|nadph|cftr|hiv|dna|rna|ii|iii|iv|vi)\b',
+                      lambda x: 'ATPase' if x.group(1).lower() == 'atpase' else x.group(1).upper(), name, flags=re.I)
     return [name[:150], species[:80]]
 
 
