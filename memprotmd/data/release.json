@@ -6,10 +6,10 @@
     "mpm": 10,
     "TCDB": 1240,
     "mpstruc": 1590,
-    "Pfam": 749,
+    "Pfam": 1102,
     "UniProt": 2181,
     "organism": 349,
-    "topology": 47,
+    "topology": 52,
     "ligand": 415
   },
   "site": "https://stansfeldlab.github.io/memprotmd/",
