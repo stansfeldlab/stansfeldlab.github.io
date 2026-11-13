@@ -131,7 +131,8 @@ def membrane_chains(ref):
 def rcsb_lookup(refs, pids):
     """Source organisms and UniProt protein names for each entry, from the RCSB PDB.
 
-    Returns {pdb: {"o": [[scientific name, NCBI taxonomy id, domain], ...], "u": {accession: name}}}.
+    Returns {pdb: {"o": [[scientific name, NCBI taxonomy id, domain], ...], "u": {accession: name},
+    "um": [UniProt accessions of the membrane chains]}}.
     Organisms come only from polymer entities that contain a chain placed in the membrane (so an
     antibody or nanobody bound to a human protein does not add its species); if none qualify, all
     polymer entities are used.
@@ -151,7 +152,7 @@ def rcsb_lookup(refs, pids):
             tm = membrane_chains(refs.get(pid))
             ents = e.get('polymer_entities') or []
             chosen = [x for x in ents if tm & set((x.get('rcsb_polymer_entity_container_identifiers') or {}).get('auth_asym_ids') or [])] or ents
-            seen, uni = {}, {}
+            seen, uni, um = {}, {}, []
             for x in chosen:
                 for o in x.get('rcsb_entity_source_organism') or []:
                     name = (o.get('scientific_name') or '').strip()
@@ -164,9 +165,11 @@ def rcsb_lookup(refs, pids):
                     nm = ((u.get('rcsb_uniprot_protein') or {}).get('name') or {}).get('value')
                     if u.get('rcsb_id') and nm:
                         uni[u['rcsb_id']] = nm
-            out[pid] = {'o': list(seen.values()), 'u': uni}
+                    if u.get('rcsb_id') and x in chosen and u['rcsb_id'] not in um:
+                        um.append(u['rcsb_id'])
+            out[pid] = {'o': list(seen.values()), 'u': uni, 'um': um}
         for pid in batch:
-            out.setdefault(pid.lower(), {'o': [], 'u': {}})   # obsolete or unreleased in the PDB
+            out.setdefault(pid.lower(), {'o': [], 'u': {}, 'um': []})   # obsolete or unreleased in the PDB
     return out
 
 
@@ -204,10 +207,10 @@ def derived_groups(ref_by, sim_by, rcsb, old_cols):
         tm = membrane_chains(ref)
         ents = ref.get('entities') or []
         mine = [en for en in ents if tm & set(str(en.get('chains') or '').split(','))] or ents
-        for en in mine:
-            for x in en.get('refs') or []:
-                if x.get('db') == 'UniProt' and x.get('accession'):
-                    add(G, 'UniProt', x['accession'], names.get(x['accession']) or x['accession'], 'UniProt|UniProt', pid)
+        accs = [x['accession'] for en in mine for x in en.get('refs') or [] if x.get('db') == 'UniProt' and x.get('accession')]
+        accs += (rcsb.get(pid) or {}).get('um') or []   # the RCSB maps fusion and engineered chains more fully
+        for acc in dict.fromkeys(accs):
+            add(G, 'UniProt', acc, names.get(acc) or acc, 'UniProt|UniProt', pid)
     G = {k: v for k, v in G.items() if len(v['m']) >= 2}
     root = set().union(*[v['m'] for v in G.values()]) if G else set()
     G['UniProt'] = {'title': 'Proteins', 'parent': 0, 'sub': 'Structures of the same protein, by UniProt accession', 'm': root}
@@ -420,7 +423,7 @@ def main(site, dry):
     # organisms and UniProt names from the RCSB PDB: looked up once per entry and kept in rcsb.json
     org_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rcsb.json')
     rcsb = load(org_path, {})
-    missing = sorted(p for p in ref_by if p not in rcsb)
+    missing = sorted(p for p in ref_by if 'um' not in (rcsb.get(p) or {}))
     if missing:
         found = rcsb_lookup(ref_by, missing)
         rcsb.update(found)

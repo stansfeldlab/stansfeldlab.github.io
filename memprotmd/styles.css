@@ -79,6 +79,7 @@ main.wrap { padding-block: 1.75rem 4rem; }
 .chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chip b { font-weight: 500; color: var(--muted); font-family: var(--mono); font-size: 0.8125rem; }
 a.chip:hover, button.chip:hover { border-color: var(--brand); color: var(--brand); }
+.chip[aria-pressed="true"]:hover { color: var(--on-brand); }
 .chip[aria-pressed="true"], .chip[aria-current="true"] { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
 .chip[aria-pressed="true"] b, .chip[aria-current="true"] b { color: var(--on-brand); }
 .tag { display: inline-block; font-family: var(--mono); font-size: 0.8125rem; font-weight: 500; padding: 0.15rem 0.55rem; border-radius: 6px; background: var(--tint); color: var(--brand); }

@@ -3,12 +3,15 @@
   'use strict';
   var CFG = window.MPM_CFG || {};
   var STORE = CFG.storage || 'https://memprotmd.bioch.ox.ac.uk/data/memprotmd/';
-  var DB = null, byId = {}, colById = {}, kids = {}, memberOf = null, searchRecs = null, ALL = null, NOT = {}, NOG = {}, GROUPS = {};
+  var DB = null, byId = {}, colById = {}, kids = {}, memberOf = null, searchRecs = null, ALL = null, NOT = {}, NOG = {}, GROUPS = {}, ORGS = [];
   var app = document.getElementById('mpm-app');
-  var DBNAMES = { mpm: 'MemProtMD groups', TCDB: 'TCDB', mpstruc: 'mpstruc', Pfam: 'Pfam', PDB: 'PDB' };
+  var DBNAMES = { mpm: 'MemProtMD groups', TCDB: 'TCDB', mpstruc: 'mpstruc', Pfam: 'Pfam', PDB: 'PDB', UniProt: 'Protein', organism: 'Organism', topology: 'Membrane topology', ligand: 'Bound ligand' };
+  /* Groupings worked out from the records (by the update job) rather than curated; they have no montage images of their own. */
+  var DERIVED = { UniProt: 1, organism: 1, topology: 1, ligand: 1 };
+  var DOMAINS = [['Eukaryota', 'Eukaryotes'], ['Bacteria', 'Bacteria'], ['Archaea', 'Archaea'], ['Viruses', 'Viruses']];
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-  function ttl(s) { return esc(s).replace(/&lt;(\/?)(sub|sup|i|em|b)&gt;/g, '<$1$2>'); }
+  function ttl(s) { return esc(s).replace(/&lt;(\/?)(sub|sup|i|em|b)&gt;/g, '<$1$2>').replace(/&amp;([a-z]+|#\d+);/gi, '&$1;'); }
   function plain(s) { return String(s || '').replace(/<[^>]+>/g, ''); }
   function sentence(s) { s = String(s || ''); return s === s.toUpperCase() && s.length > 4 ? s.charAt(0) + s.slice(1).toLowerCase() : s; }
   function enc(p) { return p.replace(/[^A-Za-z0-9]/g, function (c) { return '-' + ('0' + c.charCodeAt(0).toString(16)).slice(-2); }); }
@@ -20,14 +23,15 @@
   window.mpmPh = function (el) { el.onerror = null; el.src = PH; };
   /* Thumbnails are hosted with the site. Full-size renders stay on file storage and fall back to the thumbnail. */
   function pdbThumb(id) { return NOT[id] ? null : 'thumbs/pdb/' + id + '.jpg'; }
-  function colThumb(db, acc) { return NOG[db + '|' + acc] ? null : 'thumbs/' + db + '/' + enc(acc) + '.jpg'; }
+  function colThumb(db, acc) { if (DERIVED[db]) { var m = sample(db, acc); return m ? pdbThumb(m) : null; } return NOG[db + '|' + acc] ? null : 'thumbs/' + db + '/' + enc(acc) + '.jpg'; }
+  function sample(db, acc) { var c = colById[db + '|' + acc]; if (!c) return null; var m = members(c); for (var i = 0; i < m.length; i++) if (!NOT[m[i]] && byId[m[i]]) return m[i]; return null; }
   function remote(path) { return CFG.remoteImages === false ? null : STORE + path; }
   function imgUrl(kind, a) {
     var p = a.split('/');
     if (kind === 'pdb100') return pdbThumb(a);
     if (kind === 'pdbhero' || kind === 'pdbtile') return remote('databases/PDB/thumbs/' + a + '.jpg') || pdbThumb(a);
     if (kind === 'col100') return colThumb(p[0], p.slice(1).join('/'));
-    if (kind === 'colhero') return remote('databases/' + p[0] + '/thumbs/' + encodeURIComponent(p.slice(1).join('/')) + '.jpg');
+    if (kind === 'colhero') { if (DERIVED[p[0]]) { var sm = sample(p[0], p.slice(1).join('/')); return sm ? remote('databases/PDB/thumbs/' + sm + '.jpg') || pdbThumb(sm) : null; } return remote('databases/' + p[0] + '/thumbs/' + encodeURIComponent(p.slice(1).join('/')) + '.jpg'); }
     if (kind === 'sim') return remote('simulations/' + p[0] + '_default_dppc/images/' + p[1] + '.jpg');
     return null;
   }
@@ -52,7 +56,7 @@
   /* ---------- data ---------- */
   function load() {
     return getJSON('data/index.json').then(function (d) {
-      DB = d; (d.noThumb || []).forEach(function (k) { NOT[k] = 1; }); (d.noGroupThumb || []).forEach(function (k) { NOG[k] = 1; });
+      DB = d; ORGS = d.orgs || []; (d.noThumb || []).forEach(function (k) { NOT[k] = 1; }); (d.noGroupThumb || []).forEach(function (k) { NOG[k] = 1; });
       d.pdb.forEach(function (r) { byId[r[0]] = r; });
       Object.keys(d.cols).forEach(function (db) {
         d.cols[db].forEach(function (c) { colById[db + '|' + c[0]] = { db: db, acc: c[0], title: c[1], n: c[2], parent: c[3] || null, sub: c[4] || '', mem: c[5] }; });
@@ -74,9 +78,11 @@
     if (searchRecs) return searchRecs;
     searchRecs = [];
     Object.keys(colById).forEach(function (id) { var c = colById[id]; searchRecs.push({ db: c.db, acc: c.acc, title: c.title, size: c.n, text: (c.acc + ' ' + plain(c.title) + ' ' + c.sub).toLowerCase() }); });
-    DB.pdb.forEach(function (r) { searchRecs.push({ db: 'PDB', acc: r[0], title: r[1], size: 1, date: r[5], text: (r[0] + ' ' + plain(r[1]) + ' ' + (r[2] || '')).toLowerCase() }); });
+    DB.pdb.forEach(function (r) { searchRecs.push({ db: 'PDB', acc: r[0], title: r[1], size: 1, date: r[5], text: (r[0] + ' ' + plain(r[1]) + ' ' + (r[2] || '') + ' ' + orgNames(r).join(' ')).toLowerCase() }); });
     return searchRecs;
   }
+  function orgsOf(r) { return ((r && r[6]) || []).map(function (i) { return ORGS[i]; }).filter(Boolean); }
+  function orgNames(r) { return orgsOf(r).map(function (o) { return o[0]; }); }
   function search(q, n, dbs, test) {
     var pos = [], neg = [], m, re = /(-?)"([^"]+)"|(-?)(\S+)/g;
     while ((m = re.exec(q.toLowerCase()))) { var t = (m[2] || m[4]).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); if (t) ((m[1] || m[3]) ? neg : pos).push(new RegExp('(^|[^a-z0-9])' + t + '($|[^a-z0-9])')); }
@@ -131,7 +137,9 @@
     var latest = DB.pdb.slice().sort(function (a, b) { return String(b[5] || '').localeCompare(String(a[5] || '')); }).slice(0, 8);
     var tiles = [['gpcrs', '5t1a', 'G protein-coupled receptors'], ['ion_channels', '1k4c', 'Ion channels'], ['outer_membrane_proteins', '4kr4', 'Outer membrane proteins'], ['aquaporins', '5i32', 'Aquaporins'], ['abc_transporter', '4q4h', 'ABC transporters'], ['ligand_gated_ion_channels', '5tio', 'Ligand-gated ion channels']];
     var ncol = Object.keys(colById).length;
-    var roots = [['mpm', 'membrane_proteins', 'MemProtMD groups', 'Fold and family groups assigned from the simulations'], ['TCDB', 'TCDB', 'Transporter Classification Database', 'Channels, carriers and pumps by transport mechanism'], ['mpstruc', 'mpstruc', 'mpstruc', 'Membrane proteins of known structure, curated by family']];
+    var roots = [['UniProt', 'UniProt', 'Proteins', 'Every structure of the same protein, by UniProt accession'], ['organism', 'organism', 'Organisms', 'By the source species of the membrane chains'],
+      ['topology', 'topology', 'Membrane topology', 'By the number of transmembrane helices or β-strands'], ['ligand', 'ligand', 'Bound ligands', 'Structures sharing a ligand, lipid, detergent or ion'],
+      ['mpm', 'membrane_proteins', 'MemProtMD groups', 'Fold and family groups assigned from the simulations'], ['TCDB', 'TCDB', 'Transporter Classification Database', 'Channels, carriers and pumps by transport mechanism'], ['mpstruc', 'mpstruc', 'mpstruc', 'Membrane proteins of known structure, curated by family']];
     /* a random entry with an image, beside the introduction on wide screens; it can open in 3D in place */
     var pool = DB.pdb.filter(function (r) { return !NOT[r[0]]; }), nw = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
     var card = nw ? '<aside class="hero-new" aria-label="Random entry"><span class="eyebrow">Random entry</span><div class="well herowell" id="mol-host" data-compact="1"><a class="hero-img" href="' + refHref('PDB', nw[0]) + '">' + imgTag('pdbhero', nw[0], '', 'PDB ' + nw[0] + ' in its simulated bilayer') + '</a>' +
@@ -163,14 +171,15 @@
   }
 
   /* ---------- search ---------- */
-  var SOURCES = [['PDB', 'PDB structures'], ['mpm', 'MemProtMD groups'], ['TCDB', 'TCDB'], ['mpstruc', 'mpstruc'], ['Pfam', 'Pfam']];
+  var SOURCES = [['PDB', 'PDB structures'], ['mpm', 'MemProtMD groups'], ['TCDB', 'TCDB'], ['mpstruc', 'mpstruc'], ['Pfam', 'Pfam'], ['UniProt', 'Proteins'], ['organism', 'Organisms'], ['topology', 'Topology'], ['ligand', 'Ligands']];
   var METHODS = [['xray', 'X-ray'], ['em', 'Cryo-EM'], ['nmr', 'NMR'], ['other', 'Other']];
   var RES = [2, 2.5, 3, 3.5, 4];
   function mgroup(m) { m = String(m || ''); return /X-RAY/.test(m) ? 'xray' : /ELECTRON MICROSCOPY/.test(m) ? 'em' : /NMR/.test(m) ? 'nmr' : 'other'; }
   function qsParse(t) { var o = {}; String(t || '').split('&').forEach(function (kv) { if (!kv) return; var i = kv.indexOf('='); try { o[decodeURIComponent(i < 0 ? kv : kv.slice(0, i))] = i < 0 ? '' : decodeURIComponent(kv.slice(i + 1).replace(/\+/g, ' ')); } catch (e) {} }); return o; }
   function qsBuild(o) { return Object.keys(o).filter(function (k) { return o[k] !== '' && o[k] != null; }).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(o[k]).replace(/%2C/g, ',').replace(/%7C/g, '|'); }).join('&'); }
   function filterTest(F) {
-    if (!(F.m.length || F.r || F.y0 || F.y1 || F.f)) return null;
+    if (!(F.m.length || F.r || F.y0 || F.y1 || F.f || F.o || F.d.length)) return null;
+    var oq = (F.o || '').trim().toLowerCase();
     var fam = null; if (F.f && colById[F.f]) { fam = {}; members(colById[F.f]).forEach(function (x) { fam[x] = 1; }); }
     return function (row) {
       if (!row) return false;
@@ -179,6 +188,11 @@
       var y = +String(row[5] || '').slice(0, 4);
       if (F.y0 && !(y >= F.y0)) return false;
       if (F.y1 && !(y <= F.y1)) return false;
+      if (oq || F.d.length) {
+        var os = orgsOf(row);
+        if (oq && !os.some(function (o) { return o[0].toLowerCase().indexOf(oq) >= 0; })) return false;
+        if (F.d.length && !os.some(function (o) { return F.d.indexOf(o[1]) >= 0; })) return false;
+      }
       return !fam || !!fam[row[0]];
     };
   }
@@ -197,10 +211,11 @@
     var on = {}, shown = 30; SOURCES.forEach(function (s) { on[s[0]] = true; });
     var Q = qsParse(route.query), years = [];
     DB.pdb.forEach(function (r) { var y = +String(r[5] || '').slice(0, 4); if (y && years.indexOf(y) < 0) years.push(y); }); years.sort();
-    var F = { m: (Q.m || '').split(',').filter(function (x) { return METHODS.some(function (m) { return m[0] === x; }); }), r: +Q.r || 0, y0: +Q.y0 || 0, y1: +Q.y1 || 0, f: Q.f && colById[Q.f] ? Q.f : '' };
+    var F = { m: (Q.m || '').split(',').filter(function (x) { return METHODS.some(function (m) { return m[0] === x; }); }), r: +Q.r || 0, y0: +Q.y0 || 0, y1: +Q.y1 || 0, f: Q.f && colById[Q.f] ? Q.f : '',
+      o: Q.o || '', d: (Q.d || '').split(',').filter(function (x) { return DOMAINS.some(function (d) { return d[0] === x; }); }) };
     if (pending) { Q.q = pending; pending = ''; }
     function yopts(sel, blank) { return '<option value="">' + blank + '</option>' + years.map(function (y) { return '<option' + (y === sel ? ' selected' : '') + '>' + y + '</option>'; }).join(''); }
-    var active = F.m.length || F.r || F.y0 || F.y1 || F.f;
+    var active = F.m.length || F.r || F.y0 || F.y1 || F.f || F.o || F.d.length;
     show('search/text', '<div class="stack"><div class="pagehead"><h1>Search</h1><p class="muted" style="max-width:44rem">Search works on whole words. Put a phrase <code>"in quotes"</code> to match it exactly, or add a minus sign to leave words out, for example <code>lipoprotein -mlaa</code>.</p></div>' +
       '<input class="field big" id="ts-q" type="search" placeholder="Protein, family, process or PDB code" aria-label="Search term" autocomplete="off">' +
       '<div class="chips" id="ts-src" role="group" aria-label="Sources">' + SOURCES.map(function (s) { return '<button class="chip" type="button" aria-pressed="true" data-db="' + s[0] + '">' + s[1] + '</button>'; }).join('') + '</div>' +
@@ -209,18 +224,20 @@
         '<div class="frow"><label class="eyebrow" for="f-res">Resolution</label><select class="field sel" id="f-res"><option value="">Any</option>' + RES.map(function (v) { return '<option value="' + v + '"' + (F.r === v ? ' selected' : '') + '>' + v.toFixed(1) + ' Å or better</option>'; }).join('') + '</select></div>' +
         '<div class="frow"><span class="eyebrow" id="f-ylab">Released</span><div class="yr"><select class="field sel" id="f-y0" aria-labelledby="f-ylab">' + yopts(F.y0, 'From') + '</select><span class="muted">to</span><select class="field sel" id="f-y1" aria-label="Released up to">' + yopts(F.y1, 'To') + '</select></div></div>' +
         '<div class="frow"><label class="eyebrow" for="f-fam">Family</label><select class="field sel" id="f-fam">' + famOptions(F.f) + '</select></div>' +
+        '<div class="frow"><label class="eyebrow" for="f-org">Organism</label><div class="yr"><input class="field sel" id="f-org" type="search" list="f-orgs" placeholder="For example Homo sapiens" autocomplete="off" value="' + esc(F.o) + '"><datalist id="f-orgs">' + ORGS.slice(0, 300).map(function (o) { return '<option value="' + esc(o[0]) + '">'; }).join('') + '</datalist></div></div>' +
+        '<div class="frow"><span class="eyebrow">Domain</span><div class="chips" role="group" aria-label="Domain of life">' + DOMAINS.map(function (d) { return '<button class="chip" type="button" data-dom="' + d[0] + '" aria-pressed="' + (F.d.indexOf(d[0]) >= 0) + '">' + d[1] + '</button>'; }).join('') + '</div></div>' +
         '<p class="small muted">Filters apply to PDB structures only. Most cryo-EM entries have no resolution recorded, so they drop out when you filter by resolution.</p>' +
         '<div class="btns"><button class="btn ghost" type="button" id="f-clear">Clear filters</button><button class="btn ghost" type="button" id="f-copy">Copy link to this search</button><span class="small muted" id="f-msg" role="status"></span></div>' +
       '</div></details>' +
       '<p class="small muted" id="ts-msg">Try <a href="#" data-try="GPCR">GPCR</a>, <a href="#" data-try="porin">porin</a>, <a href="#" data-try="&quot;ion channel&quot; -sodium">"ion channel" -sodium</a> or <a href="#" data-try="1a0s">1a0s</a>.</p><div class="panel" id="ts-panel" hidden><div class="rowlist" id="ts-res"></div><p style="margin-top:1rem"><button class="btn ghost" id="ts-more" type="button" hidden>Show more</button></p></div></div>', 'Search');
     var q = document.getElementById('ts-q'), msg = document.getElementById('ts-msg'), tip = msg.innerHTML;
     q.value = Q.q || '';
-    function state() { return qsBuild({ q: q.value.trim(), m: F.m.join(','), r: F.r || '', y0: F.y0 || '', y1: F.y1 || '', f: F.f }); }
+    function state() { return qsBuild({ q: q.value.trim(), m: F.m.join(','), r: F.r || '', y0: F.y0 || '', y1: F.y1 || '', f: F.f, o: F.o.trim(), d: F.d.join(',') }); }
     function sync() { var t = state(); try { history.replaceState(null, '', location.pathname + location.search + '#/search/text' + (t ? '?' + t : '')); } catch (e) {} }
     function run() {
       var v = q.value.trim(), test = filterTest(F), r = v || test ? search(v, shown, on, test) : [];
       document.getElementById('ts-src').hidden = !!test;
-      var sum = [F.m.length ? F.m.map(function (k) { return METHODS.filter(function (m) { return m[0] === k; })[0][1]; }).join(', ') : '', F.r ? '≤ ' + F.r.toFixed(1) + ' Å' : '', F.y0 || F.y1 ? (F.y0 || '…') + '–' + (F.y1 || '…') : '', F.f ? plain(colById[F.f].title) : ''].filter(Boolean);
+      var sum = [F.m.length ? F.m.map(function (k) { return METHODS.filter(function (m) { return m[0] === k; })[0][1]; }).join(', ') : '', F.r ? '≤ ' + F.r.toFixed(1) + ' Å' : '', F.y0 || F.y1 ? (F.y0 || '…') + '–' + (F.y1 || '…') : '', F.f ? plain(colById[F.f].title) : '', F.o.trim() ? F.o.trim() : '', F.d.length ? F.d.map(function (k) { return DOMAINS.filter(function (d) { return d[0] === k; })[0][1]; }).join(', ') : ''].filter(Boolean);
       document.getElementById('f-sum').textContent = sum.length ? '· ' + sum.join(' · ') : '';
       document.getElementById('ts-panel').hidden = !r.length;
       document.getElementById('ts-res').innerHTML = r.map(rowLink).join('');
@@ -234,13 +251,16 @@
     q.addEventListener('input', function () { shown = 30; run(); });
     each('[data-db]', function (b) { b.addEventListener('click', function () { var d = b.getAttribute('data-db'); on[d] = !on[d]; b.setAttribute('aria-pressed', on[d]); run(); }); });
     each('[data-m]', function (b) { b.addEventListener('click', function () { var k = b.getAttribute('data-m'), i = F.m.indexOf(k); if (i < 0) F.m.push(k); else F.m.splice(i, 1); b.setAttribute('aria-pressed', i < 0); shown = 30; run(); }); });
+    each('[data-dom]', function (b) { b.addEventListener('click', function () { var k = b.getAttribute('data-dom'), i = F.d.indexOf(k); if (i < 0) F.d.push(k); else F.d.splice(i, 1); b.setAttribute('aria-pressed', i < 0); shown = 30; run(); }); });
+    var fo = document.getElementById('f-org'), fot = null;
+    fo.addEventListener('input', function () { clearTimeout(fot); fot = setTimeout(function () { F.o = fo.value; shown = 30; run(); }, 200); });
     [['f-res', 'r'], ['f-y0', 'y0'], ['f-y1', 'y1'], ['f-fam', 'f']].forEach(function (x) {
       document.getElementById(x[0]).addEventListener('change', function (e) { F[x[1]] = x[1] === 'f' ? e.target.value : +e.target.value || 0; shown = 30; run(); });
     });
     document.getElementById('f-clear').addEventListener('click', function () {
-      F = { m: [], r: 0, y0: 0, y1: 0, f: '' };
-      each('[data-m]', function (b) { b.setAttribute('aria-pressed', 'false'); });
-      ['f-res', 'f-y0', 'f-y1', 'f-fam'].forEach(function (id) { document.getElementById(id).value = ''; });
+      F = { m: [], r: 0, y0: 0, y1: 0, f: '', o: '', d: [] };
+      each('[data-m], [data-dom]', function (b) { b.setAttribute('aria-pressed', 'false'); });
+      ['f-res', 'f-y0', 'f-y1', 'f-fam', 'f-org'].forEach(function (id) { document.getElementById(id).value = ''; });
       shown = 30; run();
     });
     document.getElementById('f-copy').addEventListener('click', function () {
@@ -297,14 +317,23 @@
     return '<div class="hist"><h3>' + title + '</h3>' + s + '</svg></div>';
   }
   function tally(ids) {
-    var y = {}, m = {}, r = {};
+    var y = {}, m = {}, r = {}, th = {}, dt = {}, tm = {}, dom = {}, tv = [];
     ids.forEach(function (id) {
       var e = byId[id]; if (!e) return;
       if (e[5]) { var yr = String(e[5]).slice(0, 4); y[yr] = (y[yr] || 0) + 1; }
       if (e[3]) m[e[3]] = (m[e[3]] || 0) + 1;
       if (e[4]) { var b = Math.min(12, Math.floor(e[4] * 2) / 2).toFixed(1); r[b] = (r[b] || 0) + 1; }
+      var s = e[7];
+      if (s) {
+        if (s[0] != null) { var t = Math.max(28, Math.min(44, Math.round(s[0]))); th[t] = (th[t] || 0) + 1; tv.push(s[0]); }
+        if (s[1] != null) { var c = Math.max(-10, Math.min(6, Math.round(s[1]))); dt[c] = (dt[c] || 0) + 1; }
+        var k = s[3] >= 8 ? 'β-barrel' : s[2] ? (s[2] > 14 ? '15+' : String(s[2])) : 'none';
+        tm[k] = (tm[k] || 0) + 1;
+      }
+      var seen = {}; orgsOf(e).forEach(function (o) { var d = o[1] || 'Other'; if (!seen[d]) { seen[d] = 1; dom[d] = (dom[d] || 0) + 1; } });
     });
-    return { year: y, method: m, res: r };
+    tv.sort(function (a, b) { return a - b; });
+    return { year: y, method: m, res: r, thick: th, thin: dt, tm: tm, dom: dom, median: tv.length ? tv[Math.floor(tv.length / 2)] : null };
   }
 
   /* ---------- collection ---------- */
@@ -342,8 +371,10 @@
           '</tbody></table></div>' + (mem.length > st.n ? '<p style="margin-top:1rem"><button class="btn ghost" type="button" data-act="more">Show 25 more of ' + num(mem.length) + '</button></p>' : '') + '</section>' : '') +
         '</div><aside class="stack">' + (hero ? '<div class="well"><img class="heroimg" src="' + hero + '" data-fb="hide" alt="Example structures from this group in their bilayers" onerror="mpmFb(this)"></div>' : '') +
         '<section class="panel stack"><h2>How this group compares</h2><div class="legend"><span><i class="s"></i>This group</span><span><i></i>All entries</span></div><div class="hists">' +
-        hist('Publication year', ALL.year, mine.year) + hist('Experimental method', ALL.method, mine.method) + hist('Resolution (Å)', ALL.res, mine.res) +
-        (db === 'mpm' && DB.thick[acc] ? hist('Membrane thickness (Å)', DB.thick.membrane_proteins, DB.thick[acc]) : '') + '</div><p class="small muted">Each set is normalised separately.</p></section></aside></div></div>';
+        (mine.median != null && ALL.median != null ? '<p class="small">Median bilayer thickness next to the protein: <b>' + mine.median.toFixed(1) + ' Å</b> <span class="muted">(all entries ' + ALL.median.toFixed(1) + ' Å)</span></p>' : '') +
+        hist('Bilayer thickness next to the protein (Å)', ALL.thick, mine.thick) + hist('Thickness change from bulk (Å)', ALL.thin, mine.thin) + hist('Most TM helices in one chain', ALL.tm, mine.tm) +
+        hist('Domain of life', ALL.dom, mine.dom) + hist('Publication year', ALL.year, mine.year) + hist('Experimental method', ALL.method, mine.method) + hist('Resolution (Å)', ALL.res, mine.res) +
+        '</div><p class="small muted">Each set is normalised separately. Thickness is measured from the simulations; values beyond the ends of each scale are counted in the end bars.</p></section></aside></div></div>';
       show(null, h, plain(c.title));
       each('[data-act]', function (b) { b.addEventListener('click', function () { var a = b.getAttribute('data-act'); if (a === 'more') st.n += 25; else st.kidsAll = !st.kidsAll; keep(); }); });
       each('[data-sort]', function (b) { b.addEventListener('click', function () { var k = b.getAttribute('data-sort'); if (st.sort === k) st.dir = -st.dir; else { st.sort = k; st.dir = k === 'date' ? -1 : 1; } keep(); }); });
@@ -641,8 +672,8 @@
       var r = (st.rec && st.rec.ref) || {}, s = (st.rec && st.rec.sim) || {}, cit = r.primary_citation || {}, sv = s.sim_validate || {};
       var hasImgs = CFG.remoteImages !== false;
       var byDb = {}; collectionsOf(pdb).forEach(function (g) { var c = colById[g]; (byDb[c.db] = byDb[c.db] || []).push(c); });
-      var groups = ['mpm', 'TCDB', 'mpstruc', 'Pfam'].map(function (d) {
-        var l = (byDb[d] || []).sort(function (a, b) { return b.n - a.n; }); if (!l.length) return '';
+      var groups = ['mpm', 'TCDB', 'mpstruc', 'Pfam', 'UniProt', 'organism', 'topology', 'ligand'].map(function (d) {
+        var l = (byDb[d] || []).filter(function (c) { return !(DERIVED[d] && c.acc === d); }).sort(function (a, b) { return b.n - a.n; }); if (!l.length) return '';
         if (d === 'TCDB' || d === 'mpstruc') l = l.slice(-2);
         return '<span class="eyebrow">' + esc(DBNAMES[d]) + '</span><div class="chips">' + l.map(function (c) { return '<a class="chip" href="' + refHref(c.db, c.acc) + '"><span>' + ttl(c.title) + '</span><b>' + num(c.n) + '</b></a>'; }).join('') + '</div>';
       }).join('');
@@ -652,7 +683,7 @@
           '<button type="button" class="btn mol-open" id="mol-open"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2 17 6v8l-7 4-7-4V6z M10 2v8m0 0 7-4m-7 4-7-4m7 4v8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>3D view</button></div><div id="mol-ctrl"></div></div>' +
         '<div class="stack"><div class="pagehead">' + crumbs([['Home', href('home')], ['Structures', refHref('mpm', 'membrane_proteins')], [pdb.toUpperCase(), null]]) +
         '<h1>' + ttl(pdbTitle(r.title || e[1], pdb)) + '</h1><div class="idline"><span class="tag">PDB ' + pdb + '</span>' + ((r.subtitle || e[2]) ? '<span>' + esc(sentence(r.subtitle || e[2])) + '</span>' : '') + '</div></div>' +
-        '<dl class="facts">' + [['Published', fmtDate(e[5])], ['Method', esc(sentence(e[3] || ''))], ['Resolution', e[4] ? Number(e[4]).toFixed(2).replace(/0$/, '') + ' Å' : ''], ['Organism', r.organism && r.organism.scientific_name ? '<i>' + esc(r.organism.scientific_name) + '</i>' : ''],
+        '<dl class="facts">' + [['Published', fmtDate(e[5])], ['Method', esc(sentence(e[3] || ''))], ['Resolution', e[4] ? Number(e[4]).toFixed(2).replace(/0$/, '') + ' Å' : ''], ['Organism', orgNames(e).map(function (n) { return '<a href="' + href('search/text') + '?o=' + encodeURIComponent(n) + '"><i>' + esc(n) + '</i></a>'; }).join(', ')],
           ['Ligands', esc((r.ligands || []).map(function (l) { return sentence(l.description); }).join(', '))], ['Keywords', esc((r.keywords || []).join(', '))]].filter(function (p) { return p[1]; }).map(function (p) { return '<dt>' + p[0] + '</dt><dd>' + p[1] + '</dd>'; }).join('') + '</dl>' +
         (cit.title ? '<p class="cite">' + esc(cit.title) + ' <span class="muted">' + esc((r.primary_authors || []).slice(0, 4).join(', ') + ((r.primary_authors || []).length > 4 ? ' et al.' : '')) + '. ' + esc([cit.journal, cit.year].filter(Boolean).join(' ')) + '.</span> ' + (cit.DOI ? extA('https://doi.org/' + cit.DOI, 'doi:' + esc(cit.DOI)) : '') + '</p>' : '') +
         '<div class="btns">' + extA(base + 'files/structures/at.pdb', 'Atomistic PDB ↓', 'btn') + extA('https://molstar.org/viewer/?structure-url=' + encodeURIComponent(base + 'files/structures/at.pdb') + '&structure-url-format=pdb', 'Open in Mol* ↗', 'btn ghost') + '</div>' + xlinks(pdb, r) + '</div></div>' +

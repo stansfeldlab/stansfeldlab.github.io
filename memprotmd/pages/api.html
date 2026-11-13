@@ -10,7 +10,7 @@
 <tr><td class="id">data/entries.tsv</td><td>Tab-separated</td><td>One row per entry with the most-used fields, ready for a spreadsheet, R or pandas. The columns are listed below.</td></tr>
 <tr><td class="id">data/index.json</td><td>JSON</td><td>Every entry and group in compact arrays, as used by this site. See <a href="#/data">Data files</a> for the layout.</td></tr>
 <tr><td class="id">data/entries/{pdb}.json</td><td>JSON</td><td>The full record for one entry: <code>ref</code> (PDB metadata), <code>sim</code> (simulation summary) and <code>prof</code> (chain profiles). <code>{pdb}</code> is the lower-case PDB code.</td></tr>
-<tr><td class="id">data/groups/{collection}.json</td><td>JSON</td><td>Descriptions and source links for the groups in one classification: <code>mpm</code>, <code>TCDB</code>, <code>mpstruc</code> or <code>Pfam</code>.</td></tr>
+<tr><td class="id">data/groups/{collection}.json</td><td>JSON</td><td>Descriptions and source links for the groups in one classification: the curated <code>mpm</code>, <code>TCDB</code>, <code>mpstruc</code> and <code>Pfam</code>, and the groupings worked out from the records, <code>UniProt</code> (proteins), <code>organism</code>, <code>topology</code> and <code>ligand</code>.</td></tr>
 <tr><td class="id">data/stats.json</td><td>JSON</td><td>The contact tables and depth histograms behind the <a href="#/stats">Statistics</a> page.</td></tr>
 <tr><td class="id">pdb/{pdb}/</td><td>HTML</td><td>A permanent web page for each entry. It carries a schema.org <code>Dataset</code> record (Bioschemas profile) and links to the JSON record.</td></tr>
 <tr><td class="id">sitemap.xml</td><td>XML</td><td>The address of every entry page.</td></tr>
@@ -47,6 +47,7 @@ console.log(rec.ref.title, rec.sim.thinning.annular_thickness);</code></pre>
 <tr><td class="id">resolution_A</td><td>Resolution in ångströms. Missing for most cryo-EM and all NMR entries.</td></tr>
 <tr><td class="id">released</td><td>PDB release date.</td></tr>
 <tr><td class="id">uniprot</td><td>UniProt accessions of the protein chains.</td></tr>
+<tr><td class="id">organism, ncbi_taxid, domain</td><td>Source organism of the chains placed in the membrane, from the RCSB PDB, with its NCBI taxonomy id and domain of life (Eukaryota, Bacteria, Archaea or Viruses).</td></tr>
 <tr><td class="id">n_chains, n_lipids, n_protein_residues</td><td>Size of the simulated system.</td></tr>
 <tr><td class="id">bulk_thickness_A, annular_thickness_A, thickness_change_A</td><td>Bilayer thickness away from the protein and next to it, and the difference, in ångströms.</td></tr>
 <tr><td class="id">memprotmd_groups, mpstruc, tcdb, pfam</td><td>The most specific groups the entry belongs to in each classification, as accessions. Group pages are at <code>#/ref/{collection}/{accession}</code>.</td></tr>
