@@ -207,23 +207,34 @@ def derived_groups(ref_by, sim_by, rcsb, old_cols):
     # organisms: domain of life, then species with at least two structures
     G = {'organism': {'title': 'Organisms', 'parent': 0, 'sub': 'Source species of the membrane chains', 'm': set()}}
     DT = {'Eukaryota': 'Eukaryotes', 'Bacteria': 'Bacteria', 'Archaea': 'Archaea', 'Viruses': 'Viruses', 'other': 'Synthetic and unclassified'}
+    # some records lack the lineage, so take each name's domain from the records that have it
+    votes = collections.defaultdict(collections.Counter)
+    for pid in ref_by:
+        for name, taxid, dom in (rcsb.get(pid) or {}).get('o') or []:
+            if dom:
+                votes[name][dom] += 1
     sp = {}
     for pid in ref_by:
         for name, taxid, dom in (rcsb.get(pid) or {}).get('o') or []:
+            dom = dom or (votes[name].most_common(1)[0][0] if votes[name] else '')
             d = dom or 'other'
             add(G, 'organism', d, DT[d], 'organism|organism', pid)
             G['organism']['m'].add(pid)
-            k = (d, species(name, dom))
-            e = sp.setdefault(k, {'m': set(), 'tax': {}})
+            e = sp.setdefault(species(name, dom), {'m': set(), 'tax': {}, 'dom': collections.Counter()})
             e['m'].add(pid)
             e['tax'][name] = taxid
+            e['dom'][d] += 1
     taxdet = {}
-    for (d, nm), e in sp.items():
+    for nm, e in sp.items():
         if len(e['m']) < 2:
             continue
-        taxid = e['tax'].get(nm) or min(t for t in e['tax'].values() if t) if any(e['tax'].values()) else 0
+        ids = [t for t in e['tax'].values() if t]
+        taxid = e['tax'].get(nm) or (min(ids) if ids else 0)
         acc = str(taxid) if taxid else re.sub(r'[^A-Za-z0-9]+', '_', nm)
-        G[acc] = {'title': nm, 'parent': 'organism|' + d, 'sub': 0, 'm': e['m']}
+        if acc in G:   # same taxonomy id reached from two spellings: merge
+            G[acc]['m'] |= e['m']
+            continue
+        G[acc] = {'title': nm, 'parent': 'organism|' + e['dom'].most_common(1)[0][0], 'sub': 0, 'm': e['m']}
         if taxid:
             taxdet['organism|' + acc] = {'href': 'https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?id=%s' % taxid, 'copyright': {'owner': 'NCBI Taxonomy'}}
     cols['organism'] = G
