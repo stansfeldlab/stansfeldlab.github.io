@@ -1,0 +1,60 @@
+# Weekly MemProtMD update: rebuilds memprotmd/ from the MemProtMD database at Oxford and publishes
+# it if anything changed. Run it by hand from the Actions tab ("Run workflow"); tick "dry run" to
+# check the database without publishing. The script is .github/memprotmd/update.py.
+name: MemProtMD weekly update
+
+on:
+  schedule:
+    - cron: '41 6 * * 1'   # Mondays 06:41 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Check the database and report, without publishing anything
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: memprotmd-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install YAML reader
+        run: pip install pyyaml==6.0.2
+
+      - name: Rebuild the site data from the database
+        id: update
+        run: python .github/memprotmd/update.py memprotmd ${{ inputs.dry_run && '--dry-run' || '' }}
+
+      - name: Publish
+        if: ${{ !inputs.dry_run }}
+        env:
+          RELEASE: ${{ steps.update.outputs.release }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git add -A memprotmd .github/memprotmd/state.json
+          if git diff --cached --quiet; then
+            echo "Nothing changed, so nothing was published." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git diff --cached --stat | tail -1 | tee -a "$GITHUB_STEP_SUMMARY"
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "MemProtMD data release $RELEASE"
+          git push
+          # pushes made with the workflow token do not always start a Pages build, so ask for one
+          gh api -X POST "repos/$GITHUB_REPOSITORY/pages/builds" >/dev/null || echo "Pages will rebuild on its next run."

@@ -256,14 +256,19 @@
     show('status', '<p class="muted">Loading…</p>', 'Pipeline status');
     getJSON('data/status.json').then(function (s) {
       if (route.current !== 'status') return;
+      var stalled = s.stalled || [];
       show('status', '<div class="stack"><div class="pagehead"><h1>Pipeline status</h1><p class="muted" style="max-width:44rem">The MemProtMD pipeline handles around 40 new protein simulations per month. Proteins shown here are running through the pipeline, so may not be on the site yet.</p></div>' +
         '<input class="field" id="st-q" type="search" placeholder="Filter by PDB code" aria-label="Filter by PDB code" style="max-width:20rem"><h2>In progress</h2><div class="jobs">' + s.jobs.map(function (j) {
           var at = STAGES.indexOf(j.status);
-          return '<div class="panel" data-job="' + esc(j.id) + '"><div class="job-top">' + imgTag('pdb100', j.id) + '<div><a class="mono" style="font-size:1.25rem;font-weight:500;text-decoration:none" href="' + refHref('PDB', j.id) + '">' + esc(j.id) + '</a><p class="small muted">' + esc(j.status.charAt(0).toUpperCase() + j.status.slice(1)) + ' since ' + esc(fmtDate(j.time)) + '</p></div></div>' +
+          return '<div class="panel" data-job="' + esc(j.id) + '"><div class="job-top">' + imgTag('pdb100', j.id) + '<div>' + (byId[j.id] ? '<a class="mono" style="font-size:1.25rem;font-weight:500;text-decoration:none" href="' + refHref('PDB', j.id) + '">' + esc(j.id) + '</a>' : '<span class="mono" style="font-size:1.25rem;font-weight:500">' + esc(j.id) + '</span>') + '<p class="small muted">' + esc(j.status.charAt(0).toUpperCase() + j.status.slice(1)) + ' since ' + esc(fmtDate(j.time)) + '</p></div></div>' +
             '<div class="steps">' + STAGES.map(function (st, i) { return '<span class="' + (i < at ? 'done' : i === at ? 'now' : '') + '">' + st.charAt(0).toUpperCase() + st.slice(1) + '</span>'; }).join('') + '</div></div>';
-        }).join('') + '</div><p class="small muted" id="st-none" hidden>No pipeline job matches that code.</p><p class="small muted">Status file written ' + esc(fmtDate(s.written)) + '.</p></div>', 'Pipeline status');
+        }).join('') + '</div>' + (s.jobs.length ? '' : '<p class="muted">Nothing is running through the pipeline at the moment.</p>') +
+        (stalled.length ? '<details class="stalled" id="st-stalled"><summary>Needs attention <span class="muted">· ' + num(stalled.length) + '</span></summary><p class="small muted">The pipeline has paused on these and they need restarting by hand.</p><ul>' + stalled.map(function (j) {
+          return '<li data-job="' + esc(j.id) + '">' + (byId[j.id] ? '<a class="mono" href="' + refHref('PDB', j.id) + '">' + esc(j.id) + '</a>' : '<span class="mono">' + esc(j.id) + '</span>') + '<span>' + esc(j.status.charAt(0).toUpperCase() + j.status.slice(1)) + ' since ' + esc(fmtDate(j.time)) + '</span><span class="muted">' + esc(j.error || '') + '</span></li>';
+        }).join('') + '</ul></details>' : '') +
+        '<p class="small muted" id="st-none" hidden>No pipeline job matches that code.</p><p class="small muted">Status file written ' + esc(fmtDate(s.written)) + '.</p></div>', 'Pipeline status');
       var f = document.getElementById('st-q');
-      f.addEventListener('input', function () { var n = 0; each('[data-job]', function (c) { c.hidden = c.getAttribute('data-job').indexOf(f.value.trim().toLowerCase()) === -1; if (!c.hidden) n++; }); document.getElementById('st-none').hidden = n > 0; });
+      f.addEventListener('input', function () { var n = 0, d = document.getElementById('st-stalled'); if (d && f.value.trim()) d.open = true; each('[data-job]', function (c) { c.hidden = c.getAttribute('data-job').indexOf(f.value.trim().toLowerCase()) === -1; if (!c.hidden) n++; }); document.getElementById('st-none').hidden = n > 0; });
     });
   }
 
