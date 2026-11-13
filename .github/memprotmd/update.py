@@ -42,6 +42,12 @@ REF_FIELDS = ('title', 'subtitle', 'first_published', 'mean_thickness', 'keyword
               'resolution', 'sim_chains_meta', 'ligands', 'entities', 'primary_citation')
 SIM_FIELDS = ('thinning', 'sim_complete_time', 'leaflet_summary', 'sim_validate', 'chains', 'composition', 'n_chains')
 GROUP_DETAIL = ('description', 'description_copyright', 'keywords_string', 'auto_keywords', 'href', 'copyright', 'subtitle')
+RCSB_GQL = 'https://data.rcsb.org/graphql'
+ORG_QUERY = ('query($ids:[String!]!){entries(entry_ids:$ids){rcsb_id polymer_entities{'
+             'rcsb_polymer_entity_container_identifiers{auth_asym_ids} '
+             'rcsb_entity_source_organism{scientific_name ncbi_taxonomy_id taxonomy_lineage{name}}}}}')
+DOMAINS = ('Bacteria', 'Archaea', 'Eukaryota', 'Viruses')
+IN_MEMBRANE = ('membrane spanning', 'membrane embedded', 'single leaflet')
 UA = {'User-Agent': 'memprotmd-site-update (+https://stansfeldlab.github.io/memprotmd/)'}
 
 
@@ -115,6 +121,39 @@ def profile(text):
             arr = [bins.get(i, (0, 0, 0)) for i in range(nb)]
             out[c] = [[round(x[k], 4) for x in arr] for k in range(3)]
     return {'lo': round(lo, 2), 'w': round(w, 3), 'c': out} if out else None
+
+
+def organisms(refs, pids):
+    """Source organisms of the membrane chains of each entry, from the RCSB PDB.
+
+    Returns {pdb: [[scientific name, NCBI taxonomy id, domain], ...]}. Only the polymer entities that
+    contain a chain placed in the membrane are used (so an antibody or nanobody bound to a human
+    protein does not add its species); if none qualify, all polymer entities are used."""
+    out = {}
+    for i in range(0, len(pids), 100):
+        batch = [p.upper() for p in pids[i:i + 100]]
+        try:
+            r = json.loads(get(RCSB_GQL, json.dumps({'query': ORG_QUERY, 'variables': {'ids': batch}}).encode()))
+        except (RuntimeError, ValueError) as e:
+            print('RCSB organism lookup failed for a batch, will retry next run:', e)
+            continue
+        for e in (r.get('data') or {}).get('entries') or []:
+            if not e or not e.get('rcsb_id'):
+                continue
+            pid = e['rcsb_id'].lower()
+            tm = {c.get('chainID') for c in (refs.get(pid) or {}).get('sim_chains_meta') or [] if c.get('tm') in IN_MEMBRANE}
+            ents = e.get('polymer_entities') or []
+            chosen = [x for x in ents if tm & set((x.get('rcsb_polymer_entity_container_identifiers') or {}).get('auth_asym_ids') or [])] or ents
+            seen = {}
+            for x in chosen:
+                for o in x.get('rcsb_entity_source_organism') or []:
+                    name = (o.get('scientific_name') or '').strip()
+                    if not name or name in seen:
+                        continue
+                    lineage = {l.get('name') for l in o.get('taxonomy_lineage') or []}
+                    seen[name] = [name, o.get('ncbi_taxonomy_id') or 0, next((d for d in DOMAINS if d in lineage), '')]
+            out[pid] = list(seen.values())
+    return out
 
 
 def load(path, default):
@@ -235,6 +274,23 @@ def main(site, dry):
             else:
                 no_g.append(db + '|' + c[0])
 
+    # source organisms: looked up once per entry and kept in organisms.json
+    org_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'organisms.json')
+    orgs = load(org_path, {})
+    missing = sorted(p for p in ref_by if p not in orgs)
+    if missing:
+        found = organisms(ref_by, missing)
+        orgs.update(found)
+        print('organisms: looked up %d entries, found %d' % (len(missing), len(found)))
+    for p in list(orgs):
+        if p not in ref_by:
+            del orgs[p]
+    count = collections.Counter(o[0] for p in ref_by for o in orgs.get(p) or [])
+    dom = {o[0]: o[2] for p in ref_by for o in orgs.get(p) or []}
+    tax = {o[0]: o[1] for p in ref_by for o in orgs.get(p) or []}
+    names = sorted(count, key=lambda n: (-count[n], n))
+    at = {n: i for i, n in enumerate(names)}
+
     # thickness histograms per MemProtMD group
     thick = old.get('thick') or {}
     st = get(DATA + 'databases/mpm/stats.csv')
@@ -248,9 +304,11 @@ def main(site, dry):
 
     def row(pid, r):
         sub = r.get('subtitle') if r.get('subtitle') and r.get('subtitle') != r.get('title') else 0
-        return [pid, r.get('title') or 0, sub, r.get('experimental_method') or 0, r.get('resolution') or 0, r.get('first_published') or 0]
+        return [pid, r.get('title') or 0, sub, r.get('experimental_method') or 0, r.get('resolution') or 0, r.get('first_published') or 0,
+                [at[o[0]] for o in orgs.get(pid) or []]]
     index = {'pdb': [row(p, r3(ref_by[p])) for p in sorted(ref_by)], 'cols': cols, 'thick': thick, 'snap': old.get('snap') or {},
-             'noThumb': no_t, 'noGroupThumb': sorted(no_g), 'built': release, 'updated': old.get('updated') or release}
+             'noThumb': no_t, 'noGroupThumb': sorted(no_g), 'built': release, 'updated': old.get('updated') or release,
+             'orgs': [[n, dom[n], tax[n]] for n in names]}   # [scientific name, domain, NCBI taxonomy id]; pdb rows list indexes into this
 
     # pipeline status, from the pipeline's own status file
     status = load(os.path.join(site, 'data', 'status.json'), {'written': release, 'jobs': []})
@@ -316,6 +374,7 @@ def main(site, dry):
         for db, d in details.items():
             dump(os.path.join(site, 'data', 'groups', db + '.json'), d)
         dump(os.path.join(site, 'data', 'status.json'), status)
+        dump(org_path, orgs)
         with open(state_path, 'w') as f:
             json.dump(state, f, sort_keys=True, separators=(',', ':'))
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
