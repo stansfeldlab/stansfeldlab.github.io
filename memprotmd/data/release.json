@@ -1,12 +1,16 @@
 {
   "release": "2026-11-12",
-  "updated": "2026-11-12",
+  "updated": "2026-11-13",
   "entries": 9509,
   "groups": {
     "mpm": 10,
     "TCDB": 1240,
     "mpstruc": 1590,
-    "Pfam": 749
+    "Pfam": 749,
+    "UniProt": 2181,
+    "organism": 349,
+    "topology": 47,
+    "ligand": 415
   },
   "site": "https://stansfeldlab.github.io/memprotmd/",
   "files": "https://memprotmd.bioch.ox.ac.uk/data/memprotmd/",

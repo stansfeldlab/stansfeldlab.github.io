@@ -23,7 +23,7 @@ SITE = 'https://stansfeldlab.github.io/memprotmd/'
 STORE = 'https://memprotmd.bioch.ox.ac.uk/data/memprotmd/simulations/'
 NAR = 'https://doi.org/10.1093/nar/gky1047'
 BIOSCHEMAS_DATASET = 'https://bioschemas.org/profiles/Dataset/1.0-RELEASE'
-TSV_COLS = ['pdb_id', 'title', 'method', 'resolution_A', 'released', 'uniprot', 'n_chains', 'n_lipids', 'n_protein_residues',
+TSV_COLS = ['pdb_id', 'title', 'method', 'resolution_A', 'released', 'uniprot', 'organism', 'ncbi_taxid', 'domain', 'n_chains', 'n_lipids', 'n_protein_residues',
             'bulk_thickness_A', 'annular_thickness_A', 'thickness_change_A', 'memprotmd_groups', 'mpstruc', 'tcdb', 'pfam',
             'entry_url', 'record_url', 'files_url']
 STATIC = ['']  # fragment routes are not indexable, so only the home page and entry pages are listed
@@ -86,6 +86,7 @@ def main(site):
     urls = []
     for row in idx['pdb']:
         pid, title, sub, meth, res, date = (row + [None] * 6)[:6]
+        org = [idx['orgs'][i] for i in (row[6] if len(row) > 6 and isinstance(row[6], list) else []) if i < len(idx.get('orgs') or [])]
         P = pid.upper()
         try:
             e = json.load(open(os.path.join(site, 'data', 'entries', pid + '.json')))
@@ -129,7 +130,7 @@ def main(site):
         dl = [('Method', m), ('Resolution', (r + ' Å') if r else ''), ('Released', str(date)[:10] if date else ''),
               ('Bilayer thickness', '%.1f Å next to the protein, %.1f Å in bulk' % (thick['annular_thickness'], thick['bulk_thickness'])
                if thick.get('annular_thickness') and thick.get('bulk_thickness') else ''),
-              ('UniProt', ', '.join(accs[:6]))]
+              ('Organism', '; '.join(o[0] for o in org)), ('UniProt', ', '.join(accs[:6]))]
         body = ('<main class="wrap" style="padding-block:2rem"><p><a href="#/home">MemProtMD</a></p><h1>%s</h1><p>PDB %s%s</p><p>%s</p><dl class="facts">%s</dl>'
                 '<p><a href="#/ref/PDB/%s">Open the full MemProtMD entry for %s</a></p></main>') % (
             esc(t), P, (' · ' + esc(sentence(plain(sub)))) if sub else '', esc(desc),
@@ -148,7 +149,8 @@ def main(site):
         sv, mg = sim.get('sim_validate') or {}, member.get(pid, {})
         th = lambda k: ('%.2f' % thick[k]) if isinstance(thick.get(k), (int, float)) else ''
         rows.append([pid, plain(ref.get('title') or title), '; '.join(meth) if isinstance(meth, list) else ('' if str(meth) in ('0', '') else meth),
-                     ('%g' % res) if res else '', str(date)[:10] if date else '', '; '.join(accs), sim.get('n_chains', ''),
+                     ('%g' % res) if res else '', str(date)[:10] if date else '', '; '.join(accs),
+                     '; '.join(o[0] for o in org), '; '.join(str(o[2]) for o in org if o[2]), '; '.join(sorted({o[1] for o in org if o[1]})), sim.get('n_chains', ''),
                      sv.get('n_lipid_molecules', ''), sv.get('n_protein_residues', ''), th('bulk_thickness'), th('annular_thickness'), th('thickness_diff'),
                      '; '.join(mg.get('mpm', [])), '; '.join(mg.get('mpstruc', [])), '; '.join(mg.get('TCDB', [])), '; '.join(mg.get('Pfam', [])),
                      url, rec, STORE + pid + '_default_dppc/'])
