@@ -187,6 +187,27 @@ def species(name, domain):
     return ' '.join(w[:2]) if domain in ('Bacteria', 'Archaea', 'Eukaryota') and len(w) >= 2 and w[0][:1].isupper() and w[1][:1].islower() else name
 
 
+def topology(sim, ref):
+    """("alpha", most TM helices in one chain), ("beta", strands in the barrel), ("other", 0), or (None, 0)
+    when the chains were not analysed. A barrel built from several chains (TolC, α-haemolysin) is counted
+    by its strands in total; a chain marked as a β-barrel with fewer than eight strands found is a
+    β-barrel with no strand count (0)."""
+    ch = sim.get('chains') or []
+    if not ch:
+        return None, 0
+    a = max(c.get('tm_alpha') or 0 for c in ch)
+    b = max(c.get('tm_beta') or 0 for c in ch)
+    tb = sum((c.get('tm_beta') or 0) * (c.get('count') or 1) for c in ch)
+    beta_meta = any(m.get('tm_ss') == 'beta' and m.get('tm') in IN_MEMBRANE for m in ref.get('sim_chains_meta') or [])
+    if b >= 8:
+        return 'beta', b
+    if beta_meta:
+        return 'beta', tb if tb >= 8 else 0
+    if a >= 1:
+        return 'alpha', a
+    return 'other', 0
+
+
 def derived_groups(ref_by, sim_by, rcsb, old_cols):
     """Groupings worked out from the records themselves: protein (UniProt), organism, membrane topology
     and bound ligand. Returns ({db: rows}, {db: details}) in the same shape as the curated groups."""
@@ -253,27 +274,25 @@ def derived_groups(ref_by, sim_by, rcsb, old_cols):
     cols['organism'] = G
     details['organism'] = taxdet
 
-    # membrane topology: most transmembrane helices, or strands, in any one membrane chain
+    # membrane topology, for entries whose chains were analysed (others are left out rather than guessed)
     G = {'topology': {'title': 'Membrane topology', 'parent': 0, 'sub': 'By transmembrane helices or β-strands per chain', 'm': set()},
          'alpha': {'title': 'α-helical', 'parent': 'topology|topology', 'sub': 0, 'm': set()},
          'beta': {'title': 'β-barrels', 'parent': 'topology|topology', 'sub': 0, 'm': set()},
-         'other': {'title': 'No transmembrane segments', 'parent': 'topology|topology', 'sub': 'Monotopic and peripheral proteins', 'm': set()}}
+         'other': {'title': 'No transmembrane helices or strands found', 'parent': 'topology|topology',
+                   'sub': 'Peripheral proteins, and chains crossing the membrane without regular secondary structure', 'm': set()}}
     for pid, sim in sim_by.items():
         if pid not in ref_by:
             continue
-        ch = sim.get('chains') or []
-        a = max([c.get('tm_alpha') or 0 for c in ch] + [0])
-        b = max([c.get('tm_beta') or 0 for c in ch] + [0])
+        kind, n = topology(sim, ref_by[pid])
+        if not kind:
+            continue
         G['topology']['m'].add(pid)
-        if b >= 8:
-            G['beta']['m'].add(pid)
-            add(G, 'topology', 'beta-%d' % b, '%d-stranded β-barrels' % b, 'topology|beta', pid)
-        elif a >= 1:
-            G['alpha']['m'].add(pid)
-            k = a if a <= 24 else 25
+        G[kind]['m'].add(pid)
+        if kind == 'beta' and n:
+            add(G, 'topology', 'beta-%d' % n, '%d-stranded β-barrels' % n, 'topology|beta', pid)
+        elif kind == 'alpha':
+            k = min(n, 25)
             add(G, 'topology', 'alpha-%d' % k, ('%d transmembrane helix' % k if k == 1 else '%d transmembrane helices' % k) if k <= 24 else '25 or more transmembrane helices', 'topology|alpha', pid)
-        else:
-            G['other']['m'].add(pid)
     cols['topology'] = G
 
     # bound ligands seen in at least five structures
@@ -466,8 +485,10 @@ def main(site, dry):
         th, ch = sim.get('thinning') or {}, sim.get('chains') or []
         def f1(v):
             return math.floor(v * 10 + 0.5) / 10 if isinstance(v, (int, float)) else None
-        stats = [f1(th.get('annular_thickness')), f1(th.get('thickness_diff')), max([c.get('tm_alpha') or 0 for c in ch] + [0]),
-                 max([c.get('tm_beta') or 0 for c in ch] + [0]), len(membrane_chains(r)) or len(ch)]
+        kind, n = topology(sim, r)
+        stats = [f1(th.get('annular_thickness')), f1(th.get('thickness_diff')),
+                 (n if kind == 'alpha' else 0) if kind else None, ((n or 1) if kind == 'beta' else 0) if kind else None,   # None: chains not analysed
+                 len(membrane_chains(r)) or len(ch)]
         return [pid, r.get('title') or 0, sub, r.get('experimental_method') or 0, r.get('resolution') or 0, r.get('first_published') or 0,
                 [at[o[0]] for o in orgs.get(pid) or []], stats]
     index = {'pdb': [row(p, r3(ref_by[p])) for p in sorted(ref_by)], 'cols': cols, 'thick': thick, 'snap': old.get('snap') or {},
