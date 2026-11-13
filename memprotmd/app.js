@@ -77,13 +77,14 @@
     DB.pdb.forEach(function (r) { searchRecs.push({ db: 'PDB', acc: r[0], title: r[1], size: 1, date: r[5], text: (r[0] + ' ' + plain(r[1]) + ' ' + (r[2] || '')).toLowerCase() }); });
     return searchRecs;
   }
-  function search(q, n, dbs) {
+  function search(q, n, dbs, test) {
     var pos = [], neg = [], m, re = /(-?)"([^"]+)"|(-?)(\S+)/g;
     while ((m = re.exec(q.toLowerCase()))) { var t = (m[2] || m[4]).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); if (t) ((m[1] || m[3]) ? neg : pos).push(new RegExp('(^|[^a-z0-9])' + t + '($|[^a-z0-9])')); }
     var out = []; out.total = 0;
-    if (!pos.length) return out;
+    if (!pos.length && !test) return out;
     recs().forEach(function (r) {
-      if (dbs && !dbs[r.db]) return;
+      if (test) { if (r.db !== 'PDB' || !test(byId[r.acc])) return; }
+      else if (dbs && !dbs[r.db]) return;
       for (var i = 0; i < pos.length; i++) if (!pos[i].test(r.text)) return;
       for (var j = 0; j < neg.length; j++) if (neg[j].test(r.text)) return;
       out.push(r);
@@ -154,25 +155,93 @@
 
   /* ---------- search ---------- */
   var SOURCES = [['PDB', 'PDB structures'], ['mpm', 'MemProtMD groups'], ['TCDB', 'TCDB'], ['mpstruc', 'mpstruc'], ['Pfam', 'Pfam']];
+  var METHODS = [['xray', 'X-ray'], ['em', 'Cryo-EM'], ['nmr', 'NMR'], ['other', 'Other']];
+  var RES = [2, 2.5, 3, 3.5, 4];
+  function mgroup(m) { m = String(m || ''); return /X-RAY/.test(m) ? 'xray' : /ELECTRON MICROSCOPY/.test(m) ? 'em' : /NMR/.test(m) ? 'nmr' : 'other'; }
+  function qsParse(t) { var o = {}; String(t || '').split('&').forEach(function (kv) { if (!kv) return; var i = kv.indexOf('='); try { o[decodeURIComponent(i < 0 ? kv : kv.slice(0, i))] = i < 0 ? '' : decodeURIComponent(kv.slice(i + 1).replace(/\+/g, ' ')); } catch (e) {} }); return o; }
+  function qsBuild(o) { return Object.keys(o).filter(function (k) { return o[k] !== '' && o[k] != null; }).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(o[k]).replace(/%2C/g, ',').replace(/%7C/g, '|'); }).join('&'); }
+  function filterTest(F) {
+    if (!(F.m.length || F.r || F.y0 || F.y1 || F.f)) return null;
+    var fam = null; if (F.f && colById[F.f]) { fam = {}; members(colById[F.f]).forEach(function (x) { fam[x] = 1; }); }
+    return function (row) {
+      if (!row) return false;
+      if (F.m.length && F.m.indexOf(mgroup(row[3])) < 0) return false;
+      if (F.r && !(row[4] > 0 && row[4] <= F.r)) return false;
+      var y = +String(row[5] || '').slice(0, 4);
+      if (F.y0 && !(y >= F.y0)) return false;
+      if (F.y1 && !(y <= F.y1)) return false;
+      return !fam || !!fam[row[0]];
+    };
+  }
+  function famOptions(sel) {
+    var all = Object.keys(colById).map(function (k) { return colById[k]; });
+    function opt(c, label) { var v = c.db + '|' + c.acc; return '<option value="' + esc(v) + '"' + (v === sel ? ' selected' : '') + '>' + esc(label) + ' (' + num(c.n) + ')</option>'; }
+    var mpm = all.filter(function (c) { return c.db === 'mpm' && c.acc !== 'membrane_proteins'; }).sort(function (a, b) { return b.n - a.n; });
+    var mps = all.filter(function (c) { var pa = c.parent && colById[c.parent]; return c.db === 'mpstruc' && pa && pa.parent === 'mpstruc|mpstruc'; }).sort(function (a, b) { return plain(a.title).localeCompare(plain(b.title)); });
+    var tc = all.filter(function (c) { return c.db === 'TCDB' && /^\d\.[A-Z]$/.test(c.acc); }).sort(function (a, b) { return a.acc.localeCompare(b.acc); });
+    return '<option value="">Any family</option>' +
+      '<optgroup label="MemProtMD">' + mpm.map(function (c) { return opt(c, plain(c.title)); }).join('') + '</optgroup>' +
+      '<optgroup label="mpstruc">' + mps.map(function (c) { return opt(c, sentence(plain(c.title))); }).join('') + '</optgroup>' +
+      '<optgroup label="TCDB">' + tc.map(function (c) { return opt(c, c.acc + ' ' + plain(c.title)); }).join('') + '</optgroup>';
+  }
   function pageSearch() {
     var on = {}, shown = 30; SOURCES.forEach(function (s) { on[s[0]] = true; });
+    var Q = qsParse(route.query), years = [];
+    DB.pdb.forEach(function (r) { var y = +String(r[5] || '').slice(0, 4); if (y && years.indexOf(y) < 0) years.push(y); }); years.sort();
+    var F = { m: (Q.m || '').split(',').filter(function (x) { return METHODS.some(function (m) { return m[0] === x; }); }), r: +Q.r || 0, y0: +Q.y0 || 0, y1: +Q.y1 || 0, f: Q.f && colById[Q.f] ? Q.f : '' };
+    if (pending) { Q.q = pending; pending = ''; }
+    function yopts(sel, blank) { return '<option value="">' + blank + '</option>' + years.map(function (y) { return '<option' + (y === sel ? ' selected' : '') + '>' + y + '</option>'; }).join(''); }
+    var active = F.m.length || F.r || F.y0 || F.y1 || F.f;
     show('search/text', '<div class="stack"><div class="pagehead"><h1>Search</h1><p class="muted" style="max-width:44rem">Search works on whole words. Put a phrase <code>"in quotes"</code> to match it exactly, or add a minus sign to leave words out, for example <code>lipoprotein -mlaa</code>.</p></div>' +
       '<input class="field big" id="ts-q" type="search" placeholder="Protein, family, process or PDB code" aria-label="Search term" autocomplete="off">' +
-      '<div class="chips" role="group" aria-label="Sources">' + SOURCES.map(function (s) { return '<button class="chip" type="button" aria-pressed="true" data-db="' + s[0] + '">' + s[1] + '</button>'; }).join('') + '</div>' +
+      '<div class="chips" id="ts-src" role="group" aria-label="Sources">' + SOURCES.map(function (s) { return '<button class="chip" type="button" aria-pressed="true" data-db="' + s[0] + '">' + s[1] + '</button>'; }).join('') + '</div>' +
+      '<details class="filters"' + (active ? ' open' : '') + '><summary>Filter structures <span class="muted" id="f-sum"></span></summary><div class="fbody">' +
+        '<div class="frow"><span class="eyebrow">Method</span><div class="chips" role="group" aria-label="Experimental method">' + METHODS.map(function (m) { return '<button class="chip" type="button" data-m="' + m[0] + '" aria-pressed="' + (F.m.indexOf(m[0]) >= 0) + '">' + m[1] + '</button>'; }).join('') + '</div></div>' +
+        '<div class="frow"><label class="eyebrow" for="f-res">Resolution</label><select class="field sel" id="f-res"><option value="">Any</option>' + RES.map(function (v) { return '<option value="' + v + '"' + (F.r === v ? ' selected' : '') + '>' + v.toFixed(1) + ' Å or better</option>'; }).join('') + '</select></div>' +
+        '<div class="frow"><span class="eyebrow" id="f-ylab">Released</span><div class="yr"><select class="field sel" id="f-y0" aria-labelledby="f-ylab">' + yopts(F.y0, 'From') + '</select><span class="muted">to</span><select class="field sel" id="f-y1" aria-label="Released up to">' + yopts(F.y1, 'To') + '</select></div></div>' +
+        '<div class="frow"><label class="eyebrow" for="f-fam">Family</label><select class="field sel" id="f-fam">' + famOptions(F.f) + '</select></div>' +
+        '<p class="small muted">Filters apply to PDB structures only. Most cryo-EM entries have no resolution recorded, so they drop out when you filter by resolution.</p>' +
+        '<div class="btns"><button class="btn ghost" type="button" id="f-clear">Clear filters</button><button class="btn ghost" type="button" id="f-copy">Copy link to this search</button><span class="small muted" id="f-msg" role="status"></span></div>' +
+      '</div></details>' +
       '<p class="small muted" id="ts-msg">Try <a href="#" data-try="GPCR">GPCR</a>, <a href="#" data-try="porin">porin</a>, <a href="#" data-try="&quot;ion channel&quot; -sodium">"ion channel" -sodium</a> or <a href="#" data-try="1a0s">1a0s</a>.</p><div class="panel" id="ts-panel" hidden><div class="rowlist" id="ts-res"></div><p style="margin-top:1rem"><button class="btn ghost" id="ts-more" type="button" hidden>Show more</button></p></div></div>', 'Search');
-    var q = document.getElementById('ts-q');
+    var q = document.getElementById('ts-q'), msg = document.getElementById('ts-msg'), tip = msg.innerHTML;
+    q.value = Q.q || '';
+    function state() { return qsBuild({ q: q.value.trim(), m: F.m.join(','), r: F.r || '', y0: F.y0 || '', y1: F.y1 || '', f: F.f }); }
+    function sync() { var t = state(); try { history.replaceState(null, '', location.pathname + location.search + '#/search/text' + (t ? '?' + t : '')); } catch (e) {} }
     function run() {
-      var v = q.value.trim(), r = v ? search(v, shown, on) : [];
+      var v = q.value.trim(), test = filterTest(F), r = v || test ? search(v, shown, on, test) : [];
+      document.getElementById('ts-src').hidden = !!test;
+      var sum = [F.m.length ? F.m.map(function (k) { return METHODS.filter(function (m) { return m[0] === k; })[0][1]; }).join(', ') : '', F.r ? '≤ ' + F.r.toFixed(1) + ' Å' : '', F.y0 || F.y1 ? (F.y0 || '…') + '–' + (F.y1 || '…') : '', F.f ? plain(colById[F.f].title) : ''].filter(Boolean);
+      document.getElementById('f-sum').textContent = sum.length ? '· ' + sum.join(' · ') : '';
       document.getElementById('ts-panel').hidden = !r.length;
       document.getElementById('ts-res').innerHTML = r.map(rowLink).join('');
       document.getElementById('ts-more').hidden = r.total <= r.length;
-      if (v) document.getElementById('ts-msg').textContent = r.length ? 'Showing ' + r.length + ' of ' + num(r.total) + ' results.' : 'No results. Try another spelling or a related term.';
+      if (v || test) msg.textContent = r.length ? 'Showing ' + num(r.length) + ' of ' + num(r.total) + (test ? ' structures' : ' results') + '.' : 'No results. Try another spelling, a related term or fewer filters.';
+      else msg.innerHTML = tip;
+      wireTry();
+      sync();
     }
+    function wireTry() { each('[data-try]', function (a) { if (a.dataset.w) return; a.dataset.w = 1; a.addEventListener('click', function (e) { e.preventDefault(); q.value = a.getAttribute('data-try'); shown = 30; run(); }); }); }
     q.addEventListener('input', function () { shown = 30; run(); });
     each('[data-db]', function (b) { b.addEventListener('click', function () { var d = b.getAttribute('data-db'); on[d] = !on[d]; b.setAttribute('aria-pressed', on[d]); run(); }); });
-    each('[data-try]', function (a) { a.addEventListener('click', function (e) { e.preventDefault(); q.value = a.getAttribute('data-try'); run(); }); });
+    each('[data-m]', function (b) { b.addEventListener('click', function () { var k = b.getAttribute('data-m'), i = F.m.indexOf(k); if (i < 0) F.m.push(k); else F.m.splice(i, 1); b.setAttribute('aria-pressed', i < 0); shown = 30; run(); }); });
+    [['f-res', 'r'], ['f-y0', 'y0'], ['f-y1', 'y1'], ['f-fam', 'f']].forEach(function (x) {
+      document.getElementById(x[0]).addEventListener('change', function (e) { F[x[1]] = x[1] === 'f' ? e.target.value : +e.target.value || 0; shown = 30; run(); });
+    });
+    document.getElementById('f-clear').addEventListener('click', function () {
+      F = { m: [], r: 0, y0: 0, y1: 0, f: '' };
+      each('[data-m]', function (b) { b.setAttribute('aria-pressed', 'false'); });
+      ['f-res', 'f-y0', 'f-y1', 'f-fam'].forEach(function (id) { document.getElementById(id).value = ''; });
+      shown = 30; run();
+    });
+    document.getElementById('f-copy').addEventListener('click', function () {
+      var t = state(), u = SITE + '#/search/text' + (t ? '?' + t : ''), m = document.getElementById('f-msg');
+      function done(ok) { m.textContent = ok ? 'Link copied.' : u; }
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(u).then(function () { done(true); }, function () { done(false); }); else done(false);
+    });
     document.getElementById('ts-more').addEventListener('click', function () { shown += 30; run(); });
-    if (pending) { q.value = pending; pending = ''; run(); }
+    wireTry();
+    if (q.value || active) run();
     q.focus();
   }
 
@@ -287,11 +356,6 @@
     return '<div class="gauge"><svg width="196" height="' + H + '" viewBox="0 0 196 ' + H + '" role="img" aria-label="Bilayer thickness in bulk and next to the protein, drawn to scale">' + slab(0, bulk, 'Bulk') + slab(112, ann, 'At protein') + '</svg>' +
       '<dl class="facts"><dt>Bulk bilayer</dt><dd>' + bulk.toFixed(1) + ' Å</dd><dt>Next to the protein</dt><dd>' + ann.toFixed(1) + ' Å</dd><dt>Change</dt><dd>' + (t.thickness_diff > 0 ? '+' : '−') + Math.abs(t.thickness_diff).toFixed(1) + ' Å</dd></dl></div>';
   }
-  function uniprot(r) {
-    var seen = {}, out = [];
-    (r.entities || []).forEach(function (en) { (en.refs || []).forEach(function (x) { if (x.db === 'UniProt' && !seen[x.accession]) { seen[x.accession] = 1; out.push(extA('https://www.uniprot.org/uniprotkb/' + x.accession, esc(x.accession))); } }); });
-    return out.join(', ');
-  }
   /* Residue density along the bilayer normal for one chain: all residues, helices and strands. */
   function violin(prof, chain, t) {
     var d = prof && prof.c[chain]; if (!d) return '';
@@ -305,10 +369,65 @@
     var half = (t && t.bulk_thickness ? t.bulk_thickness : 40) / 2;
     return '<svg viewBox="0 0 100 100" aria-hidden="true"><rect x="-5" width="110" y="' + y(half) + '" height="' + (half / Z * 100).toFixed(1) + '"/>' + shape(d[0], 'all-density') + shape(d[1], 'alpha-density') + shape(d[2], 'beta-density') + '</svg>';
   }
+  /* ---------- links out and citation ---------- */
+  var SITE = CFG.siteUrl || 'https://stansfeldlab.github.io/memprotmd/';
+  var MDDB = 'https://mdposit.mddbr.eu/';
+  function uniAccs(r) {
+    var seen = {}, out = [];
+    (r.entities || []).forEach(function (en) { (en.refs || []).forEach(function (x) { if (x.db === 'UniProt' && x.accession && !seen[x.accession]) { seen[x.accession] = 1; out.push(x.accession); } }); });
+    return out;
+  }
+  function xlinks(pdb, r) {
+    function a(u, t) { return extA(u, t + '<span class="xa" aria-hidden="true">↗</span>'); }
+    var acc = uniAccs(r), more = acc.length > 6 ? ' <span class="muted small">and ' + (acc.length - 6) + ' more</span>' : '';
+    acc = acc.slice(0, 6);
+    var rows = [['Structure', [a('https://www.rcsb.org/structure/' + pdb, 'RCSB PDB'), a('https://www.ebi.ac.uk/pdbe/entry/pdb/' + pdb, 'PDBe'), a('https://pdbj.org/mine/summary/' + pdb, 'PDBj')]],
+      ['Membrane', [a('https://opm.phar.umich.edu/proteins?search=' + pdb, 'OPM'), a('https://pdbtm.unitmp.org/entry/' + pdb, 'PDBTM')]],
+      ['Simulations', ['<span id="xl-mddb">' + a(MDDB + '#/browse?search=' + pdb, 'MDDB') + '</span>']]];
+    if (acc.length) {
+      rows.push(['UniProt', acc.map(function (x) { return a('https://www.uniprot.org/uniprotkb/' + x + '/entry', x); })]);
+      rows.push(['AlphaFold', acc.map(function (x) { return a('https://alphafold.ebi.ac.uk/entry/' + x, x); })]);
+    }
+    return '<dl class="xlinks">' + rows.map(function (rw, i) { return '<dt>' + rw[0] + '</dt><dd>' + rw[1].join('') + (i >= 3 && more ? more : '') + '</dd>'; }).join('') + '</dl>';
+  }
+  /* MDDB lists simulations by PDB code; say how many there are, or that there are none yet. */
+  function mddbCount(pdb) {
+    var c = mddbCount.c || (mddbCount.c = {});
+    if (!(pdb in c)) c[pdb] = fetch(MDDB + 'api/rest/v1/projects?search=' + pdb).then(function (r) { if (!r.ok) throw 0; return r.json(); })
+      .then(function (j) { return (j.projects || []).filter(function (x) { return ((x.metadata || {}).PDBIDS || []).some(function (id) { return String(id).toLowerCase() === pdb; }); }).length; })
+      .catch(function () { return null; });
+    c[pdb].then(function (n) {
+      var el = document.getElementById('xl-mddb'); if (!el || n === null) return;
+      el.innerHTML = n ? extA(MDDB + '#/browse?search=' + pdb, 'MDDB · ' + n + (n > 1 ? ' simulations' : ' simulation') + '<span class="xa" aria-hidden="true">↗</span>') : '<span class="muted">None in MDDB yet</span>';
+    });
+  }
+  var CITE = 'Newport TD, Sansom MSP, Stansfeld PJ (2019). The MemProtMD database: a resource for membrane-embedded protein structures and their lipid interactions. Nucleic Acids Research 47(D1):D390–D397. doi:10.1093/nar/gky1047';
+  var CITE_BIB = '@article{newport2019memprotmd,\n  author = {Newport, Thomas D. and Sansom, Mark S. P. and Stansfeld, Phillip J.},\n  title = {The {MemProtMD} database: a resource for membrane-embedded protein structures and their lipid interactions},\n  journal = {Nucleic Acids Research},\n  volume = {47},\n  number = {D1},\n  pages = {D390--D397},\n  year = {2019},\n  doi = {10.1093/nar/gky1047}\n}';
+  function today() { return new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }); }
+  function citeBox(pdb, cit) {
+    var u = SITE + 'pdb/' + pdb + '/', P = pdb.toUpperCase();
+    return '<section class="panel stack"><h2>Cite this entry</h2><p class="cite">' + esc(CITE).replace('doi:10.1093/nar/gky1047', extA('https://doi.org/10.1093/nar/gky1047', 'doi:10.1093/nar/gky1047')) + '</p>' +
+      '<p class="small muted">Entry: MemProtMD PDB ' + P + ', <a href="' + esc(u) + '">' + esc(u) + '</a> (accessed ' + today() + '). Please also cite the original structure' + (cit && cit.DOI ? ', ' + extA('https://doi.org/' + cit.DOI, 'doi:' + esc(cit.DOI)) : '') + '.</p>' +
+      '<div class="btns"><button class="btn ghost" type="button" data-copy="txt">Copy citation</button><button class="btn ghost" type="button" data-copy="bib">Copy BibTeX</button><span class="small muted" id="cite-msg" role="status"></span></div></section>';
+  }
+  function wireCite(pdb, cit) {
+    var u = SITE + 'pdb/' + pdb + '/', P = pdb.toUpperCase();
+    var txt = CITE + '\nMemProtMD entry PDB ' + P + ', ' + u + ' (accessed ' + today() + ').' + (cit && cit.DOI ? '\nOriginal structure: doi:' + cit.DOI : '');
+    var bib = CITE_BIB + '\n@misc{memprotmd_' + pdb + ',\n  title = {{MemProtMD} entry {PDB} ' + P + '},\n  howpublished = {\\url{' + u + '}},\n  note = {Accessed ' + today() + '}\n}';
+    each('[data-copy]', function (b) {
+      b.addEventListener('click', function () {
+        var t = b.getAttribute('data-copy') === 'bib' ? bib : txt, msg = document.getElementById('cite-msg');
+        function done(ok) { if (msg) msg.textContent = ok ? 'Copied.' : 'Copy failed. Select the text above instead.'; }
+        function legacy() { var ta = document.createElement('textarea'); ta.value = t; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); var ok = false; try { ok = document.execCommand('copy'); } catch (e) {} ta.remove(); done(ok); }
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(function () { done(true); }, legacy); else legacy();
+      });
+    });
+  }
+
   /* ---------- 3D viewer (Mol*, loaded on demand) ---------- */
   var MOLSTAR = CFG.molstar || 'https://cdn.jsdelivr.net/npm/molstar@5.13.1/build/viewer/';
   var CHAIN_COLS = ['#1f499e', '#c8003f', '#0f8b7a', '#d48a00', '#6b4fbb', '#2f86c9', '#b5476b', '#5a7d1a'];
-  var MOL_COLOR = [['Chain', null], ['Head groups', 'head'], ['Tails', 'tail'], ['Solvent', 'solvent']];
+  var MOL_COLOR = [['Structure', null], ['Head groups', 'head'], ['Tails', 'tail'], ['Solvent', 'solvent']];
   var MOL_STYLE = ['Cartoon', 'Surface'];
   var MOL_MEM = ['Phosphates', 'Lipids', 'Hidden'];
   var CON_PAL = { head: ['#eef1f6', '#f2b552', '#c8003f'], tail: ['#eef1f6', '#7fcfc0', '#0b6e60'], solvent: ['#eef1f6', '#8fb0f2', '#17397b'] };
@@ -338,10 +457,14 @@
   function pdbLines(t, f) { t.split('\n').forEach(function (l) { var k = l.slice(0, 6); if (k === 'ATOM  ' || k === 'HETATM') f(l); }); }
   function molSource(pdb, base) {
     return fetchText(base + 'files/structures/web_vis.pdb').then(function (t) {
-      var chains = [], seen = {};
-      pdbLines(t, function (l) { var c = l.charAt(21).trim(); if (c && !seen[c] && AA.indexOf(' ' + l.substr(17, 3) + ' ') >= 0) { seen[c] = 1; chains.push(c); } });
-      if (!chains.length && !/\n(ATOM|HETATM)/.test('\n' + t)) throw new Error('empty');
-      return { url: URL.createObjectURL(new Blob([t], { type: 'text/plain' })), format: 'pdb', blob: true, chains: chains };
+      if (!/\n(ATOM|HETATM)/.test('\n' + t)) throw new Error('empty');
+      var ss = { h: [], s: [] };
+      t.split('\n').forEach(function (l) {
+        var k = l.slice(0, 5), b, e;
+        if (k === 'HELIX') { b = parseInt(l.substr(21, 4), 10); e = parseInt(l.substr(33, 4), 10); if (b <= e) ss.h.push({ beg_auth_seq_id: b, end_auth_seq_id: e }); }
+        else if (k === 'SHEET') { b = parseInt(l.substr(22, 4), 10); e = parseInt(l.substr(33, 4), 10); if (b <= e) ss.s.push({ beg_auth_seq_id: b, end_auth_seq_id: e }); }
+      });
+      return { url: URL.createObjectURL(new Blob([t], { type: 'text/plain' })), format: 'pdb', blob: true, ss: ss };
     }).catch(function () { return { url: 'https://models.rcsb.org/' + pdb + '.bcif', format: 'bcif', rcsb: true, chains: null }; });
   }
   function molContacts(base, g) {
@@ -350,10 +473,10 @@
     return fetchText(base + 'files/structures/group_' + g + '.contacts.pdb').then(function (t) {
       var rows = [], at = {};
       pdbLines(t, function (l) {
-        var c = l.charAt(21).trim(), r = parseInt(l.substr(22, 4), 10), b = parseFloat(l.substr(60, 6)), k = c + ':' + r;
+        var r = parseInt(l.substr(22, 4), 10), b = parseFloat(l.substr(60, 6)), k = 'r' + r;
         if (isNaN(r) || isNaN(b)) return;
         if (k in at) { if (b > rows[at[k]].value) rows[at[k]].value = b; return; }
-        at[k] = rows.length; var row = { auth_seq_id: r, value: b }; if (c) row.auth_asym_id = c; rows.push(row);
+        at[k] = rows.length; rows.push({ auth_seq_id: r, value: b });
       });
       if (!rows.length) throw new Error('empty');
       return URL.createObjectURL(new Blob([JSON.stringify(rows)], { type: 'application/json' }));
@@ -363,7 +486,11 @@
     var s = MOL.src, g = MOL_COLOR[MOL.color][1], cu = g && MOL.con[g], kids = [];
     var rep = { kind: 'representation', params: MOL.style ? { type: 'surface', surface_type: 'gaussian' } : { type: 'cartoon' }, children: [] };
     if (cu) rep.children.push({ kind: 'color', params: { color: '#eef1f6' } }, { kind: 'color_from_uri', params: { uri: cu, format: 'json', schema: 'auth_residue', field_name: 'value', palette: { kind: 'continuous', colors: CON_PAL[g] } } });
-    else {
+    else if (s.ss && (s.ss.h.length || s.ss.s.length)) {
+      rep.children.push({ kind: 'color', params: { color: '#dfe4ec' } });
+      if (s.ss.h.length) rep.children.push({ kind: 'color', params: { selector: s.ss.h, color: '#2f6fd0' } });
+      if (s.ss.s.length) rep.children.push({ kind: 'color', params: { selector: s.ss.s, color: '#17946b' } });
+    } else {
       var ch = s.chains && s.chains.length ? s.chains : null;
       rep.children.push({ kind: 'color', params: { color: CHAIN_COLS[0] } });
       if (ch && ch.length > 1) ch.forEach(function (id, i) { rep.children.push({ kind: 'color', params: { selector: { auth_asym_id: id }, color: CHAIN_COLS[i % CHAIN_COLS.length] } }); });
@@ -389,7 +516,7 @@
     if (MOL.src && MOL.src.rcsb) t.push('The simulation snapshot could not be loaded, so this is the deposited PDB structure without the bilayer.');
     if (g && MOL.src && MOL.con[g] === null) t.push('Contact data for this entry could not be loaded.');
     else if (g) t.push('Coloured by average occupancy within 6 Å over the final 800 ns, pale to strong.');
-    else if (MOL.src && !MOL.src.rcsb) t.push('Final atomistic snapshot. Phosphorus atoms mark the lipid head groups.');
+    else if (MOL.src && !MOL.src.rcsb) t.push('Final atomistic snapshot: helices in blue, strands in green, and lipid phosphorus atoms in gold.');
     n.textContent = t.join(' ');
   }
   function molPaint(base) {
@@ -407,7 +534,8 @@
     var c = document.getElementById('mol-ctrl'); if (!c) return;
     function seg3(k, labels, aria) { return '<div class="seg" role="group" aria-label="' + aria + '">' + labels.map(function (l, i) { return '<button type="button" data-mol="' + k + '" data-i="' + i + '" aria-pressed="' + (MOL[k] === i) + '">' + l + '</button>'; }).join('') + '</div>'; }
     var rc = MOL.src && MOL.src.rcsb;
-    c.innerHTML = '<div class="molbar"><div class="molrow"><span class="eyebrow">Colour by</span>' + seg3('color', MOL_COLOR.map(function (x) { return x[0]; }), 'Colour by') + '</div>' +
+    if (rc) MOL.color = 0;
+    c.innerHTML = '<div class="molbar">' + (rc ? '' : '<div class="molrow"><span class="eyebrow">Colour by</span>' + seg3('color', MOL_COLOR.map(function (x) { return x[0]; }), 'Colour by') + '</div>') +
       '<div class="molrow"><span class="eyebrow">Protein</span>' + seg3('style', MOL_STYLE, 'Protein style') + '</div>' +
       (rc ? '' : '<div class="molrow"><span class="eyebrow">Bilayer</span>' + seg3('mem', MOL_MEM, 'Bilayer') + '</div>') +
       '<p class="small muted" id="mol-note"></p><div class="btns"><button type="button" class="btn ghost" id="mol-close">Back to image</button></div></div>';
@@ -505,9 +633,9 @@
         '<div class="stack"><div class="pagehead">' + crumbs([['Home', href('home')], ['Structures', refHref('mpm', 'membrane_proteins')], [pdb.toUpperCase(), null]]) +
         '<h1>' + ttl(pdbTitle(r.title || e[1], pdb)) + '</h1><div class="idline"><span class="tag">PDB ' + pdb + '</span>' + ((r.subtitle || e[2]) ? '<span>' + esc(sentence(r.subtitle || e[2])) + '</span>' : '') + '</div></div>' +
         '<dl class="facts">' + [['Published', fmtDate(e[5])], ['Method', esc(sentence(e[3] || ''))], ['Resolution', e[4] ? Number(e[4]).toFixed(2).replace(/0$/, '') + ' Å' : ''], ['Organism', r.organism && r.organism.scientific_name ? '<i>' + esc(r.organism.scientific_name) + '</i>' : ''],
-          ['UniProt', uniprot(r)], ['Ligands', esc((r.ligands || []).map(function (l) { return sentence(l.description); }).join(', '))], ['Keywords', esc((r.keywords || []).join(', '))]].filter(function (p) { return p[1]; }).map(function (p) { return '<dt>' + p[0] + '</dt><dd>' + p[1] + '</dd>'; }).join('') + '</dl>' +
+          ['Ligands', esc((r.ligands || []).map(function (l) { return sentence(l.description); }).join(', '))], ['Keywords', esc((r.keywords || []).join(', '))]].filter(function (p) { return p[1]; }).map(function (p) { return '<dt>' + p[0] + '</dt><dd>' + p[1] + '</dd>'; }).join('') + '</dl>' +
         (cit.title ? '<p class="cite">' + esc(cit.title) + ' <span class="muted">' + esc((r.primary_authors || []).slice(0, 4).join(', ') + ((r.primary_authors || []).length > 4 ? ' et al.' : '')) + '. ' + esc([cit.journal, cit.year].filter(Boolean).join(' ')) + '.</span> ' + (cit.DOI ? extA('https://doi.org/' + cit.DOI, 'doi:' + esc(cit.DOI)) : '') + '</p>' : '') +
-        '<div class="btns">' + extA('https://molstar.org/viewer/?structure-url=' + encodeURIComponent(base + 'files/structures/at.pdb') + '&structure-url-format=pdb', 'Open in Mol* ↗', 'btn') + extA(base + 'files/structures/at.pdb', 'Atomistic PDB ↓', 'btn ghost') + extA('https://www.rcsb.org/structure/' + pdb, 'RCSB ↗', 'btn ghost') + extA('https://www.ebi.ac.uk/pdbe/entry/pdb/' + pdb, 'PDBe ↗', 'btn ghost') + extA('https://pdbj.org/mine/summary/' + pdb, 'PDBj ↗', 'btn ghost') + '</div></div></div>' +
+        '<div class="btns">' + extA(base + 'files/structures/at.pdb', 'Atomistic PDB ↓', 'btn') + extA('https://molstar.org/viewer/?structure-url=' + encodeURIComponent(base + 'files/structures/at.pdb') + '&structure-url-format=pdb', 'Open in Mol* ↗', 'btn ghost') + '</div>' + xlinks(pdb, r) + '</div></div>' +
         (groups ? '<section class="panel"><h2>Member of</h2><div class="groups">' + groups + '</div></section>' : '') +
         '<section class="stack"><div class="head-row" style="margin:0"><h2>Simulation</h2><span class="mono muted">' + sim + '</span></div>' +
         (s.thinning ? '<div class="panel stack"><h3>Bilayer thickness</h3>' + gauge(s.thinning) + (sv.n_lipid_molecules ? '<p class="small muted">' + num(sv.n_lipid_molecules) + ' ' + esc(Object.keys(s.composition || { lipid: 1 }).join('/')) + ' lipids around ' + num(sv.n_protein_residues) + ' protein residues.</p>' : '') + '</div>' : '') +
@@ -525,10 +653,11 @@
             (st.topo && st.topo.chain === chainSel ? '<h3>Topology of chain ' + esc(chainSel) + '</h3><p class="small muted">Helices and strands of at least five residues, arranged relative to the bilayer.</p><div class="well topology scroll">' + st.topo.svg + '</div>' : '') : '<p class="small muted">Choose a chain for its membrane placement.</p>')) + '</section>' +
         '<section class="panel stack"><h2>Downloads</h2><p class="small muted">Files are served from file storage. Licensed under Creative Commons Attribution 4.0.</p><div class="files">' + FILES.map(function (g) {
           return '<div><h3>' + g[0] + '</h3><ul>' + g[1].map(function (f) { return '<li>' + extA(base + f[1], sim + '-' + f[0]) + '<span>' + f[2] + '</span></li>'; }).join('') + '</ul></div>';
-        }).join('') + '</div></section></div>';
-      show(null, h, 'PDB ' + pdb);
+        }).join('') + '</div></section>' + citeBox(pdb, cit) + '</div>';
+      show(null, h, plain(pdbTitle(r.title || e[1], pdb)) + ' (' + pdb.toUpperCase() + ')');
       if (molMount.pdb !== pdb) { molMount.pdb = pdb; molMount.lipids = molMount.chains = null; }
       molMount(pdb, base, Object.keys(s.composition || {}), ch.map(function (c) { return c.chainID; }));
+      mddbCount(pdb); wireCite(pdb, cit);
       each('[data-g]', function (b) { b.addEventListener('click', function () {
         var g = b.getAttribute('data-g'), i = +b.getAttribute('data-i');
         if (g === 'v0') st.v[0] = i; else if (g === 'v1') st.v[1] = i; else st[g] = i;
@@ -729,8 +858,10 @@
 
   /* ---------- router ---------- */
   function route() {
-    var h = location.hash.replace(/^#/, ''), p = (h.charAt(0) === '/' ? h.slice(1) : dec(h)).replace(/\/+$/, ''), m;
-    if (!p) p = 'home';
+    var h = location.hash.replace(/^#/, ''), p = h.charAt(0) === '/' ? h.slice(1) : dec(h), m, qi = p.indexOf('?');
+    route.query = qi >= 0 ? p.slice(qi + 1) : '';
+    p = (qi >= 0 ? p.slice(0, qi) : p).replace(/\/+$/, '');
+    if (!p) p = window.MPM_ROUTE || 'home';
     route.current = p;
     var mp = p.match(/^ref\/PDB\/([0-9a-z]{4})/i);
     if (MOL.pdb && (!mp || mp[1].toLowerCase() !== MOL.pdb)) molReset();
