@@ -327,8 +327,10 @@
       if (s) {
         if (s[0] != null) { var t = Math.max(28, Math.min(44, Math.round(s[0]))); th[t] = (th[t] || 0) + 1; tv.push(s[0]); }
         if (s[1] != null) { var c = Math.max(-10, Math.min(6, Math.round(s[1]))); dt[c] = (dt[c] || 0) + 1; }
-        var k = s[3] >= 8 ? 'β-barrel' : s[2] ? (s[2] > 14 ? '15+' : String(s[2])) : 'none';
-        tm[k] = (tm[k] || 0) + 1;
+        if (s[2] != null) {   // null: the chains were not analysed
+          var k = s[3] ? 'β-barrel' : s[2] ? (s[2] > 14 ? '15+' : String(s[2])) : 'none';
+          tm[k] = (tm[k] || 0) + 1;
+        }
       }
       var seen = {}; orgsOf(e).forEach(function (o) { var d = o[1] || 'Other'; if (!seen[d]) { seen[d] = 1; dom[d] = (dom[d] || 0) + 1; } });
     });
