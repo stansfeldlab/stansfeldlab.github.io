@@ -179,12 +179,14 @@
   function qsParse(t) { var o = {}; String(t || '').split('&').forEach(function (kv) { if (!kv) return; var i = kv.indexOf('='); try { o[decodeURIComponent(i < 0 ? kv : kv.slice(0, i))] = i < 0 ? '' : decodeURIComponent(kv.slice(i + 1).replace(/\+/g, ' ')); } catch (e) {} }); return o; }
   function qsBuild(o) { return Object.keys(o).filter(function (k) { return o[k] !== '' && o[k] != null; }).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(o[k]).replace(/%2C/g, ',').replace(/%7C/g, '|'); }).join('&'); }
   function filterTest(F) {
-    if (!(F.m.length || F.r || F.y0 || F.y1 || F.f || F.o || F.d.length)) return null;
+    if (!(F.m.length || F.r || F.y0 || F.y1 || F.f || F.o || F.d.length || F.x)) return null;
+    var md = DB.mddb || {};
     var oq = (F.o || '').trim().toLowerCase();
     var fam = null; if (F.f && colById[F.f]) { fam = {}; members(colById[F.f]).forEach(function (x) { fam[x] = 1; }); }
     return function (row) {
       if (!row) return false;
       if (F.m.length && F.m.indexOf(mgroup(row[3])) < 0) return false;
+      if (F.x && !md[row[0]]) return false;
       if (F.r && !(row[4] > 0 && row[4] <= F.r)) return false;
       var y = +String(row[5] || '').slice(0, 4);
       if (F.y0 && !(y >= F.y0)) return false;
@@ -213,10 +215,11 @@
     var Q = qsParse(route.query), years = [];
     DB.pdb.forEach(function (r) { var y = +String(r[5] || '').slice(0, 4); if (y && years.indexOf(y) < 0) years.push(y); }); years.sort();
     var F = { m: (Q.m || '').split(',').filter(function (x) { return METHODS.some(function (m) { return m[0] === x; }); }), r: +Q.r || 0, y0: +Q.y0 || 0, y1: +Q.y1 || 0, f: Q.f && colById[Q.f] ? Q.f : '',
-      o: Q.o || '', d: (Q.d || '').split(',').filter(function (x) { return DOMAINS.some(function (d) { return d[0] === x; }); }) };
+      o: Q.o || '', d: (Q.d || '').split(',').filter(function (x) { return DOMAINS.some(function (d) { return d[0] === x; }); }), x: Q.x === '1' ? 1 : 0 };
+    var nMd = Object.keys(DB.mddb || {}).length;
     if (pending) { Q.q = pending; pending = ''; }
     function yopts(sel, blank) { return '<option value="">' + blank + '</option>' + years.map(function (y) { return '<option' + (y === sel ? ' selected' : '') + '>' + y + '</option>'; }).join(''); }
-    var active = F.m.length || F.r || F.y0 || F.y1 || F.f || F.o || F.d.length;
+    var active = F.m.length || F.r || F.y0 || F.y1 || F.f || F.o || F.d.length || F.x;
     show('search/text', '<div class="stack"><div class="pagehead"><h1>Search</h1><p class="muted" style="max-width:44rem">Search works on whole words. Put a phrase <code>"in quotes"</code> to match it exactly, or add a minus sign to leave words out, for example <code>lipoprotein -mlaa</code>.</p></div>' +
       '<input class="field big" id="ts-q" type="search" placeholder="Protein, family, process or PDB code" aria-label="Search term" autocomplete="off">' +
       '<div class="chips" id="ts-src" role="group" aria-label="Sources">' + SOURCES.map(function (s) { return '<button class="chip" type="button" aria-pressed="true" data-db="' + s[0] + '">' + s[1] + '</button>'; }).join('') + '</div>' +
@@ -227,18 +230,19 @@
         '<div class="frow"><label class="eyebrow" for="f-fam">Family</label><select class="field sel" id="f-fam">' + famOptions(F.f) + '</select></div>' +
         '<div class="frow"><label class="eyebrow" for="f-org">Organism</label><div class="yr"><input class="field sel" id="f-org" type="search" list="f-orgs" placeholder="For example Homo sapiens" autocomplete="off" value="' + esc(F.o) + '"><datalist id="f-orgs">' + ORGS.slice(0, 300).map(function (o) { return '<option value="' + esc(o[0]) + '">'; }).join('') + '</datalist></div></div>' +
         '<div class="frow"><span class="eyebrow">Domain</span><div class="chips" role="group" aria-label="Domain of life">' + DOMAINS.map(function (d) { return '<button class="chip" type="button" data-dom="' + d[0] + '" aria-pressed="' + (F.d.indexOf(d[0]) >= 0) + '">' + d[1] + '</button>'; }).join('') + '</div></div>' +
+        (nMd ? '<div class="frow"><span class="eyebrow">Simulations</span><div class="chips" role="group" aria-label="Simulations elsewhere"><button class="chip" type="button" id="f-mddb" aria-pressed="' + !!F.x + '">Also in MDDB · ' + num(nMd) + '</button></div></div>' : '') +
         '<p class="small muted">Filters apply to PDB structures only. Most cryo-EM entries have no resolution recorded, so they drop out when you filter by resolution.</p>' +
         '<div class="btns"><button class="btn ghost" type="button" id="f-clear">Clear filters</button><button class="btn ghost" type="button" id="f-copy">Copy link to this search</button><span class="small muted" id="f-msg" role="status"></span></div>' +
       '</div></details>' +
       '<p class="small muted" id="ts-msg">Try <a href="#" data-try="GPCR">GPCR</a>, <a href="#" data-try="porin">porin</a>, <a href="#" data-try="&quot;ion channel&quot; -sodium">"ion channel" -sodium</a> or <a href="#" data-try="1a0s">1a0s</a>.</p><div class="panel" id="ts-panel" hidden><div class="rowlist" id="ts-res"></div><p style="margin-top:1rem"><button class="btn ghost" id="ts-more" type="button" hidden>Show more</button></p></div></div>', 'Search');
     var q = document.getElementById('ts-q'), msg = document.getElementById('ts-msg'), tip = msg.innerHTML;
     q.value = Q.q || '';
-    function state() { return qsBuild({ q: q.value.trim(), m: F.m.join(','), r: F.r || '', y0: F.y0 || '', y1: F.y1 || '', f: F.f, o: F.o.trim(), d: F.d.join(',') }); }
+    function state() { return qsBuild({ q: q.value.trim(), m: F.m.join(','), r: F.r || '', y0: F.y0 || '', y1: F.y1 || '', f: F.f, o: F.o.trim(), d: F.d.join(','), x: F.x ? 1 : '' }); }
     function sync() { var t = state(); try { history.replaceState(null, '', location.pathname + location.search + '#/search/text' + (t ? '?' + t : '')); } catch (e) {} }
     function run() {
       var v = q.value.trim(), test = filterTest(F), r = v || test ? search(v, shown, on, test) : [];
       document.getElementById('ts-src').hidden = !!test;
-      var sum = [F.m.length ? F.m.map(function (k) { return METHODS.filter(function (m) { return m[0] === k; })[0][1]; }).join(', ') : '', F.r ? '≤ ' + F.r.toFixed(1) + ' Å' : '', F.y0 || F.y1 ? (F.y0 || '…') + '–' + (F.y1 || '…') : '', F.f ? plain(colById[F.f].title) : '', F.o.trim() ? F.o.trim() : '', F.d.length ? F.d.map(function (k) { return DOMAINS.filter(function (d) { return d[0] === k; })[0][1]; }).join(', ') : ''].filter(Boolean);
+      var sum = [F.m.length ? F.m.map(function (k) { return METHODS.filter(function (m) { return m[0] === k; })[0][1]; }).join(', ') : '', F.r ? '≤ ' + F.r.toFixed(1) + ' Å' : '', F.y0 || F.y1 ? (F.y0 || '…') + '–' + (F.y1 || '…') : '', F.f ? plain(colById[F.f].title) : '', F.o.trim() ? F.o.trim() : '', F.d.length ? F.d.map(function (k) { return DOMAINS.filter(function (d) { return d[0] === k; })[0][1]; }).join(', ') : '', F.x ? 'Also in MDDB' : ''].filter(Boolean);
       document.getElementById('f-sum').textContent = sum.length ? '· ' + sum.join(' · ') : '';
       document.getElementById('ts-panel').hidden = !r.length;
       document.getElementById('ts-res').innerHTML = r.map(rowLink).join('');
@@ -253,14 +257,16 @@
     each('[data-db]', function (b) { b.addEventListener('click', function () { var d = b.getAttribute('data-db'); on[d] = !on[d]; b.setAttribute('aria-pressed', on[d]); run(); }); });
     each('[data-m]', function (b) { b.addEventListener('click', function () { var k = b.getAttribute('data-m'), i = F.m.indexOf(k); if (i < 0) F.m.push(k); else F.m.splice(i, 1); b.setAttribute('aria-pressed', i < 0); shown = 30; run(); }); });
     each('[data-dom]', function (b) { b.addEventListener('click', function () { var k = b.getAttribute('data-dom'), i = F.d.indexOf(k); if (i < 0) F.d.push(k); else F.d.splice(i, 1); b.setAttribute('aria-pressed', i < 0); shown = 30; run(); }); });
+    var fx = document.getElementById('f-mddb');
+    if (fx) fx.addEventListener('click', function () { F.x = F.x ? 0 : 1; fx.setAttribute('aria-pressed', !!F.x); shown = 30; run(); });
     var fo = document.getElementById('f-org'), fot = null;
     fo.addEventListener('input', function () { clearTimeout(fot); fot = setTimeout(function () { F.o = fo.value; shown = 30; run(); }, 200); });
     [['f-res', 'r'], ['f-y0', 'y0'], ['f-y1', 'y1'], ['f-fam', 'f']].forEach(function (x) {
       document.getElementById(x[0]).addEventListener('change', function (e) { F[x[1]] = x[1] === 'f' ? e.target.value : +e.target.value || 0; shown = 30; run(); });
     });
     document.getElementById('f-clear').addEventListener('click', function () {
-      F = { m: [], r: 0, y0: 0, y1: 0, f: '', o: '', d: [] };
-      each('[data-m], [data-dom]', function (b) { b.setAttribute('aria-pressed', 'false'); });
+      F = { m: [], r: 0, y0: 0, y1: 0, f: '', o: '', d: [], x: 0 };
+      each('[data-m], [data-dom], #f-mddb', function (b) { b.setAttribute('aria-pressed', 'false'); });
       ['f-res', 'f-y0', 'f-y1', 'f-fam', 'f-org'].forEach(function (id) { document.getElementById(id).value = ''; });
       shown = 30; run();
     });

@@ -3,7 +3,7 @@
 Reads the Oxford API (refs and simulations) and a few shared files, then rewrites, inside
 memprotmd/:
 
-  data/index.json, data/entries/<pdb>.json, data/groups/<db>.json, data/status.json
+  data/index.json, data/entries/<pdb>.json, data/groups/<db>.json, data/status.json, data/stats.json
   thumbs/pdb/<pdb>.jpg and thumbs/<db>/<acc>.jpg   (only new or changed ones are downloaded)
   pdb/<pdb>/index.html, sitemap.xml, data/entries.tsv, data/release.json   (via pages_build)
 
@@ -52,6 +52,7 @@ DOMAINS = ('Bacteria', 'Archaea', 'Eukaryota', 'Viruses')
 IN_MEMBRANE = ('membrane spanning', 'membrane embedded', 'single leaflet')
 UA = {'User-Agent': 'memprotmd-site-update (+https://stansfeldlab.github.io/memprotmd/)'}
 TCDB_PUBLIC = 'https://www.tcdb.org/cgi-bin/projectv/public/'
+MDDB_API = 'https://mdposit.mddbr.eu/api/rest/v1/projects'
 TCDB_MIN = {'acc': 5000, 'pdb': 200, 'fam': 500}   # fewer rows than this means TCDB sent something else (an error page)
 # TCDB's families list has no subclass names; these are the subclasses Oxford's mapping does not already name
 TC_SUBCLASS = {'1.D': 'Non-ribosomally Synthesized Channels', '1.E': 'Holins', '1.I': 'Membrane-bounded Channels',
@@ -344,6 +345,62 @@ def tcdb_fill(cols, details, no_g, ref_by, rcsb, tc):
     return n
 
 
+def mddb_lookup(ref_by):
+    """How many MDDB simulations list each entry's PDB code (MDDB's PDBIDS field), as {pdb: count} for
+    MemProtMD entries; None if MDDB's project list could not be read in full."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    def page(n):
+        return json.loads(get('%s?limit=100&page=%d' % (MDDB_API, n), tries=3) or b'{}')
+    try:
+        first = page(1)
+        total = int(first.get('filteredCount') or 0)
+        with ThreadPoolExecutor(6) as ex:
+            pages = [first] + list(ex.map(page, range(2, (total + 99) // 100 + 1)))
+    except (RuntimeError, ValueError, TypeError) as e:
+        print('MDDB: could not read the project list, keeping the last counts:', e)
+        return None
+    projects = [x for pg in pages for x in pg.get('projects') or []]
+    if total < 1000 or len(projects) < 0.95 * total:
+        print('MDDB: got %d of %d projects, keeping the last counts' % (len(projects), total))
+        return None
+    out = collections.Counter()
+    for x in projects:
+        for pid in {str(i).lower() for i in (x.get('metadata') or {}).get('PDBIDS') or []}:
+            if pid in ref_by:
+                out[pid] += 1
+    print('MDDB: %d projects, %d of them list %d MemProtMD entries' % (len(projects), sum(out.values()), len(out)))
+    return dict(sorted(out.items()))
+
+
+def contact_stats():
+    """The residue contact tables and depth histograms on the Statistics page, from the pipeline's
+    statistics over all simulations. Contacts are scaled as the original site scaled them: glycine 0,
+    the highest amino acid 100, with columns ordered by tail contact. None if the files are missing."""
+    import yaml
+    try:
+        sc = (yaml.safe_load(get(DATA + 'ensembles/statistics/contact_scales.latest.yml') or b'') or {})['scales']
+        h = (yaml.safe_load(get(DATA + 'ensembles/statistics/resname_hists.latest.yml') or b'') or {})['hists']
+
+        def table(which, labels, order):
+            R = sc[which]['resNames']
+            cols = sorted(R, key=lambda c: R[c][order])
+            rows = []
+            for label in labels:
+                k = label.lower().replace(' ', '_')
+                g, top = R['GLY'][k], max(R[c][k] for c in R)
+                rows.append({'label': label, 'v': [math.floor(100 * (R[c][k] - g) / (top - g) + 0.5) for c in cols]})
+            return {'cols': cols, 'rows': rows}
+        keep = [i for i, b in enumerate(h['bins']) if b['minVal'] >= -50 and b['maxVal'] <= 50]
+        return {'overview': table('byGroup', ('Solvent', 'Head', 'Tail'), 'tail'),
+                'detail': table('byBead', ('Chloride', 'Sodium', 'Water', 'Choline', 'Phosphate', 'Glycerol', 'Tail 1', 'Tail 2', 'Tail 3', 'Tail 4'), 'tail_2'),
+                'bins': [[h['bins'][i]['minVal'], h['bins'][i]['maxVal']] for i in keep],
+                'groups': [{'desc': g['desc'], 'counts': g['counts'], 'h': {aa: [round(v[i], 6) for i in keep] for aa, v in g['hists'].items()}} for g in h['groups']]}
+    except (RuntimeError, KeyError, TypeError, ValueError, ZeroDivisionError, yaml.YAMLError) as e:
+        print('Statistics: could not rebuild from the pipeline files, keeping the last ones:', e)
+        return None
+
+
 def derived_groups(ref_by, sim_by, rcsb, old_cols):
     """Groupings worked out from the records themselves: protein (UniProt), organism, membrane topology
     and bound ligand. Returns ({db: rows}, {db: details}) in the same shape as the curated groups."""
@@ -626,6 +683,18 @@ def main(site, dry):
     names = sorted(count, key=lambda n: (-count[n], n))
     at = {n: i for i, n in enumerate(names)}
 
+    # MDDB: simulations elsewhere of the same structures; looked up on the first run of the day (or a run by hand)
+    mddb = {p: n for p, n in (old.get('mddb') or {}).items() if p in ref_by}
+    if not old.get('mddb') or now.hour < 6 or os.environ.get('GITHUB_EVENT_NAME') in ('workflow_dispatch', 'push'):
+        found = mddb_lookup(ref_by)
+        if found is not None:
+            mddb = found
+
+    # residue contact tables and depth histograms for the Statistics page
+    stats_path = os.path.join(site, 'data', 'stats.json')
+    old_stats = load(stats_path, None)
+    stats = contact_stats() or old_stats
+
     # thickness histograms per MemProtMD group
     thick = old.get('thick') or {}
     st = get(DATA + 'databases/mpm/stats.csv')
@@ -652,7 +721,8 @@ def main(site, dry):
                 [at[o[0]] for o in orgs.get(pid) or []], stats]
     index = {'pdb': [row(p, r3(ref_by[p])) for p in sorted(ref_by)], 'cols': cols, 'thick': thick, 'snap': old.get('snap') or {},
              'noThumb': no_t, 'noGroupThumb': sorted(no_g), 'built': release, 'updated': old.get('updated') or release,
-             'orgs': [[n, dom[n], tax[n]] for n in names]}   # [scientific name, domain, NCBI taxonomy id]; pdb rows list indexes into this
+             'orgs': [[n, dom[n], tax[n]] for n in names],   # [scientific name, domain, NCBI taxonomy id]; pdb rows list indexes into this
+             'mddb': mddb}   # {pdb: number of MDDB simulations}, entries in MDDB only
 
     # pipeline status, from the pipeline's own status file
     status = load(os.path.join(site, 'data', 'status.json'), {'written': release, 'jobs': []})
@@ -686,7 +756,7 @@ def main(site, dry):
     groups_changed = any(load(os.path.join(site, 'data', 'groups', db + '.json'), None) != json.loads(json.dumps(d, ensure_ascii=False)) for db, d in details.items())
     reasons = [x for x, c in (('entries', pending or new_ids or removed), ('index', strip(index, 'built') != strip(old, 'built')),
                                ('groups', groups_changed), ('pipeline status', strip(status, 'written') != strip(old_status, 'written')),
-                               ('change tracking', state != old_state)) if c]
+                               ('statistics', stats != old_stats), ('change tracking', state != old_state)) if c]
     def strip2(d):
         return strip(d, 'built', 'updated')
     reasons = [r for r in reasons if r != 'index'] + (['index'] if strip2(index) != strip2(old) else [])
@@ -718,6 +788,8 @@ def main(site, dry):
         for db, d in details.items():
             dump(os.path.join(site, 'data', 'groups', db + '.json'), d)
         dump(os.path.join(site, 'data', 'status.json'), status)
+        if stats:
+            dump(stats_path, stats)
         dump(os.path.join(site, 'data', 'growth.json'), growth_stats(ref_by, rcsb, cols))
         dump(org_path, rcsb)
         dump(tc_path, tc)
