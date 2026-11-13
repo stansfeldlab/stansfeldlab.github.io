@@ -1,0 +1,28 @@
+name: memprotmd-probe
+on:
+  push:
+    branches: [memprotmd-probe]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe the Oxford MemProtMD server
+        run: |
+          B=https://memprotmd.bioch.ox.ac.uk
+          echo "== home"; curl -s -o home.html -w '%{http_code} %{size_download}\n' $B/
+          grep -o 'src="[^"]*\.js"' home.html | head
+          for js in $(grep -o 'src="[^"]*\.js"' home.html | sed 's/src="//;s/"$//'); do
+            case $js in http*) u=$js;; /*) u=$B$js;; *) u=$B/$js;; esac
+            curl -s "$u" -o b.js; echo "== bundle $u $(wc -c < b.js)"
+            grep -o '.\{0,160\}api/[a-z/]*.\{0,200\}' b.js | head -20
+            grep -o 'collectionName.\{0,120\}' b.js | sort -u | head -20
+          done
+          echo "== api simulations"
+          curl -s -X POST -H 'Content-Type: application/json' $B/api/search/advanced -d '{"collectionName":"simulations","query":{},"projection":{},"options":{"limit":1}}' | head -c 3000; echo
+          echo "== api refs"
+          curl -s -X POST -H 'Content-Type: application/json' $B/api/search/advanced -d '{"collectionName":"refs","query":{"db":"PDB"},"projection":{},"options":{"limit":1}}' | head -c 3000; echo
+          echo "== api collections"
+          curl -s -X POST -H 'Content-Type: application/json' $B/api/search/advanced -d '{"collectionName":"collections","query":{},"projection":{},"options":{"limit":1}}' | head -c 1500; echo
+          echo "== sim folder"
+          curl -s $B/data/memprotmd/simulations/1a0s_default_dppc/ | sed 's/<[^>]*>/ /g' | tr -s ' ' | head -60
+          echo "== status"; curl -s -o /dev/null -w '%{http_code}\n' $B/data/memprotmd/simulations/1a0s_default_dppc/thinning.latest.yml
