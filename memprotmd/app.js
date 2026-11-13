@@ -108,7 +108,7 @@
       '</div></header>' + (CFG.banner ? '<div class="draft"><div class="wrap">' + CFG.banner + '</div></div>' : '') +
       '<main class="wrap">' + main + '</main>' +
       '<footer class="foot"><div class="wrap"><div><h3>Reuse this work</h3><p>Except where indicated otherwise, data on this site is part of the MemProtMD database, by Thomas D. Newport, Mark S.P. Sansom and Phillip J. Stansfeld, licensed under ' + extA('https://creativecommons.org/licenses/by/4.0/', 'Creative Commons Attribution 4.0') + '.</p>' +
-        '<p style="margin-top:.5rem">Data release <span class="mono">' + esc(String(DB.built || '').slice(0, 10)) + '</span> · ' + num(DB.pdb.length) + ' entries · <a href="' + href('api') + '">API</a> · <a href="' + href('data') + '">Data files</a></p></div>' +
+        '<p style="margin-top:.5rem">Data release <span class="mono">' + esc(String(DB.built || '').slice(0, 10)) + '</span>' + (DB.updated && DB.updated > DB.built ? ', updated <span class="mono">' + esc(String(DB.updated).slice(0, 10)) + '</span>' : '') + ' · ' + num(DB.pdb.length) + ' entries · <a href="' + href('api') + '">API</a> · <a href="' + href('data') + '">Data files</a></p></div>' +
       '<div><h3>Cite</h3><p>Newport TD, Sansom MSP, Stansfeld PJ. The MemProtMD database. <i>Nucleic Acids Research</i> (2019). ' + extA('https://doi.org/10.1093/nar/gky1047', 'doi:10.1093/nar/gky1047') + '</p></div>' +
       '<div><h3>Get in touch</h3><p>' + extA('https://stansfeldlab.github.io/', 'Stansfeld Research Group') + '<br>' + extA('https://twitter.com/memprotmd', '@memprotmd') + '</p><p style="margin-top:.5rem">Supported by BBSRC, Wellcome and EPSRC.</p></div></div></footer>';
   }
@@ -132,10 +132,14 @@
     var tiles = [['gpcrs', '5t1a', 'G protein-coupled receptors'], ['ion_channels', '1k4c', 'Ion channels'], ['outer_membrane_proteins', '4kr4', 'Outer membrane proteins'], ['aquaporins', '5i32', 'Aquaporins'], ['abc_transporter', '4q4h', 'ABC transporters'], ['ligand_gated_ion_channels', '5tio', 'Ligand-gated ion channels']];
     var ncol = Object.keys(colById).length;
     var roots = [['mpm', 'membrane_proteins', 'MemProtMD groups', 'Fold and family groups assigned from the simulations'], ['TCDB', 'TCDB', 'Transporter Classification Database', 'Channels, carriers and pumps by transport mechanism'], ['mpstruc', 'mpstruc', 'mpstruc', 'Membrane proteins of known structure, curated by family']];
-    var h = '<div class="stack-lg"><section class="hero stack"><p class="eyebrow">MemProtMD</p><h1>Membrane proteins, simulated in their lipid bilayer</h1>' +
+    /* a random entry with an image, beside the introduction on wide screens; it can open in 3D in place */
+    var pool = DB.pdb.filter(function (r) { return !NOT[r[0]]; }), nw = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+    var card = nw ? '<aside class="hero-new" aria-label="Random entry"><span class="eyebrow">Random entry</span><div class="well herowell" id="mol-host" data-compact="1"><a class="hero-img" href="' + refHref('PDB', nw[0]) + '">' + imgTag('pdbhero', nw[0], '', 'PDB ' + nw[0] + ' in its simulated bilayer') + '</a>' +
+      '<button type="button" class="btn mol-open" id="mol-open"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2 17 6v8l-7 4-7-4V6z M10 2v8m0 0 7-4m-7 4-7-4m7 4v8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>3D view</button></div><a class="t" href="' + refHref('PDB', nw[0]) + '">' + ttl(pdbTitle(nw[1], nw[0])) + '</a><span class="k">PDB ' + esc(nw[0]) + (nw[5] ? ' · released ' + esc(fmtDate(nw[5])) : '') + '</span><div id="mol-ctrl"></div></aside>' : '';
+    var h = '<div class="stack-lg"><section class="hero"><div class="hero-main stack"><p class="eyebrow">MemProtMD</p><h1>Membrane proteins, simulated in their lipid bilayer</h1>' +
       '<p class="lede">Every intrinsic membrane protein structure in the Protein Data Bank, inserted into a lipid bilayer by coarse-grained self-assembly molecular dynamics. Browse the analysis, or download the files to run your own coarse-grained and atomistic simulations.</p>' +
       '<div class="find"><input class="field big" id="home-q" type="search" placeholder="Search by protein, family or PDB code, for example LeuT or 1a0s" aria-label="Search MemProtMD" autocomplete="off"><div class="rowlist" id="home-res" style="margin-top:.5rem"></div></div>' +
-      '<div class="figures"><div><b>' + num(DB.pdb.length) + '</b><span>simulated structures</span></div><div><b>' + num(ncol) + '</b><span>families and groups</span></div><div><b>' + esc(fmtDate(latest[0][5])) + '</b><span>most recent structure</span></div></div></section>' +
+      '<div class="figures"><div><b>' + num(DB.pdb.length) + '</b><span>simulated structures</span></div><div><b>' + num(ncol) + '</b><span>families and groups</span></div><div><b>' + esc(fmtDate(latest[0][5])) + '</b><span>most recent structure</span></div></div></div>' + card + '</section>' +
       '<section><div class="head-row"><h2>Browse by family</h2><a href="' + refHref('mpm', 'membrane_proteins') + '">All MemProtMD groups</a></div><div class="tiles">' + tiles.map(function (t) {
         var c = colById['mpm|' + t[0]];
         return '<a class="tile" href="' + refHref('mpm', t[0]) + '"><div class="well">' + imgTag('pdbtile', t[1], '', 'PDB ' + t[1]) + '</div><span class="t">' + t[2] + '</span><span class="k">' + (c ? num(c.n) + ' structures' : '') + '</span></a>';
@@ -146,6 +150,10 @@
         return c ? '<a class="panel" style="text-decoration:none;color:inherit" href="' + refHref(r[0], r[1]) + '"><h3>' + r[2] + '</h3><p class="small muted">' + r[3] + '</p><p class="small" style="margin-top:.5rem"><span class="tag">' + num(c.n) + ' structures</span></p></a>' : '';
       }).join('') + '</div></section></div>';
     show('home', h);
+    if (nw) {
+      if (molMount.pdb !== nw[0]) { molMount.pdb = nw[0]; molMount.lipids = molMount.chains = null; }
+      molMount(nw[0], STORE + 'simulations/' + nw[0] + '_default_dppc/');
+    }
     var q = document.getElementById('home-q');
     q.addEventListener('input', function () {
       var v = q.value.trim(), r = v ? search(v, 8) : [];
@@ -256,14 +264,19 @@
     show('status', '<p class="muted">Loading…</p>', 'Pipeline status');
     getJSON('data/status.json').then(function (s) {
       if (route.current !== 'status') return;
+      var stalled = s.stalled || [];
       show('status', '<div class="stack"><div class="pagehead"><h1>Pipeline status</h1><p class="muted" style="max-width:44rem">The MemProtMD pipeline handles around 40 new protein simulations per month. Proteins shown here are running through the pipeline, so may not be on the site yet.</p></div>' +
         '<input class="field" id="st-q" type="search" placeholder="Filter by PDB code" aria-label="Filter by PDB code" style="max-width:20rem"><h2>In progress</h2><div class="jobs">' + s.jobs.map(function (j) {
           var at = STAGES.indexOf(j.status);
-          return '<div class="panel" data-job="' + esc(j.id) + '"><div class="job-top">' + imgTag('pdb100', j.id) + '<div><a class="mono" style="font-size:1.25rem;font-weight:500;text-decoration:none" href="' + refHref('PDB', j.id) + '">' + esc(j.id) + '</a><p class="small muted">' + esc(j.status.charAt(0).toUpperCase() + j.status.slice(1)) + ' since ' + esc(fmtDate(j.time)) + '</p></div></div>' +
+          return '<div class="panel" data-job="' + esc(j.id) + '"><div class="job-top">' + imgTag('pdb100', j.id) + '<div>' + (byId[j.id] ? '<a class="mono" style="font-size:1.25rem;font-weight:500;text-decoration:none" href="' + refHref('PDB', j.id) + '">' + esc(j.id) + '</a>' : '<span class="mono" style="font-size:1.25rem;font-weight:500">' + esc(j.id) + '</span>') + '<p class="small muted">' + esc(j.status.charAt(0).toUpperCase() + j.status.slice(1)) + ' since ' + esc(fmtDate(j.time)) + '</p></div></div>' +
             '<div class="steps">' + STAGES.map(function (st, i) { return '<span class="' + (i < at ? 'done' : i === at ? 'now' : '') + '">' + st.charAt(0).toUpperCase() + st.slice(1) + '</span>'; }).join('') + '</div></div>';
-        }).join('') + '</div><p class="small muted" id="st-none" hidden>No pipeline job matches that code.</p><p class="small muted">Status file written ' + esc(fmtDate(s.written)) + '.</p></div>', 'Pipeline status');
+        }).join('') + '</div>' + (s.jobs.length ? '' : '<p class="muted">Nothing is running through the pipeline at the moment.</p>') +
+        (stalled.length ? '<details class="stalled" id="st-stalled"><summary>Needs attention <span class="muted">· ' + num(stalled.length) + '</span></summary><p class="small muted">The pipeline has paused on these and they need restarting by hand.</p><ul>' + stalled.map(function (j) {
+          return '<li data-job="' + esc(j.id) + '">' + (byId[j.id] ? '<a class="mono" href="' + refHref('PDB', j.id) + '">' + esc(j.id) + '</a>' : '<span class="mono">' + esc(j.id) + '</span>') + '<span>' + esc(j.status.charAt(0).toUpperCase() + j.status.slice(1)) + ' since ' + esc(fmtDate(j.time)) + '</span><span class="muted">' + esc(j.error || '') + '</span></li>';
+        }).join('') + '</ul></details>' : '') +
+        '<p class="small muted" id="st-none" hidden>No pipeline job matches that code.</p><p class="small muted">Status file written ' + esc(fmtDate(s.written)) + '.</p></div>', 'Pipeline status');
       var f = document.getElementById('st-q');
-      f.addEventListener('input', function () { var n = 0; each('[data-job]', function (c) { c.hidden = c.getAttribute('data-job').indexOf(f.value.trim().toLowerCase()) === -1; if (!c.hidden) n++; }); document.getElementById('st-none').hidden = n > 0; });
+      f.addEventListener('input', function () { var n = 0, d = document.getElementById('st-stalled'); if (d && f.value.trim()) d.open = true; each('[data-job]', function (c) { c.hidden = c.getAttribute('data-job').indexOf(f.value.trim().toLowerCase()) === -1; if (!c.hidden) n++; }); document.getElementById('st-none').hidden = n > 0; });
     });
   }
 
@@ -534,7 +547,13 @@
   function molControls(base) {
     var c = document.getElementById('mol-ctrl'); if (!c) return;
     function seg3(k, labels, aria) { return '<div class="seg" role="group" aria-label="' + aria + '">' + labels.map(function (l, i) { return '<button type="button" data-mol="' + k + '" data-i="' + i + '" aria-pressed="' + (MOL[k] === i) + '">' + l + '</button>'; }).join('') + '</div>'; }
-    var rc = MOL.src && MOL.src.rcsb;
+    var rc = MOL.src && MOL.src.rcsb, host = document.getElementById('mol-host');
+    if (host && host.hasAttribute('data-compact')) {
+      c.innerHTML = '<div class="molbar"><p class="small muted" id="mol-note"></p><div class="btns"><button type="button" class="btn ghost" id="mol-close">Back to image</button><a class="btn ghost" href="' + refHref('PDB', MOL.pdb) + '">Open entry</a></div></div>';
+      molNote();
+      document.getElementById('mol-close').addEventListener('click', function () { molClose(MOL.pdb, base); });
+      return;
+    }
     if (rc) MOL.color = 0;
     c.innerHTML = '<div class="molbar">' + (rc ? '' : '<div class="molrow"><span class="eyebrow">Colour by</span>' + seg3('color', MOL_COLOR.map(function (x) { return x[0]; }), 'Colour by') + '</div>') +
       '<div class="molrow"><span class="eyebrow">Protein</span>' + seg3('style', MOL_STYLE, 'Protein style') + '</div>' +

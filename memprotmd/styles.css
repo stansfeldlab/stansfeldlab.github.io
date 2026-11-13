@@ -116,10 +116,18 @@ a.chip:hover, button.chip:hover { border-color: var(--brand); color: var(--brand
 
 /* ---- home ---- */
 .hero { position: relative; padding-block: 1.5rem 0.5rem; }
-.hero::after { content: ""; position: absolute; right: 0; top: 1.25rem; width: min(38%, 420px); height: 64px; opacity: 0.5; pointer-events: none;
-  background: radial-gradient(circle, var(--brand) 2.6px, transparent 3px) 0 0 / 14px 14px repeat-x, radial-gradient(circle, var(--brand) 2.6px, transparent 3px) 7px 50px / 14px 14px repeat-x,
-    repeating-linear-gradient(90deg, var(--line) 0 2px, transparent 2px 14px) 6px 14px / 100% 36px no-repeat; }
-@media (max-width: 860px) { .hero::after { display: none; } }
+/* A random entry sits beside the introduction on wide screens, and can open in 3D in place. */
+.hero { display: flex; gap: 3rem; align-items: flex-start; }
+.hero-main { flex: 1 1 auto; min-width: 0; }
+.hero-new { flex: 0 0 min(30%, 330px); display: grid; gap: 0.4rem; min-width: 0; }
+.hero-new .well { aspect-ratio: 1; overflow: hidden; }
+.hero-new .hero-img, .hero-new .hero-img img { display: block; width: 100%; height: 100%; }
+.hero-new .hero-img img { object-fit: contain; }
+.hero-new .t { font-weight: 600; line-height: 1.3; color: var(--ink); text-decoration: none; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.hero-new .t:hover { color: var(--brand); }
+.hero-new .k { font-size: 0.8125rem; color: var(--muted); }
+.hero-new .molbar { gap: 0.4rem; }
+@media (max-width: 1099px) { .hero-new { display: none; } }
 .hero h1 { max-width: 15em; }
 .hero .lede { max-width: 40rem; color: var(--muted); font-size: 1.0625rem; }
 .hero .find { max-width: 40rem; }
@@ -347,3 +355,11 @@ footer.foot h3 { font-size: 0.875rem; color: var(--ink); margin-bottom: 0.4rem; 
 .frow .yr { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 .filters p { margin: 0; }
 @media (max-width: 560px) { .frow { grid-template-columns: minmax(0, 1fr); } }
+
+/* Pipeline jobs that have stalled */
+details.stalled { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+details.stalled > summary { cursor: pointer; padding: 0.8rem 1rem; font-weight: 600; }
+details.stalled > p { margin: 0 1rem 0.5rem; }
+details.stalled ul { list-style: none; margin: 0; padding: 0 1rem 1rem; display: grid; gap: 0.35rem; }
+details.stalled li { display: grid; grid-template-columns: 4.5rem minmax(0, 12rem) minmax(0, 1fr); gap: 0.75rem; font-size: 0.875rem; align-items: baseline; }
+@media (max-width: 560px) { details.stalled li { grid-template-columns: 4.5rem minmax(0, 1fr); } details.stalled li > :last-child { grid-column: 2; } }
