@@ -168,6 +168,14 @@ def rcsb_lookup(refs, pids):
     return out
 
 
+def norm_name(name):
+    """Some records give species in capitals: "HOMO SAPIENS" -> "Homo sapiens"."""
+    if name.isupper():
+        w = name.split()
+        return ' '.join([w[0].capitalize()] + [x.lower() for x in w[1:]])
+    return name
+
+
 def species(name, domain):
     """Group strains with their species: "Escherichia coli K-12" -> "Escherichia coli" (not for viruses)."""
     w = name.replace('(', ' ').split()
@@ -417,6 +425,11 @@ def main(site, dry):
     for p in list(rcsb):
         if p not in ref_by:
             del rcsb[p]
+        else:
+            merged = {}
+            for n, t, d in rcsb[p].get('o') or []:
+                merged.setdefault(norm_name(n), [norm_name(n), t, d])
+            rcsb[p]['o'] = list(merged.values())
     orgs = {p: v.get('o') or [] for p, v in rcsb.items()}
     count = collections.Counter(o[0] for p in ref_by for o in orgs.get(p) or [])
     dom = {o[0]: o[2] for p in ref_by for o in orgs.get(p) or []}
