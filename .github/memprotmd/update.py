@@ -53,6 +53,11 @@ IN_MEMBRANE = ('membrane spanning', 'membrane embedded', 'single leaflet')
 UA = {'User-Agent': 'memprotmd-site-update (+https://stansfeldlab.github.io/memprotmd/)'}
 TCDB_PUBLIC = 'https://www.tcdb.org/cgi-bin/projectv/public/'
 TCDB_MIN = {'acc': 5000, 'pdb': 200, 'fam': 500}   # fewer rows than this means TCDB sent something else (an error page)
+# TCDB's families list has no subclass names; these are the subclasses Oxford's mapping does not already name
+TC_SUBCLASS = {'1.D': 'Non-ribosomally Synthesized Channels', '1.E': 'Holins', '1.I': 'Membrane-bounded Channels',
+               '2.B': 'Nonribosomally synthesized porters', '3.C': 'Methyltransfer-driven transporters',
+               '4.B': 'Nicotinamide ribonucleoside uptake transporters', '4.C': 'Acyl CoA ligase-coupled transporters',
+               '4.E': 'Vacuolar Polyphosphate Polymerases'}
 TC_ID = re.compile(r'^[1-9]\.[A-Z]\.\d+\.\d+\.\d+$')
 
 
@@ -326,7 +331,7 @@ def tcdb_fill(cols, details, no_g, ref_by, rcsb, tc):
             continue
         parts = t.split('.')
         family = '.'.join(parts[:3])
-        title = fam.get(t) or (len(parts) > 3 and (fam.get(family) or (rows.get(family) or [0, 0])[1])) or 'TC ' + t
+        title = fam.get(t) or TC_SUBCLASS.get(t) or (len(parts) > 3 and (fam.get(family) or (rows.get(family) or [0, 0])[1])) or 'TC ' + t
         rows[t] = [t, title, 0, 'TCDB|' + ('.'.join(parts[:-1]) if len(parts) > 1 else 'TCDB'), 0, '']
         cols['TCDB'].append(rows[t])
         no_g.append('TCDB|' + t)
