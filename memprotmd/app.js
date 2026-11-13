@@ -107,7 +107,8 @@
       (active === 'home' || active === 'search/text' ? '' : '<div class="bar-search" id="qs"><input id="qs-input" type="search" placeholder="Search ' + num(DB.pdb.length) + ' structures" aria-label="Quick search" autocomplete="off"><div class="pop" id="qs-pop" hidden></div></div>') +
       '</div></header>' + (CFG.banner ? '<div class="draft"><div class="wrap">' + CFG.banner + '</div></div>' : '') +
       '<main class="wrap">' + main + '</main>' +
-      '<footer class="foot"><div class="wrap"><div><h3>Reuse this work</h3><p>Except where indicated otherwise, data on this site is part of the MemProtMD database, by Thomas D. Newport, Mark S.P. Sansom and Phillip J. Stansfeld, licensed under ' + extA('https://creativecommons.org/licenses/by/4.0/', 'Creative Commons Attribution 4.0') + '.</p></div>' +
+      '<footer class="foot"><div class="wrap"><div><h3>Reuse this work</h3><p>Except where indicated otherwise, data on this site is part of the MemProtMD database, by Thomas D. Newport, Mark S.P. Sansom and Phillip J. Stansfeld, licensed under ' + extA('https://creativecommons.org/licenses/by/4.0/', 'Creative Commons Attribution 4.0') + '.</p>' +
+        '<p style="margin-top:.5rem">Data release <span class="mono">' + esc(String(DB.built || '').slice(0, 10)) + '</span> · ' + num(DB.pdb.length) + ' entries · <a href="' + href('api') + '">API</a> · <a href="' + href('data') + '">Data files</a></p></div>' +
       '<div><h3>Cite</h3><p>Newport TD, Sansom MSP, Stansfeld PJ. The MemProtMD database. <i>Nucleic Acids Research</i> (2019). ' + extA('https://doi.org/10.1093/nar/gky1047', 'doi:10.1093/nar/gky1047') + '</p></div>' +
       '<div><h3>Get in touch</h3><p>' + extA('https://stansfeldlab.github.io/', 'Stansfeld Research Group') + '<br>' + extA('https://twitter.com/memprotmd', '@memprotmd') + '</p><p style="margin-top:.5rem">Supported by BBSRC, Wellcome and EPSRC.</p></div></div></footer>';
   }

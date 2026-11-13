@@ -1,0 +1,23 @@
+{
+  "release": "2026-11-12",
+  "entries": 9509,
+  "groups": {
+    "mpm": 10,
+    "TCDB": 1240,
+    "mpstruc": 1590,
+    "Pfam": 749
+  },
+  "site": "https://stansfeldlab.github.io/memprotmd/",
+  "files": "https://memprotmd.bioch.ox.ac.uk/data/memprotmd/",
+  "license": "https://creativecommons.org/licenses/by/4.0/",
+  "citation": "https://doi.org/10.1093/nar/gky1047",
+  "documentation": "https://stansfeldlab.github.io/memprotmd/#/api",
+  "paths": {
+    "index": "data/index.json",
+    "table": "data/entries.tsv",
+    "record": "data/entries/{pdb}.json",
+    "groups": "data/groups/{collection}.json",
+    "page": "pdb/{pdb}/",
+    "simulation_files": "{files}simulations/{pdb}_default_dppc/"
+  }
+}

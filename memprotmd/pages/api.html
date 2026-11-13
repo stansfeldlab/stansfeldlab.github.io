@@ -1,5 +1,70 @@
-<article class="prose"><h1>The MemProtMD API</h1>
-<p>The MemProtMD API connects the MemProtMD database to applications such
-as this site. The API is free to use for any application, provided data
-obtained through it is properly attributed.</p>
-<p>We have provided a quick overview of API methods in a <a href="https://github.com/pstansfeld/mpm_api/" rel="noopener" target="_blank">github repository</a>.</p></article>
+<article class="prose" style="max-width:52rem">
+<h1>API and programmatic access</h1>
+<p>MemProtMD is published as plain files over HTTPS. The same addresses work from scripts, notebooks and other websites: there is no key or sign-up, and cross-site requests are allowed, so a web page elsewhere can load MemProtMD data directly. All data is licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">Creative Commons Attribution 4.0</a>; please cite MemProtMD when you use it.</p>
+<p>Everything below is relative to</p>
+<pre><code>https://stansfeldlab.github.io/memprotmd/</code></pre>
+
+<h2>Endpoints</h2>
+<div class="scroll"><table class="tbl"><thead><tr><th>Address</th><th>Format</th><th>Contents</th></tr></thead><tbody>
+<tr><td class="id">data/release.json</td><td>JSON</td><td>The current release: its date, the number of entries and groups, the licence, and the address patterns on this page. Check it first to see whether anything has changed.</td></tr>
+<tr><td class="id">data/entries.tsv</td><td>Tab-separated</td><td>One row per entry with the most-used fields, ready for a spreadsheet, R or pandas. The columns are listed below.</td></tr>
+<tr><td class="id">data/index.json</td><td>JSON</td><td>Every entry and group in compact arrays, as used by this site. See <a href="#/data">Data files</a> for the layout.</td></tr>
+<tr><td class="id">data/entries/{pdb}.json</td><td>JSON</td><td>The full record for one entry: <code>ref</code> (PDB metadata), <code>sim</code> (simulation summary) and <code>prof</code> (chain profiles). <code>{pdb}</code> is the lower-case PDB code.</td></tr>
+<tr><td class="id">data/groups/{collection}.json</td><td>JSON</td><td>Descriptions and source links for the groups in one classification: <code>mpm</code>, <code>TCDB</code>, <code>mpstruc</code> or <code>Pfam</code>.</td></tr>
+<tr><td class="id">data/stats.json</td><td>JSON</td><td>The contact tables and depth histograms behind the <a href="#/stats">Statistics</a> page.</td></tr>
+<tr><td class="id">pdb/{pdb}/</td><td>HTML</td><td>A permanent web page for each entry. It carries a schema.org <code>Dataset</code> record (Bioschemas profile) and links to the JSON record.</td></tr>
+<tr><td class="id">sitemap.xml</td><td>XML</td><td>The address of every entry page.</td></tr>
+</tbody></table></div>
+<p>Coordinate files, images, contact tables and simulation inputs for each entry are on file storage, under the base address given on the <a href="#/data">Data files</a> page and in <code>files</code> in <code>data/release.json</code>.</p>
+
+<h2>Examples</h2>
+<h3>Command line</h3>
+<pre><code># bilayer thickness next to the protein and in bulk, for 1A0S
+curl -s https://stansfeldlab.github.io/memprotmd/data/entries/1a0s.json | jq '.sim.thinning'
+
+# the date of the current release
+curl -s https://stansfeldlab.github.io/memprotmd/data/release.json | jq -r '.release'</code></pre>
+<h3>Python</h3>
+<pre><code>import pandas as pd
+
+t = pd.read_csv("https://stansfeldlab.github.io/memprotmd/data/entries.tsv", sep="\t", dtype={"pdb_id": str})
+
+# X-ray GPCR structures at 2.5 Å or better, thinnest bilayer next to the protein first
+gpcr = t[t.memprotmd_groups.str.contains("gpcrs", na=False)
+         &amp; t.method.str.contains("X-RAY", na=False)
+         &amp; (t.resolution_A &lt;= 2.5)]
+print(gpcr.sort_values("annular_thickness_A")[["pdb_id", "title", "annular_thickness_A"]])</code></pre>
+<h3>JavaScript</h3>
+<pre><code>const rec = await fetch("https://stansfeldlab.github.io/memprotmd/data/entries/1a0s.json").then(r =&gt; r.json());
+console.log(rec.ref.title, rec.sim.thinning.annular_thickness);</code></pre>
+
+<h2>Columns in entries.tsv</h2>
+<p>Lists within a cell are separated by a semicolon and a space. Empty cells mean the value is not recorded.</p>
+<div class="scroll"><table class="tbl"><thead><tr><th>Column</th><th>Meaning</th></tr></thead><tbody>
+<tr><td class="id">pdb_id</td><td>Lower-case PDB code.</td></tr>
+<tr><td class="id">title</td><td>Title of the PDB entry.</td></tr>
+<tr><td class="id">method</td><td>Experimental method as given by the PDB, for example <code>X-RAY DIFFRACTION</code> or <code>ELECTRON MICROSCOPY</code>.</td></tr>
+<tr><td class="id">resolution_A</td><td>Resolution in ångströms. Missing for most cryo-EM and all NMR entries.</td></tr>
+<tr><td class="id">released</td><td>PDB release date.</td></tr>
+<tr><td class="id">uniprot</td><td>UniProt accessions of the protein chains.</td></tr>
+<tr><td class="id">n_chains, n_lipids, n_protein_residues</td><td>Size of the simulated system.</td></tr>
+<tr><td class="id">bulk_thickness_A, annular_thickness_A, thickness_change_A</td><td>Bilayer thickness away from the protein and next to it, and the difference, in ångströms.</td></tr>
+<tr><td class="id">memprotmd_groups, mpstruc, tcdb, pfam</td><td>The most specific groups the entry belongs to in each classification, as accessions. Group pages are at <code>#/ref/{collection}/{accession}</code>.</td></tr>
+<tr><td class="id">entry_url, record_url, files_url</td><td>The entry's web page, its JSON record and its folder on file storage.</td></tr>
+</tbody></table></div>
+
+<h2>Releases</h2>
+<p>Each update of the data is labelled with its date, shown in <code>data/release.json</code> and at the foot of every page. When you cite MemProtMD data, give the release date along with the address you used.</p>
+
+<h2>Moving from the old API</h2>
+<p>The server-side API at <code>memprotmd.bioch.ox.ac.uk/api/</code> (requests such as <code>POST /api/search/advanced</code> with <code>collectionName</code> <code>refs</code> or <code>simulations</code>) is being retired along with that server. Use these files instead:</p>
+<div class="scroll"><table class="tbl"><thead><tr><th>Old request</th><th>Replacement</th></tr></thead><tbody>
+<tr><td><code>refs</code> for one PDB entry</td><td><code>ref</code> in <code>data/entries/{pdb}.json</code></td></tr>
+<tr><td><code>simulations</code> for one entry</td><td><code>sim</code> in <code>data/entries/{pdb}.json</code></td></tr>
+<tr><td>Searches and listings across entries</td><td><code>data/entries.tsv</code>, or <code>data/index.json</code> for group membership</td></tr>
+<tr><td>Files for one simulation</td><td>The folder in <code>files_url</code>, laid out as on the <a href="#/data">Data files</a> page</td></tr>
+</tbody></table></div>
+
+<h2>Citing</h2>
+<p>Newport TD, Sansom MSP, Stansfeld PJ (2019). The MemProtMD database: a resource for membrane-embedded protein structures and their lipid interactions. <i>Nucleic Acids Research</i> 47(D1):D390–D397. <a href="https://doi.org/10.1093/nar/gky1047" target="_blank" rel="noopener">doi:10.1093/nar/gky1047</a></p>
+</article>
