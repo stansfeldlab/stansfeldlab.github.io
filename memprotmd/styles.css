@@ -311,3 +311,18 @@ footer.foot h3 { font-size: 0.875rem; color: var(--ink); margin-bottom: 0.4rem; 
 .gtip i { width: 10px; height: 10px; border-radius: 50%; background: var(--sc); }
 .gtip em { font-style: normal; font-variant-numeric: tabular-nums; font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { .stage-rotate .face { transform: none !important; } .ct-col { transition: none; } }
+
+/* 3D viewer: the hero well swaps its render for Mol* in place. The well stays white in both themes. */
+:root { --on-well: #101a30; }
+.herocol { display: grid; gap: 0.75rem; min-width: 0; align-content: start; }
+.herowell { position: relative; }
+.herowell.is-3d { aspect-ratio: 1; }
+.mol-open { position: absolute; right: 12px; bottom: 12px; box-shadow: 0 2px 10px rgba(16, 26, 48, 0.18); }
+.mol-open svg { width: 1.05em; height: 1.05em; }
+.molview, .mol-canvas { position: absolute; inset: 0; }
+.mol-status { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: 80%; text-align: center; font-size: 0.875rem; color: var(--on-well); background: rgba(255, 255, 255, 0.92); border: 1px solid #dde3ee; border-radius: 9px; padding: 0.5rem 0.85rem; z-index: 5; pointer-events: none; }
+.molbar { display: grid; gap: 0.6rem; }
+.molrow { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.75rem; }
+.molrow .eyebrow { min-width: 5.25rem; margin: 0; }
+.molbar p { margin: 0; }
+.molview .msp-state-snapshot-viewport-controls { display: none !important; }

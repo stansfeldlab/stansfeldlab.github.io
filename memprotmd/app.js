@@ -305,6 +305,163 @@
     var half = (t && t.bulk_thickness ? t.bulk_thickness : 40) / 2;
     return '<svg viewBox="0 0 100 100" aria-hidden="true"><rect x="-5" width="110" y="' + y(half) + '" height="' + (half / Z * 100).toFixed(1) + '"/>' + shape(d[0], 'all-density') + shape(d[1], 'alpha-density') + shape(d[2], 'beta-density') + '</svg>';
   }
+  /* ---------- 3D viewer (Mol*, loaded on demand) ---------- */
+  var MOLSTAR = CFG.molstar || 'https://cdn.jsdelivr.net/npm/molstar@5.13.1/build/viewer/';
+  var CHAIN_COLS = ['#1f499e', '#c8003f', '#0f8b7a', '#d48a00', '#6b4fbb', '#2f86c9', '#b5476b', '#5a7d1a'];
+  var MOL_COLOR = [['Chain', null], ['Head groups', 'head'], ['Tails', 'tail'], ['Solvent', 'solvent']];
+  var MOL_STYLE = ['Cartoon', 'Surface'];
+  var MOL_MEM = ['Phosphates', 'Lipids', 'Hidden'];
+  var CON_PAL = { head: ['#eef1f6', '#f2b552', '#c8003f'], tail: ['#eef1f6', '#7fcfc0', '#0b6e60'], solvent: ['#eef1f6', '#8fb0f2', '#17397b'] };
+  var AA = ' ALA ARG ASN ASP CYS GLN GLU GLY HIS HSD HSE HSP ILE LEU LYS MET PHE PRO SER THR TRP TYR VAL ';
+  function molFresh() { return { pdb: null, open: false, viewer: null, el: null, src: null, con: {}, color: 0, style: 0, mem: 0, busy: false, again: false, first: true, note: '', }; }
+  var MOL = molFresh();
+  function molReset() {
+    var m = MOL; MOL = molFresh();
+    if (m.viewer) { try { m.viewer.dispose(); } catch (e) {} }
+    Object.keys(m.con).forEach(function (k) { if (m.con[k]) URL.revokeObjectURL(m.con[k]); });
+    if (m.src && m.src.blob) URL.revokeObjectURL(m.src.url);
+  }
+  var molLib = null;
+  function loadMolstar() {
+    if (window.molstar && window.molstar.Viewer) return Promise.resolve(window.molstar);
+    if (molLib) return molLib;
+    molLib = new Promise(function (ok, no) {
+      var l = document.createElement('link'); l.rel = 'stylesheet'; l.href = MOLSTAR + 'theme/light.css'; document.head.appendChild(l);
+      var s = document.createElement('script'); s.src = MOLSTAR + 'molstar.js'; s.async = true;
+      s.onload = function () { window.molstar && window.molstar.Viewer ? ok(window.molstar) : no(new Error('Mol* did not start')); };
+      s.onerror = function () { molLib = null; s.remove(); no(new Error('Mol* could not be downloaded')); };
+      document.head.appendChild(s);
+    });
+    return molLib;
+  }
+  function fetchText(u) { return fetch(u).then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); }); }
+  function pdbLines(t, f) { t.split('\n').forEach(function (l) { var k = l.slice(0, 6); if (k === 'ATOM  ' || k === 'HETATM') f(l); }); }
+  function molSource(pdb, base) {
+    return fetchText(base + 'files/structures/web_vis.pdb').then(function (t) {
+      var chains = [], seen = {};
+      pdbLines(t, function (l) { var c = l.charAt(21).trim(); if (c && !seen[c] && AA.indexOf(' ' + l.substr(17, 3) + ' ') >= 0) { seen[c] = 1; chains.push(c); } });
+      if (!chains.length && !/\n(ATOM|HETATM)/.test('\n' + t)) throw new Error('empty');
+      return { url: URL.createObjectURL(new Blob([t], { type: 'text/plain' })), format: 'pdb', blob: true, chains: chains };
+    }).catch(function () { return { url: 'https://models.rcsb.org/' + pdb + '.bcif', format: 'bcif', rcsb: true, chains: null }; });
+  }
+  function molContacts(base, g) {
+    if (g in MOL.con) return Promise.resolve(MOL.con[g]);
+    var m = MOL;
+    return fetchText(base + 'files/structures/group_' + g + '.contacts.pdb').then(function (t) {
+      var rows = [], at = {};
+      pdbLines(t, function (l) {
+        var c = l.charAt(21).trim(), r = parseInt(l.substr(22, 4), 10), b = parseFloat(l.substr(60, 6)), k = c + ':' + r;
+        if (isNaN(r) || isNaN(b)) return;
+        if (k in at) { if (b > rows[at[k]].value) rows[at[k]].value = b; return; }
+        at[k] = rows.length; var row = { auth_seq_id: r, value: b }; if (c) row.auth_asym_id = c; rows.push(row);
+      });
+      if (!rows.length) throw new Error('empty');
+      return URL.createObjectURL(new Blob([JSON.stringify(rows)], { type: 'application/json' }));
+    }).catch(function () { return null; }).then(function (u) { if (m === MOL) m.con[g] = u; else if (u) URL.revokeObjectURL(u); return u; });
+  }
+  function molTree() {
+    var s = MOL.src, g = MOL_COLOR[MOL.color][1], cu = g && MOL.con[g], kids = [];
+    var rep = { kind: 'representation', params: MOL.style ? { type: 'surface', surface_type: 'gaussian' } : { type: 'cartoon' }, children: [] };
+    if (cu) rep.children.push({ kind: 'color', params: { color: '#eef1f6' } }, { kind: 'color_from_uri', params: { uri: cu, format: 'json', schema: 'auth_residue', field_name: 'value', palette: { kind: 'continuous', colors: CON_PAL[g] } } });
+    else {
+      var ch = s.chains && s.chains.length ? s.chains : null;
+      rep.children.push({ kind: 'color', params: { color: CHAIN_COLS[0] } });
+      if (ch && ch.length > 1) ch.forEach(function (id, i) { rep.children.push({ kind: 'color', params: { selector: { auth_asym_id: id }, color: CHAIN_COLS[i % CHAIN_COLS.length] } }); });
+    }
+    var prot = { kind: 'component', params: { selector: 'protein' }, children: [rep] };
+    if (!s.rcsb) prot.children.push({ kind: 'focus', params: { direction: [0, 1, 0], up: [0, 0, 1], radius_factor: 1.15 } });
+    kids.push(prot);
+    if (s.rcsb) kids.push({ kind: 'component', params: { selector: 'ligand' }, children: [{ kind: 'representation', params: { type: 'ball_and_stick' }, children: [{ kind: 'color', params: { color: '#8a94a8' } }] }] });
+    else if (MOL.mem < 2) {
+      var L = molMount.lipids || ['DPPC'], names = [];
+      L.forEach(function (n) { n = String(n).toUpperCase(); [n, n.slice(0, 3)].forEach(function (x) { if (names.indexOf(x) < 0) names.push(x); }); });
+      if (MOL.mem === 1) kids.push({ kind: 'component', params: { selector: names.map(function (n) { return { label_comp_id: n }; }) }, children: [{ kind: 'representation', params: { type: 'line' }, children: [{ kind: 'color', params: { color: '#a7afbf' } }] }] });
+      kids.push({ kind: 'component', params: { selector: names.map(function (n) { return { label_comp_id: n, type_symbol: 'P' }; }) }, children: [{ kind: 'representation', params: { type: 'spacefill', size_factor: 0.85 }, children: [{ kind: 'color', params: { color: '#e0a526' } }] }] });
+    }
+    return { metadata: { version: '1' }, root: { kind: 'root', children: [{ kind: 'canvas', params: { background_color: '#ffffff' } },
+      { kind: 'download', params: { url: s.url }, children: [{ kind: 'parse', params: { format: s.format }, children: [{ kind: 'structure', params: { type: 'model' }, children: kids }] }] }] } };
+  }
+  function molXr(ms) { try { return [[ms.lib.plugin.PluginConfig.Viewport.ShowXR, 'auto']]; } catch (e) { return []; } }
+  function molStatus(t) { var e = MOL.el && MOL.el.querySelector('.mol-status'); if (e) { e.textContent = t || ''; e.hidden = !t; } }
+  function molNote() {
+    var n = document.getElementById('mol-note'); if (!n) return;
+    var g = MOL_COLOR[MOL.color][1], t = [];
+    if (MOL.src && MOL.src.rcsb) t.push('The simulation snapshot could not be loaded, so this is the deposited PDB structure without the bilayer.');
+    if (g && MOL.src && MOL.con[g] === null) t.push('Contact data for this entry could not be loaded.');
+    else if (g) t.push('Coloured by average occupancy within 6 Å over the final 800 ns, pale to strong.');
+    else if (MOL.src && !MOL.src.rcsb) t.push('Final atomistic snapshot. Phosphorus atoms mark the lipid head groups.');
+    n.textContent = t.join(' ');
+  }
+  function molPaint(base) {
+    var m = MOL;
+    if (m.busy) { m.again = true; return; }
+    m.busy = true; m.again = false;
+    var g = MOL_COLOR[m.color][1];
+    (g ? molContacts(base, g) : Promise.resolve()).then(function () {
+      if (m !== MOL) return;
+      return m.viewer.loadMvsData(JSON.stringify(molTree()), 'mvsj', { keepCamera: !m.first, doNotReportErrors: true });
+    }).then(function () { m.first = false; }).catch(function () { molStatus('The structure could not be displayed.'); })
+      .then(function () { if (m !== MOL) return; m.busy = false; molStatus(''); molNote(); if (m.again) molPaint(base); });
+  }
+  function molControls(base) {
+    var c = document.getElementById('mol-ctrl'); if (!c) return;
+    function seg3(k, labels, aria) { return '<div class="seg" role="group" aria-label="' + aria + '">' + labels.map(function (l, i) { return '<button type="button" data-mol="' + k + '" data-i="' + i + '" aria-pressed="' + (MOL[k] === i) + '">' + l + '</button>'; }).join('') + '</div>'; }
+    var rc = MOL.src && MOL.src.rcsb;
+    c.innerHTML = '<div class="molbar"><div class="molrow"><span class="eyebrow">Colour by</span>' + seg3('color', MOL_COLOR.map(function (x) { return x[0]; }), 'Colour by') + '</div>' +
+      '<div class="molrow"><span class="eyebrow">Protein</span>' + seg3('style', MOL_STYLE, 'Protein style') + '</div>' +
+      (rc ? '' : '<div class="molrow"><span class="eyebrow">Bilayer</span>' + seg3('mem', MOL_MEM, 'Bilayer') + '</div>') +
+      '<p class="small muted" id="mol-note"></p><div class="btns"><button type="button" class="btn ghost" id="mol-close">Back to image</button></div></div>';
+    molNote();
+    Array.prototype.forEach.call(c.querySelectorAll('[data-mol]'), function (b) {
+      b.addEventListener('click', function () {
+        var k = b.getAttribute('data-mol'), i = +b.getAttribute('data-i'); if (MOL[k] === i) return;
+        MOL[k] = i;
+        Array.prototype.forEach.call(c.querySelectorAll('[data-mol="' + k + '"]'), function (x) { x.setAttribute('aria-pressed', String(+x.getAttribute('data-i') === i)); });
+        if (MOL.viewer) molPaint(base);
+      });
+    });
+    document.getElementById('mol-close').addEventListener('click', function () { molClose(MOL.pdb, base); });
+  }
+  /* Mounts the viewer into #mol-host; called after every render of the entry page. */
+  function molMount(pdb, base, lipids, chains) {
+    var host = document.getElementById('mol-host'); if (!host) return;
+    if (lipids && lipids.length) molMount.lipids = lipids;
+    if (chains && chains.length) molMount.chains = chains;
+    if (!host.classList.contains('is-3d')) molMount.html = host.innerHTML;
+    if (!(MOL.open && MOL.pdb === pdb)) {
+      var b = document.getElementById('mol-open');
+      if (b) b.addEventListener('click', function () { molOpen(pdb, base); });
+      return;
+    }
+    host.classList.add('is-3d'); host.innerHTML = ''; host.appendChild(MOL.el);
+    molControls(base);
+    if (MOL.viewer) MOL.viewer.handleResize();
+  }
+  function molClose(pdb, base) {
+    molReset();
+    var host = document.getElementById('mol-host'), c = document.getElementById('mol-ctrl');
+    if (c) c.innerHTML = '';
+    if (host) { host.classList.remove('is-3d'); host.innerHTML = molMount.html || ''; molMount(pdb, base); var b = document.getElementById('mol-open'); if (b) b.focus(); }
+  }
+  function molOpen(pdb, base) {
+    if (MOL.pdb !== pdb) molReset();
+    var m = MOL, chains = molMount.chains; m.pdb = pdb; m.open = true;
+    m.el = document.createElement('div'); m.el.className = 'molview';
+    m.el.innerHTML = '<div class="mol-canvas" role="img" aria-label="Interactive 3D view of ' + esc(pdb.toUpperCase()) + ' in its simulated bilayer"></div><div class="mol-status">Loading the 3D viewer…</div>';
+    molMount(pdb, base);
+    Promise.all([loadMolstar(), molSource(pdb, base)]).then(function (r) {
+      if (m !== MOL) { if (r[1].blob) URL.revokeObjectURL(r[1].url); return; }
+      m.src = r[1]; if (m.src.rcsb && chains && chains.length) m.src.chains = chains;
+      molStatus(m.src.rcsb ? 'Loading the PDB structure…' : 'Loading the simulation snapshot…');
+      molControls(base);
+      return r[0].Viewer.create(m.el.querySelector('.mol-canvas'), {
+        layoutIsExpanded: false, layoutShowControls: false, layoutShowRemoteState: false, layoutShowSequence: false, layoutShowLog: false, layoutShowLeftPanel: false,
+        viewportShowExpand: true, viewportShowSelectionMode: false, viewportShowAnimation: false, viewportShowTrajectoryControls: false, viewportShowSettings: false,
+        viewportShowControls: false, viewportBackgroundColor: '#ffffff', pdbProvider: 'rcsb', collapseLeftPanel: true, config: molXr(r[0])
+      }).then(function (v) { if (m !== MOL) { v.dispose(); return; } m.viewer = v; molPaint(base); });
+    }).catch(function (err) { if (m === MOL) molStatus('The 3D viewer could not be loaded. ' + (err && err.message ? err.message + '.' : '')); });
+  }
+
   function pageEntry(pdb, chainSel) {
     var e = byId[pdb];
     if (!e) return notFound('PDB ' + pdb);
@@ -343,7 +500,8 @@
       }).join('');
       var ch = s.chains || [], selc = ch.filter(function (c) { return c.chainID === chainSel; })[0];
       var contactImgs = []; CONTACTS.forEach(function (cn) { REPS.forEach(function (rp) { contactImgs.push([cn[0] + ', ' + rp[0].toLowerCase(), 'front-contacts-' + cn[1] + '-' + rp[1]]); }); });
-      var h = '<div class="stack-lg"><div class="cols entry"><div class="well"><img class="heroimg" src="' + (imgUrl('pdbhero', pdb) || PH) + '"' + fbAttr('pdbhero', pdb) + ' alt="' + esc(pdb.toUpperCase()) + ' in its simulated bilayer" onerror="mpmFb(this)"></div>' +
+      var h = '<div class="stack-lg"><div class="cols entry"><div class="herocol"><div class="well herowell" id="mol-host"><img class="heroimg" src="' + (imgUrl('pdbhero', pdb) || PH) + '"' + fbAttr('pdbhero', pdb) + ' alt="' + esc(pdb.toUpperCase()) + ' in its simulated bilayer" onerror="mpmFb(this)">' +
+          '<button type="button" class="btn mol-open" id="mol-open"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2 17 6v8l-7 4-7-4V6z M10 2v8m0 0 7-4m-7 4-7-4m7 4v8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>3D view</button></div><div id="mol-ctrl"></div></div>' +
         '<div class="stack"><div class="pagehead">' + crumbs([['Home', href('home')], ['Structures', refHref('mpm', 'membrane_proteins')], [pdb.toUpperCase(), null]]) +
         '<h1>' + ttl(pdbTitle(r.title || e[1], pdb)) + '</h1><div class="idline"><span class="tag">PDB ' + pdb + '</span>' + ((r.subtitle || e[2]) ? '<span>' + esc(sentence(r.subtitle || e[2])) + '</span>' : '') + '</div></div>' +
         '<dl class="facts">' + [['Published', fmtDate(e[5])], ['Method', esc(sentence(e[3] || ''))], ['Resolution', e[4] ? Number(e[4]).toFixed(2).replace(/0$/, '') + ' Å' : ''], ['Organism', r.organism && r.organism.scientific_name ? '<i>' + esc(r.organism.scientific_name) + '</i>' : ''],
@@ -369,6 +527,8 @@
           return '<div><h3>' + g[0] + '</h3><ul>' + g[1].map(function (f) { return '<li>' + extA(base + f[1], sim + '-' + f[0]) + '<span>' + f[2] + '</span></li>'; }).join('') + '</ul></div>';
         }).join('') + '</div></section></div>';
       show(null, h, 'PDB ' + pdb);
+      if (molMount.pdb !== pdb) { molMount.pdb = pdb; molMount.lipids = molMount.chains = null; }
+      molMount(pdb, base, Object.keys(s.composition || {}), ch.map(function (c) { return c.chainID; }));
       each('[data-g]', function (b) { b.addEventListener('click', function () {
         var g = b.getAttribute('data-g'), i = +b.getAttribute('data-i');
         if (g === 'v0') st.v[0] = i; else if (g === 'v1') st.v[1] = i; else st[g] = i;
@@ -572,6 +732,8 @@
     var h = location.hash.replace(/^#/, ''), p = (h.charAt(0) === '/' ? h.slice(1) : dec(h)).replace(/\/+$/, ''), m;
     if (!p) p = 'home';
     route.current = p;
+    var mp = p.match(/^ref\/PDB\/([0-9a-z]{4})/i);
+    if (MOL.pdb && (!mp || mp[1].toLowerCase() !== MOL.pdb)) molReset();
     if (p === 'home') pageHome();
     else if (p === 'search/text') pageSearch();
     else if (p === 'stats') pageStats();
