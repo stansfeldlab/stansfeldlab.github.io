@@ -31,6 +31,7 @@ import re
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 ORIGIN = os.environ.get('MEMPROTMD_ORIGIN', 'https://memprotmd.bioch.ox.ac.uk')
@@ -53,6 +54,8 @@ IN_MEMBRANE = ('membrane spanning', 'membrane embedded', 'single leaflet')
 UA = {'User-Agent': 'memprotmd-site-update (+https://stansfeldlab.github.io/memprotmd/)'}
 TCDB_PUBLIC = 'https://www.tcdb.org/cgi-bin/projectv/public/'
 MDDB_API = 'https://mdposit.mddbr.eu/api/rest/v1/projects'
+TCDB_FASTA = 'https://www.tcdb.org/public/tcdb'
+MPSTRUC_XML = 'https://blanco.biomol.uci.edu/mpstruc/listAll/mpstrucTblXml'
 TCDB_MIN = {'acc': 5000, 'pdb': 200, 'fam': 500}   # fewer rows than this means TCDB sent something else (an error page)
 # TCDB's families list has no subclass names; these are the subclasses Oxford's mapping does not already name
 TC_SUBCLASS = {'1.D': 'Non-ribosomally Synthesized Channels', '1.E': 'Holins', '1.I': 'Membrane-bounded Channels',
@@ -340,6 +343,185 @@ def tcdb_fill(cols, details, no_g, ref_by, rcsb, tc):
         details.setdefault('TCDB', {})['TCDB|' + t] = {'href': page, 'copyright': {'owner': 'Saier Lab', 'origin': page, 'terms': 'https://www.tcdb.org/aboutus.php'}}
     for t, pids in add.items():
         c = rows[t]
+        m = sorted(set(c[5].split()) | pids)
+        c[5], c[2] = ' '.join(m), len(m)
+    return n
+
+
+def protein_name(desc):
+    """A TCDB FASTA description as [protein name, species]: 'Chain A, ' prefixes, alternative names in
+    brackets and UniProt's [Cleaved into: ...] notes are dropped."""
+    d = urllib.parse.unquote(desc).strip()
+    d = re.sub(r'^Chain [^,]+,\s*', '', d)
+    species = ''
+    if ' - ' in d:
+        d, species = d.rsplit(' - ', 1)
+        species = re.sub(r'\s*\([^()]*\)\s*$', '', species.strip().rstrip('.')).strip()
+    d = re.sub(r'\s*\[(Cleaved into|Includes|Contains)[^\]]*\]', '', d)
+    name = d.strip()
+    while True:   # drop trailing bracketed alternative names, allowing one level of brackets inside
+        cut = re.sub(r'\s*\((?:[^()]|\([^()]*\))*\)\s*$', '', name).strip()
+        if cut == name or not cut:
+            break
+        name = cut
+    return [name[:150], species[:80]]
+
+
+def tcdb_names(saved, want, refresh):
+    """Protein names for TCDB systems, from TCDB's FASTA file: {TC id: [[accession, name, species], ...]}
+    for the systems in want. Downloaded on the daily run; otherwise, or if TCDB cannot be reached, the
+    saved names are used."""
+    if saved and not refresh:
+        return saved
+    try:
+        raw = get(TCDB_FASTA, tries=2) or b''
+    except RuntimeError as e:
+        print('TCDB: the FASTA file could not be downloaded (%s)' % e)
+        return saved
+    out = collections.defaultdict(list)
+    for line in raw.decode('utf-8', 'replace').splitlines():
+        m = re.match(r'^>gnl\|TC-DB\|([^|]+)\|(\S+)\s+(.*)$', line)
+        if m and m.group(2) in want and len(out[m.group(2)]) < 12:
+            out[m.group(2)].append([m.group(1)] + protein_name(m.group(3)))
+    if len(out) < 0.5 * len(want):
+        print('TCDB: the FASTA file named only %d of %d systems, using the saved names' % (len(out), len(want)))
+        return saved
+    return dict(sorted(out.items()))
+
+
+def tcdb_titles(cols, names, rcsb):
+    """Give TCDB systems their protein's name (and species as subtitle), and subfamilies the name of
+    their largest system, instead of the family name both carry from Oxford. The protein chosen for
+    a system is one of its member entries' own proteins where TCDB lists one."""
+    rows = cols.get('TCDB') or []
+    systems = [c for c in rows if c[0].count('.') == 4]
+    for c in systems:
+        cand = names.get(c[0]) or []
+        if not cand:
+            continue
+        mem = c[5].split()
+        accs = set()
+        for p in mem:
+            accs.update((rcsb.get(p) or {}).get('u') or {})
+        pick = next((x for x in cand if x[0] in accs or x[0].split('_')[0].lower() in mem), cand[0])
+        c[1], c[4] = pick[1], pick[2] or 0
+    for c in rows:
+        if c[0].count('.') == 3:
+            kids = [k for k in systems if k[3] == 'TCDB|' + c[0]]
+            named = sorted((k for k in kids if names.get(k[0])), key=lambda k: (-k[2], k[0]))
+            if named:
+                c[1] = named[0][1] + (' and related proteins' if len(kids) > 1 else '')
+
+
+def slug(name):
+    return re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')
+
+
+def mpstruc_tables(path, ref_by, refresh):
+    """mpstruc's own list (its XML download), cut down to MemProtMD entries: {"nodes": {key: [title,
+    parent key]}, "pdb": {pdb: key of the protein it is listed under}}. Keys follow Oxford's: a slug of
+    the group or subgroup name, protein-<pdb> for a protein and protein-<pdb>-<pdb> for a member
+    protein. Downloaded on the daily run; otherwise, or if mpstruc cannot be reached, the copy saved
+    in mpstruc.json is used."""
+    import xml.etree.ElementTree as ET
+    saved = load(path, {})
+    if saved.get('pdb') and not refresh:
+        return saved
+    try:
+        root = ET.fromstring(get(MPSTRUC_XML, tries=2) or b'')
+    except (RuntimeError, ET.ParseError) as e:
+        print('mpstruc: the list could not be read (%s), using the saved copy' % e)
+        return saved
+    nodes, where = {}, {}
+
+    def text(e, tag):
+        return re.sub(r'\s+', ' ', e.findtext(tag) or '').strip()
+
+    def related(e):
+        return [c.text.strip().lower() for c in e.findall('relatedPdbEntries/pdbCode') if c.text and c.text.strip()]
+    for g in root.iter('group'):
+        gk = slug(text(g, 'name'))
+        nodes[gk] = [text(g, 'name'), 'mpstruc']
+        holders = [(gk, g)]
+        for sg in g.findall('subgroups/subgroup'):
+            sk = slug(text(sg, 'name'))
+            nodes[sk] = [text(sg, 'name'), gk]
+            holders.append((sk, sg))
+        for hk, h in holders:
+            for pr in h.findall('proteins/protein'):
+                pc = text(pr, 'pdbCode').lower()
+                if not pc:
+                    continue
+                pk = 'protein-' + pc
+                nodes[pk] = [text(pr, 'name') or pc.upper(), hk]
+                for c in [pc] + related(pr):
+                    where.setdefault(c, pk)
+                for mp in pr.findall('memberProteins/memberProtein'):
+                    mc = text(mp, 'pdbCode').lower()
+                    if not mc:
+                        continue
+                    mk = pk + '-' + mc
+                    nodes[mk] = [text(mp, 'name') or mc.upper(), pk]
+                    for c in [mc] + related(mp):
+                        where[c] = mk
+    if len(where) < 3000:
+        print('mpstruc: the list has only %d PDB codes, using the saved copy' % len(where))
+        return saved
+    pdb = {p: k for p, k in sorted(where.items()) if p in ref_by}
+    keep = set()
+    for k in pdb.values():
+        while k in nodes and k not in keep:
+            keep.add(k)
+            k = nodes[k][1]
+    print('mpstruc: %d PDB codes listed (newest protein %s), %d of them MemProtMD entries' % (len(where), root.get('lastNewProteinDate'), len(pdb)))
+    return {'nodes': {k: nodes[k] for k in sorted(keep)}, 'pdb': pdb}
+
+
+def mpstruc_fill(cols, details, no_g, ref_by, ms):
+    """Place entries that have no mpstruc group from Oxford (its mapping stops in 2020) where mpstruc's
+    own list has them, keeping Oxford's tree for groups it already has. Returns the number placed."""
+    rows = {c[0]: c for c in cols.get('mpstruc') or []}
+    nodes, where = ms.get('nodes') or {}, ms.get('pdb') or {}
+    if 'mpstruc' not in rows:
+        return 0
+    placed = set()
+    for acc, c in rows.items():
+        if acc != 'mpstruc':
+            placed.update(c[5].split())
+
+    def parent(k):
+        return rows[k][3][len('mpstruc|'):] if k in rows and rows[k][3] else (nodes.get(k) or [0, None])[1]
+    add, n = collections.defaultdict(set), 0
+    for pid in sorted(ref_by):
+        if pid in placed or pid not in where:
+            continue
+        path, k = [], where[pid]
+        while k and k != 'mpstruc' and (k in rows or k in nodes) and len(path) < 8:
+            path.append(k)
+            k = parent(k)
+        if k != 'mpstruc':
+            continue
+        n += 1
+        add['mpstruc'].add(pid)
+        for k in path:
+            add[k].add(pid)
+    note = next((v['copyright'] for v in (details.get('mpstruc') or {}).values() if v.get('copyright')), None)
+
+    def depth(k):
+        d = 0
+        while k and k != 'mpstruc' and d < 9:
+            k, d = parent(k), d + 1
+        return d
+    for k in sorted(add, key=lambda x: (depth(x), x)):
+        if k in rows:
+            continue
+        rows[k] = [k, nodes[k][0], 0, 'mpstruc|' + nodes[k][1], 0, '']
+        cols['mpstruc'].append(rows[k])
+        no_g.append('mpstruc|' + k)
+        if note:
+            details.setdefault('mpstruc', {})['mpstruc|' + k] = {'copyright': note}
+    for k, pids in add.items():
+        c = rows[k]
         m = sorted(set(c[5].split()) | pids)
         c[5], c[2] = ' '.join(m), len(m)
     return n
@@ -670,10 +852,23 @@ def main(site, dry):
             m = sorted(set(c[5].split()) | extra[acc])
             c[5], c[2] = ' '.join(m), len(m)
 
-    # TCDB: Oxford's TCDB families stop in 2020; place the entries without one from TCDB's own lists
-    tc_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tcdb.json')
+    # the bigger outside lists (MDDB, mpstruc, TCDB's protein names) are read on the first run of the day
+    # or a run started by hand; other runs reuse what was saved
+    daily = not old.get('mddb') or now.hour < 6 or os.environ.get('GITHUB_EVENT_NAME') in ('workflow_dispatch', 'push')
+
+    # TCDB: Oxford's TCDB families stop in 2020; place the entries without one from TCDB's own lists,
+    # then name systems and subfamilies after their proteins
+    here = os.path.dirname(os.path.abspath(__file__))
+    tc_path = os.path.join(here, 'tcdb.json')
     tc = tcdb_tables(tc_path, ref_by, rcsb)
     print('TCDB: %d entries without an Oxford TCDB family placed from TCDB\'s own lists' % tcdb_fill(cols, details, no_g, ref_by, rcsb, tc))
+    tc['names'] = tcdb_names(load(tc_path, {}).get('names') or {}, {c[0] for c in cols.get('TCDB') or [] if c[0].count('.') == 4}, daily)
+    tcdb_titles(cols, tc['names'], rcsb)
+
+    # mpstruc: Oxford's mpstruc groups stop in 2020; place the entries without one from mpstruc's own list
+    ms_path = os.path.join(here, 'mpstruc.json')
+    ms = mpstruc_tables(ms_path, ref_by, daily)
+    print('mpstruc: %d entries without an Oxford mpstruc group placed from mpstruc\'s own list' % mpstruc_fill(cols, details, no_g, ref_by, ms))
 
     # groupings worked out from the records: proteins, organisms, topology, ligands
     dcols, ddetails = derived_groups(ref_by, sim_by, rcsb, old.get('cols'))
@@ -685,7 +880,7 @@ def main(site, dry):
 
     # MDDB: simulations elsewhere of the same structures; looked up on the first run of the day (or a run by hand)
     mddb = {p: n for p, n in (old.get('mddb') or {}).items() if p in ref_by}
-    if not old.get('mddb') or now.hour < 6 or os.environ.get('GITHUB_EVENT_NAME') in ('workflow_dispatch', 'push'):
+    if daily:
         found = mddb_lookup(ref_by)
         if found is not None:
             mddb = found
@@ -793,6 +988,8 @@ def main(site, dry):
         dump(os.path.join(site, 'data', 'growth.json'), growth_stats(ref_by, rcsb, cols))
         dump(org_path, rcsb)
         dump(tc_path, tc)
+        if ms:
+            dump(ms_path, ms)
         with open(state_path, 'w') as f:
             json.dump(state, f, sort_keys=True, separators=(',', ':'))
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

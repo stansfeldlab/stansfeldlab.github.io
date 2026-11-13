@@ -50,7 +50,7 @@ jobs:
           RELEASE: ${{ steps.update.outputs.release }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          git add -A memprotmd .github/memprotmd/state.json .github/memprotmd/rcsb.json .github/memprotmd/tcdb.json
+          git add -A memprotmd .github/memprotmd/state.json .github/memprotmd/rcsb.json .github/memprotmd/tcdb.json .github/memprotmd/mpstruc.json
           if git diff --cached --quiet; then
             echo "Nothing changed, so nothing was published." | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
