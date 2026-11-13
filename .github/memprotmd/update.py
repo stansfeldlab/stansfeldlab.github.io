@@ -51,6 +51,9 @@ ORG_QUERY = ('query($ids:[String!]!){entries(entry_ids:$ids){rcsb_id polymer_ent
 DOMAINS = ('Bacteria', 'Archaea', 'Eukaryota', 'Viruses')
 IN_MEMBRANE = ('membrane spanning', 'membrane embedded', 'single leaflet')
 UA = {'User-Agent': 'memprotmd-site-update (+https://stansfeldlab.github.io/memprotmd/)'}
+TCDB_PUBLIC = 'https://www.tcdb.org/cgi-bin/projectv/public/'
+TCDB_MIN = {'acc': 5000, 'pdb': 200, 'fam': 500}   # fewer rows than this means TCDB sent something else (an error page)
+TC_ID = re.compile(r'^[1-9]\.[A-Z]\.\d+\.\d+\.\d+$')
 
 
 def get(url, data=None, tries=4):
@@ -251,6 +254,89 @@ def growth_stats(ref_by, rcsb, cols):
                 per[method_group(ref_by[pid].get('experimental_method'))][i] += 1
         out[m] = {'total': sum(per['all']), 'per': per}
     return out
+
+
+def tcdb_tables(path, ref_by, rcsb):
+    """TCDB's own lists: UniProt accession -> TC numbers (acc2tcid), PDB code -> TC numbers (pdb) and
+    TC family names (families). Downloaded every run and cut down to what MemProtMD entries use; if
+    TCDB cannot be reached, the copy saved in tcdb.json at the last successful download is used."""
+    saved = load(path, {})
+    accs = set()
+    for p in ref_by:
+        r = rcsb.get(p) or {}
+        accs.update(r.get('u') or {})
+        accs.update(r.get('um') or [])
+    out = {}
+    for key, name in (('acc', 'acc2tcid.py'), ('pdb', 'pdb.py'), ('fam', 'families.py')):
+        try:
+            raw = get(TCDB_PUBLIC + name, tries=2) or b''
+        except RuntimeError as e:
+            print('TCDB: %s could not be downloaded (%s)' % (name, e))
+            raw = b''
+        rows = collections.defaultdict(set)
+        for line in raw.decode('utf-8', 'replace').splitlines():
+            f = [x.strip() for x in line.split('\t')]
+            if len(f) < 2 or not f[0] or not f[1]:
+                continue
+            if key == 'fam':
+                if re.match(r'^[1-9](\.[A-Z](\.\d+){0,3})?$', f[0]):
+                    rows[f[0]].add(f[1])
+            elif TC_ID.match(f[1]):
+                rows[f[0].upper() if key == 'acc' else f[0].lower()].add(f[1])
+        if len(rows) < TCDB_MIN[key]:   # missing or not the expected list: keep the saved copy
+            print('TCDB: %s gave %d rows, using the saved copy' % (name, len(rows)))
+            out[key] = saved.get(key) or {}
+            continue
+        keep = accs if key == 'acc' else set(ref_by) if key == 'pdb' else None
+        out[key] = {k: (sorted(v)[0] if key == 'fam' else sorted(v)) for k, v in sorted(rows.items()) if keep is None or k in keep}
+    return out
+
+
+def tcdb_fill(cols, details, no_g, ref_by, rcsb, tc):
+    """Place entries that have no TCDB family from Oxford (its mapping stops in 2020) using TCDB's own
+    lists: the entry's PDB code, or the UniProt accession of any of its chains. Groups new to MemProtMD
+    are created down from the TC class, named as Oxford named them (subfamilies and systems take
+    their family's name). Returns the number of entries placed."""
+    rows = {c[0]: c for c in cols.get('TCDB') or []}
+    if 'TCDB' not in rows:
+        return 0
+    placed = set()
+    for acc, c in rows.items():
+        if acc != 'TCDB':
+            placed.update(c[5].split())
+    fam = tc.get('fam') or {}
+    add, n = collections.defaultdict(set), 0
+    for pid in sorted(ref_by):
+        if pid in placed:
+            continue
+        r = rcsb.get(pid) or {}
+        found = set((tc.get('pdb') or {}).get(pid) or [])
+        for a in set(r.get('u') or {}) | set(r.get('um') or []):
+            found.update((tc.get('acc') or {}).get(a) or [])
+        if not found:
+            continue
+        n += 1
+        add['TCDB'].add(pid)
+        for t in found:
+            parts = t.split('.')
+            for k in range(1, 6):
+                add['.'.join(parts[:k])].add(pid)
+    for t in sorted(add, key=lambda x: (x.count('.'), x)):
+        if t in rows:
+            continue
+        parts = t.split('.')
+        family = '.'.join(parts[:3])
+        title = fam.get(t) or (len(parts) > 3 and (fam.get(family) or (rows.get(family) or [0, 0])[1])) or 'TC ' + t
+        rows[t] = [t, title, 0, 'TCDB|' + ('.'.join(parts[:-1]) if len(parts) > 1 else 'TCDB'), 0, '']
+        cols['TCDB'].append(rows[t])
+        no_g.append('TCDB|' + t)
+        page = 'https://www.tcdb.org/search/result.php?tc=' + t
+        details.setdefault('TCDB', {})['TCDB|' + t] = {'href': page, 'copyright': {'owner': 'Saier Lab', 'origin': page, 'terms': 'https://www.tcdb.org/aboutus.php'}}
+    for t, pids in add.items():
+        c = rows[t]
+        m = sorted(set(c[5].split()) | pids)
+        c[5], c[2] = ' '.join(m), len(m)
+    return n
 
 
 def derived_groups(ref_by, sim_by, rcsb, old_cols):
@@ -522,6 +608,11 @@ def main(site, dry):
             m = sorted(set(c[5].split()) | extra[acc])
             c[5], c[2] = ' '.join(m), len(m)
 
+    # TCDB: Oxford's TCDB families stop in 2020; place the entries without one from TCDB's own lists
+    tc_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tcdb.json')
+    tc = tcdb_tables(tc_path, ref_by, rcsb)
+    print('TCDB: %d entries without an Oxford TCDB family placed from TCDB\'s own lists' % tcdb_fill(cols, details, no_g, ref_by, rcsb, tc))
+
     # groupings worked out from the records: proteins, organisms, topology, ligands
     dcols, ddetails = derived_groups(ref_by, sim_by, rcsb, old.get('cols'))
     cols.update(dcols)
@@ -624,6 +715,7 @@ def main(site, dry):
         dump(os.path.join(site, 'data', 'status.json'), status)
         dump(os.path.join(site, 'data', 'growth.json'), growth_stats(ref_by, rcsb, cols))
         dump(org_path, rcsb)
+        dump(tc_path, tc)
         with open(state_path, 'w') as f:
             json.dump(state, f, sort_keys=True, separators=(',', ':'))
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
