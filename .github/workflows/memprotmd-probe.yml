@@ -8,12 +8,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 1 }
-      - name: Status data file used by the old site
+      - name: Pipeline status file
         shell: bash
         run: |
-          set +e
-          curl -s https://memprotmd.bioch.ox.ac.uk/static/js/index.js -o /tmp/b.js
-          grep -o 'fetchDataFile)("[^"]*"' /tmp/b.js | sort -u; grep -o '.\{0,120\}status.\{0,160\}' /tmp/b.js | grep -i 'fetch\|json\|yml' | head -8
+          curl -s https://memprotmd.bioch.ox.ac.uk/data/memprotmd/databases/cgdb/status.latest.yml -o /tmp/st.yml; wc -c /tmp/st.yml; head -c 2500 /tmp/st.yml; echo; grep -c . /tmp/st.yml || true
       - name: Dry run
         run: python3 .github/memprotmd/update.py memprotmd --dry-run
       - name: Real run (not pushed)
@@ -21,10 +19,11 @@ jobs:
       - name: What changed
         shell: bash
         run: |
+          set +e +o pipefail
           git add -A memprotmd .github/memprotmd/state.json
           git diff --cached --stat | tail -5
           git diff --cached --name-only | sed -E 's#/[^/]+$#/#' | sort | uniq -c | sort -rn | head
-          for f in $(git diff --cached --name-only -- memprotmd/data/entries | head -3); do echo "== $f"; git diff --cached -- $f | head -12 | cut -c1-400; done
+          for f in $(git diff --cached --name-only -- memprotmd/data/entries | head -14); do echo "== $f"; python3 -c "import json,subprocess,sys;f=sys.argv[1];n=json.load(open(f));o=json.loads(subprocess.run(['git','show','HEAD:'+f],capture_output=True,text=True).stdout);[print(' ',s,k,json.dumps(o[s].get(k))[:150],'->',json.dumps(n[s].get(k))[:150]) for s in ('ref','sim') for k in set(o[s])|set(n[s]) if o[s].get(k)!=n[s].get(k)];print('  prof same',o.get('prof')==n.get('prof'))" $f; done
           echo "== index"; python3 - <<'PY'
           import json, subprocess
           new = json.load(open('memprotmd/data/index.json'))
