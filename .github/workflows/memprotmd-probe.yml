@@ -6,24 +6,37 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe the Oxford MemProtMD API
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
+      - name: Status data file used by the old site
         shell: bash
         run: |
           set +e
-          B=https://memprotmd.bioch.ox.ac.uk
-          api() { curl -s -X POST -H 'Content-Type: application/json' $B/api/search/advanced -d "$1"; }
-          curl -s $B/static/js/index.js -o b.js
-          echo "== endpoints"; grep -o 'fetchAPIResource)("[^"]*"' b.js | sort | uniq -c
-          grep -o '"[a-z_]*/[a-z_]*"' b.js | grep -i 'api\|search\|status\|queue\|jobs' | sort -u | head -20
-          grep -o 'getThumbURI=function.\{0,400\}' b.js | head -3
-          grep -o 'collectionName:"[a-z_]*"' b.js | sort | uniq -c
-          for db in mpm TCDB mpstruc Pfam; do echo "== group $db"; api "{\"collectionName\":\"refs\",\"query\":{\"db\":\"$db\"},\"projection\":{},\"options\":{\"limit\":2,\"skip\":3}}" | head -c 1800; echo; done
-          echo "== counts"
-          time (api '{"collectionName":"refs","query":{},"projection":{"_id":1,"db":1,"db_version":1,"updated_at":1},"options":{}}' > refs_ids.json); wc -c refs_ids.json
-          python3 -c "import json,collections;d=json.load(open('refs_ids.json'));print(len(d),collections.Counter(x.get('db') for x in d),collections.Counter(x.get('db_version') for x in d).most_common(3))"
-          time (api '{"collectionName":"simulations","query":{},"projection":{"_id":1,"last_update_time":1,"sim_complete_time":1,"db_version":1},"options":{}}' > sims_ids.json); wc -c sims_ids.json
-          python3 -c "import json,collections;d=json.load(open('sims_ids.json'));print(len(d));print(sum(1 for x in d if not x.get('sim_complete_time')),'incomplete');import datetime;t=sorted(x.get('last_update_time') or 0 for x in d)[-5:];print([datetime.datetime.utcfromtimestamp(v).isoformat() for v in t])"
-          echo "== full sim doc keys"; api '{"collectionName":"simulations","query":{"_id":"1a0s_default_dppc"},"projection":{"jobs":0,"images":0},"options":{}}' | python3 -c "import json,sys;d=json.load(sys.stdin)[0];print({k:(type(v).__name__, json.dumps(v)[:150]) for k,v in d.items()})"
-          echo "== thumbs"; for u in databases/PDB/thumbs/1a0s_250.jpg databases/PDB/thumbs/1a0s.jpg databases/mpm/thumbs/gpcrs.jpg databases/mpm/thumbs/gpcrs_100.jpg databases/TCDB/thumbs/1.A_100.jpg databases/Pfam/thumbs/PF00001_100.jpg databases/mpm/stats.csv ensembles/statistics/contact_scales.latest.yml ensembles/statistics/resname_hists.latest.yml simulations/1a0s_default_dppc/files/contacts/relative_z_histogram.csv; do printf '%-70s %s\n' $u "$(curl -s -o /dev/null -w '%{http_code} %{size_download}' $B/data/memprotmd/$u)"; done
-          echo "== contact_scales head"; curl -s $B/data/memprotmd/ensembles/statistics/contact_scales.latest.yml | head -40
-          echo "== stats.csv head"; curl -s $B/data/memprotmd/databases/mpm/stats.csv | head -5
+          curl -s https://memprotmd.bioch.ox.ac.uk/static/js/index.js -o /tmp/b.js
+          grep -o 'fetchDataFile)("[^"]*"' /tmp/b.js | sort -u; grep -o '.\{0,120\}status.\{0,160\}' /tmp/b.js | grep -i 'fetch\|json\|yml' | head -8
+      - name: Dry run
+        run: python3 .github/memprotmd/update.py memprotmd --dry-run
+      - name: Real run (not pushed)
+        run: python3 .github/memprotmd/update.py memprotmd
+      - name: What changed
+        shell: bash
+        run: |
+          git add -A memprotmd .github/memprotmd/state.json
+          git diff --cached --stat | tail -5
+          git diff --cached --name-only | sed -E 's#/[^/]+$#/#' | sort | uniq -c | sort -rn | head
+          for f in $(git diff --cached --name-only -- memprotmd/data/entries | head -3); do echo "== $f"; git diff --cached -- $f | head -12 | cut -c1-400; done
+          echo "== index"; python3 - <<'PY'
+          import json, subprocess
+          new = json.load(open('memprotmd/data/index.json'))
+          old = json.loads(subprocess.run(['git', 'show', 'HEAD:memprotmd/data/index.json'], capture_output=True, text=True).stdout)
+          for k in new:
+              if new[k] != old.get(k): print('differs:', k)
+          for db in new['cols']:
+              o = {c[0]: c for c in old['cols'].get(db, [])}; n = {c[0]: c for c in new['cols'][db]}
+              diff = [a for a in n if a in o and n[a] != o[a]]
+              print(db, 'rows', len(o), '->', len(n), 'changed', len(diff))
+              for a in diff[:3]:
+                  print('  old', [str(x)[:60] for x in o[a]]); print('  new', [str(x)[:60] for x in n[a]])
+          print('noThumb', len(old['noThumb']), '->', len(new['noThumb']), 'noGroupThumb', len(old['noGroupThumb']), '->', len(new['noGroupThumb']))
+          print('status', open('memprotmd/data/status.json').read()[:300])
+          PY

@@ -1,0 +1,291 @@
+"""Weekly MemProtMD update: rebuild the site's data from the MemProtMD database at Oxford.
+
+Reads the Oxford API (refs and simulations) and a few shared files, then rewrites, inside
+memprotmd/:
+
+  data/index.json, data/entries/<pdb>.json, data/groups/<db>.json, data/status.json
+  thumbs/pdb/<pdb>.jpg and thumbs/<db>/<acc>.jpg   (only new or changed ones are downloaded)
+  pdb/<pdb>/index.html, sitemap.xml, data/entries.tsv, data/release.json   (via pages_build)
+
+Entries whose simulation has not changed keep their chain profile; only new or updated
+simulations have their profile CSV and thumbnail fetched again. The run stops without writing
+anything if the database looks incomplete (far fewer entries than the site already has).
+
+Usage: python3 update.py <site_dir> [--dry-run]
+"""
+import collections
+import csv
+import datetime
+import io
+import json
+import os
+import re
+import sys
+import time
+import urllib.error
+import urllib.request
+
+ORIGIN = os.environ.get('MEMPROTMD_ORIGIN', 'https://memprotmd.bioch.ox.ac.uk')
+API = ORIGIN + '/api/search/advanced'
+DATA = ORIGIN + '/data/memprotmd/'
+DBS = ('mpm', 'TCDB', 'mpstruc', 'Pfam')
+MIN_FRACTION = 0.98   # refuse to publish if the database has fewer than 98% of the entries already on the site
+REF_FIELDS = ('title', 'subtitle', 'first_published', 'mean_thickness', 'keywords', 'experimental_method', 'primary_authors',
+              'resolution', 'sim_chains_meta', 'ligands', 'entities', 'primary_citation')
+SIM_FIELDS = ('thinning', 'sim_complete_time', 'leaflet_summary', 'sim_validate', 'chains', 'composition', 'n_chains')
+GROUP_DETAIL = ('description', 'description_copyright', 'keywords_string', 'auto_keywords', 'href', 'copyright', 'subtitle')
+UA = {'User-Agent': 'memprotmd-site-update (+https://stansfeldlab.github.io/memprotmd/)'}
+
+
+def get(url, data=None, tries=4):
+    for i in range(tries):
+        try:
+            req = urllib.request.Request(url, data=data, headers=dict(UA, **({'Content-Type': 'application/json'} if data else {})))
+            with urllib.request.urlopen(req, timeout=120) as r:
+                return r.read()
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return None
+            err = e
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+            err = e
+        time.sleep(5 * (i + 1))
+    raise RuntimeError('could not fetch %s: %s' % (url, err))
+
+
+def api(collection, query, fields):
+    body = json.dumps({'collectionName': collection, 'query': query, 'projection': {f: 1 for f in fields}, 'options': {}}).encode()
+    out = json.loads(get(API, body))
+    if not isinstance(out, list):
+        raise RuntimeError('unexpected API answer for %s: %s' % (collection, str(out)[:200]))
+    return out
+
+
+def r3(v):
+    if isinstance(v, float):
+        return round(v, 3)
+    if isinstance(v, dict):
+        return {k: r3(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [r3(x) for x in v]
+    return v
+
+
+def enc(p):
+    return re.sub(r'[^A-Za-z0-9]', lambda m: '-%02x' % ord(m.group(0)), p)
+
+
+def num(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def profile(text):
+    """Residue density along the bilayer normal per chain, from relative_z_histogram.csv."""
+    def ok(r):
+        try:
+            float(r['min_val']); float(r['max_val']); return True
+        except (TypeError, ValueError, KeyError):
+            return False
+    rows = [r for r in csv.DictReader(io.StringIO(text)) if ok(r)]
+    if not rows:
+        return None
+    lo = min(float(r['min_val']) for r in rows)
+    w = float(rows[0]['max_val']) - float(rows[0]['min_val'])
+    if w <= 0:
+        return None
+    ch = collections.defaultdict(dict)
+    for r in rows:
+        ch[r['chainID'] or '_all'][int(round((float(r['min_val']) - lo) / w))] = tuple(num(r.get(k)) for k in ('z', 'alpha', 'beta'))
+    nb = max(max(v) for v in ch.values()) + 1
+    out = {}
+    for c, bins in ch.items():
+        if c != '_all':
+            arr = [bins.get(i, (0, 0, 0)) for i in range(nb)]
+            out[c] = [[round(x[k], 4) for x in arr] for k in range(3)]
+    return {'lo': round(lo, 2), 'w': round(w, 3), 'c': out} if out else None
+
+
+def load(path, default):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return default
+
+
+def dump(path, obj, pretty=False):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    s = json.dumps(obj, indent=2 if pretty else None, separators=None if pretty else (',', ':'), ensure_ascii=False)
+    try:
+        with open(path) as f:
+            same = json.load(f) == json.loads(s)   # ignore key order and formatting
+    except (OSError, ValueError):
+        same = False
+    if not same:
+        with open(path, 'w') as f:
+            f.write(s)
+        return True
+    return False
+
+
+def main(site, dry):
+    t0 = time.time()
+    old = load(os.path.join(site, 'data', 'index.json'), {'pdb': [], 'cols': {}})
+    state_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'state.json')
+    state = load(state_path, {})
+
+    refs = api('refs', {'db': 'PDB'}, REF_FIELDS + ('accession', 'in_collections', 'db_version'))
+    sims = api('simulations', {}, SIM_FIELDS + ('accession', 'last_update_time', 'db', 'jobs'))
+    groups = api('refs', {'db': {'$in': list(DBS)}}, ('db', 'accession', 'title', 'subtitle', 'parent', 'n_simulations', 'collection_members.accession') + GROUP_DETAIL)
+    version = max((r.get('db_version') or '' for r in refs), default='')
+    release = version[:10] or datetime.date.today().isoformat()
+
+    sim_by = {s['accession']: s for s in sims if s.get('accession') and s.get('sim_complete_time')}
+    ref_by = {r['accession']: r for r in refs if r.get('accession') in sim_by}
+    n_old = len(old.get('pdb') or [])
+    print('database %s: %d PDB records, %d finished simulations, %d published; site has %d' % (version, len(refs), len(sim_by), len(ref_by), n_old))
+    if n_old and len(ref_by) < MIN_FRACTION * n_old:
+        raise SystemExit('Stopping: the database lists %d entries but the site already has %d. Nothing was changed.' % (len(ref_by), n_old))
+
+    old_ids = {r[0] for r in old.get('pdb') or []}
+    new_ids, changed_ids, removed = sorted(set(ref_by) - old_ids), [], sorted(old_ids - set(ref_by))
+    entries_dir = os.path.join(site, 'data', 'entries')
+    written = 0
+    for pid in sorted(ref_by):
+        ref, sim = ref_by[pid], sim_by[pid]
+        stamp = sim.get('last_update_time') or sim.get('sim_complete_time')
+        path = os.path.join(entries_dir, pid + '.json')
+        prev = load(path, None)
+        # fetch the profile and thumbnail again only for new entries and simulations that changed since the last run
+        fresh = pid in new_ids or prev is None or (pid in state and state[pid] != stamp)
+        rec = {'ref': r3({k: ref[k] for k in REF_FIELDS if k in ref}), 'sim': r3({k: sim[k] for k in SIM_FIELDS if k in sim})}
+        if fresh:
+            if pid not in new_ids:
+                changed_ids.append(pid)
+            csvt = get(DATA + 'simulations/%s_default_dppc/files/contacts/relative_z_histogram.csv' % pid)
+            p = profile(csvt.decode('utf-8', 'replace')) if csvt else None
+            if not dry:
+                img = get(DATA + 'databases/PDB/thumbs/%s_250.jpg' % pid)
+                if img:
+                    os.makedirs(os.path.join(site, 'thumbs', 'pdb'), exist_ok=True)
+                    with open(os.path.join(site, 'thumbs', 'pdb', pid + '.jpg'), 'wb') as f:
+                        f.write(img)
+        else:
+            p = (prev or {}).get('prof')
+        if p:
+            rec['prof'] = p
+        state[pid] = stamp
+        if not dry and dump(path, rec):
+            written += 1
+        elif dry and prev != json.loads(json.dumps(rec, ensure_ascii=False)):
+            written += 1
+    for pid in removed:
+        state.pop(pid, None)
+        if not dry and os.path.exists(os.path.join(entries_dir, pid + '.json')):
+            os.remove(os.path.join(entries_dir, pid + '.json'))
+
+    # groups: keep the existing order, add new ones at the end
+    by_db = collections.defaultdict(dict)
+    for g in groups:
+        if g.get('db') in DBS and g.get('accession'):
+            by_db[g['db']][g['accession']] = g
+    cols, details = {}, {}
+    for db in DBS:
+        order = [c[0] for c in (old.get('cols') or {}).get(db, []) if c[0] in by_db[db]]
+        order += sorted(set(by_db[db]) - set(order))
+        rows = []
+        for acc in order:
+            g = by_db[db][acc]
+            mem = sorted({m.get('accession') for m in g.get('collection_members') or [] if m.get('accession') in ref_by})
+            n = g.get('n_simulations') or len(mem)
+            rows.append([acc, g.get('title') or acc, n, g.get('parent') or 0, g.get('subtitle') or 0, ' '.join(mem)])
+            d = {k: g[k] for k in GROUP_DETAIL if g.get(k)}
+            if isinstance(d.get('copyright'), dict):
+                d['copyright'] = {k: d['copyright'][k] for k in ('owner', 'origin', 'terms') if k in d['copyright']}
+            if d:
+                details.setdefault(db, {})[db + '|' + acc] = d
+        cols[db] = rows
+
+    # thumbnails: new entries and groups without one yet
+    no_t = sorted(pid for pid in ref_by if not os.path.exists(os.path.join(site, 'thumbs', 'pdb', pid + '.jpg')))
+    no_g = []
+    for db, rows in cols.items():
+        for c in rows:
+            f = os.path.join(site, 'thumbs', db, enc(c[0]) + '.jpg')
+            if os.path.exists(f):
+                continue
+            img = None if dry else get(DATA + 'databases/%s/thumbs/%s_100.jpg' % (db, c[0]))
+            if img:
+                os.makedirs(os.path.dirname(f), exist_ok=True)
+                with open(f, 'wb') as fh:
+                    fh.write(img)
+            else:
+                no_g.append(db + '|' + c[0])
+
+    # thickness histograms per MemProtMD group
+    thick = old.get('thick') or {}
+    st = get(DATA + 'databases/mpm/stats.csv')
+    if st:
+        t = collections.defaultdict(dict)
+        for r in csv.DictReader(io.StringIO(st.decode('utf-8', 'replace'))):
+            if r.get('metric') == 'thickness':
+                t[r['accession']][r['bin']] = num(r['density'])
+        if t:
+            thick = dict(t)
+
+    def row(pid, r):
+        sub = r.get('subtitle') if r.get('subtitle') and r.get('subtitle') != r.get('title') else 0
+        return [pid, r.get('title') or 0, sub, r.get('experimental_method') or 0, r.get('resolution') or 0, r.get('first_published') or 0]
+    index = {'pdb': [row(p, ref_by[p]) for p in sorted(ref_by)], 'cols': cols, 'thick': thick, 'snap': old.get('snap') or {},
+             'noThumb': no_t, 'noGroupThumb': sorted(no_g), 'built': release}
+
+    # pipeline status: simulations still running or not yet analysed
+    jobs = []
+    for s in sims:
+        pid = s.get('accession')
+        if not pid:
+            continue
+        done = set((s.get('jobs') or {}).keys())
+        last = max([j.get('last_update') or 0 for j in (s.get('jobs') or {}).values()] + [s.get('last_update_time') or 0])
+        when = datetime.datetime.fromtimestamp(last, datetime.timezone.utc).strftime('%Y-%m-%d') if last else release
+        if not s.get('sim_complete_time'):
+            jobs.append({'id': pid, 'status': 'simulating', 'time': when})
+        elif 'render_static_images' not in done or 'postprocess_contacts' not in done:
+            jobs.append({'id': pid, 'status': 'analysing', 'time': when})
+    status = {'written': release, 'jobs': sorted(jobs, key=lambda j: j['time'], reverse=True)}
+
+    summary = ['MemProtMD update, database version %s' % version,
+               '%d entries (%+d): %d new, %d updated, %d removed; %d entry records changed' % (len(ref_by), len(ref_by) - n_old, len(new_ids), len(changed_ids), len(removed), written),
+               'New: ' + (', '.join(new_ids[:40]) + (' …' if len(new_ids) > 40 else '') if new_ids else 'none'),
+               'Pipeline: %d simulations in progress' % len(jobs)]
+    if dry:
+        idx_diff = json.dumps(index, sort_keys=True) != json.dumps(old, sort_keys=True)
+        cdiff = {db: sum(1 for a, b in zip(cols[db], (old.get('cols') or {}).get(db, [])) if a != b) + abs(len(cols[db]) - len((old.get('cols') or {}).get(db, []))) for db in DBS}
+        summary.append('Dry run: index differs=%s; group rows differing per collection %s; thick same=%s' % (idx_diff, cdiff, thick == old.get('thick')))
+    else:
+        dump(os.path.join(site, 'data', 'index.json'), index)
+        for db, d in details.items():
+            dump(os.path.join(site, 'data', 'groups', db + '.json'), d)
+        dump(os.path.join(site, 'data', 'status.json'), status)
+        with open(state_path, 'w') as f:
+            json.dump(state, f, sort_keys=True, separators=(',', ':'))
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import pages_build
+        pages_build.main(site)
+    summary.append('Took %.0f s' % (time.time() - t0))
+    print('\n'.join(summary))
+    out = os.environ.get('GITHUB_STEP_SUMMARY')
+    if out:
+        with open(out, 'a') as f:
+            f.write('\n\n'.join(summary) + '\n')
+    gh = os.environ.get('GITHUB_OUTPUT')
+    if gh:
+        with open(gh, 'a') as f:
+            f.write('release=%s\nnew=%d\nchanged=%d\n' % (release, len(new_ids), len(changed_ids)))
+
+
+if __name__ == '__main__':
+    main(sys.argv[1], '--dry-run' in sys.argv[2:])
