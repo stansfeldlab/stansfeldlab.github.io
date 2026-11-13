@@ -54,7 +54,7 @@ console.log(rec.ref.title, rec.sim.thinning.annular_thickness);</code></pre>
 </tbody></table></div>
 
 <h2>Releases</h2>
-<p>Each update of the data is labelled with its date, shown in <code>data/release.json</code> and at the foot of every page. When you cite MemProtMD data, give the release date along with the address you used.</p>
+<p>The site checks the MemProtMD database four times a day, and new or updated entries appear as soon as they are found. Releases are weekly: each Monday, if anything has changed, the data is labelled with that date and a snapshot of <code>data/entries.tsv</code>, <code>data/index.json</code> and <code>data/release.json</code> is kept as a <a href="https://github.com/stansfeldlab/stansfeldlab.github.io/releases" target="_blank" rel="noopener">GitHub release</a>. <code>data/release.json</code> gives the current <code>release</code> and the date of the latest change (<code>updated</code>), and both are shown at the foot of every page. When you cite MemProtMD data, give the release you used.</p>
 
 <h2>Moving from the old API</h2>
 <p>The server-side API at <code>memprotmd.bioch.ox.ac.uk/api/</code> (requests such as <code>POST /api/search/advanced</code> with <code>collectionName</code> <code>refs</code> or <code>simulations</code>) is being retired along with that server. Use these files instead:</p>

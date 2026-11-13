@@ -1,12 +1,13 @@
-# Daily MemProtMD update: rebuilds memprotmd/ from the MemProtMD database at Oxford and publishes it
-# only when an entry, group or the pipeline status has changed, so most days it does nothing.
+# MemProtMD update: four times a day, rebuilds memprotmd/ from the MemProtMD database at Oxford and
+# publishes it only when an entry, group or the pipeline status has changed, so most runs do nothing.
+# On Mondays it also labels a weekly release and keeps a snapshot of the data as a GitHub release.
 # Run it by hand from the Actions tab ("Run workflow"); tick "dry run" to check the database without
 # publishing. The script is .github/memprotmd/update.py.
-name: MemProtMD daily update
+name: MemProtMD update
 
 on:
   schedule:
-    - cron: '41 6 * * *'   # every day at 06:41 UTC
+    - cron: '7 0,6,12,18 * * *'   # 00:07, 06:07, 12:07 and 18:07 UTC (an hour later in British Summer Time)
   workflow_dispatch:
     inputs:
       dry_run:
@@ -17,6 +18,7 @@ on:
 permissions:
   contents: write
   pages: write
+  actions: write
 
 concurrency:
   group: memprotmd-update
@@ -59,3 +61,20 @@ jobs:
           git push
           # pushes made with the workflow token do not always start a Pages build, so ask for one
           gh api -X POST "repos/$GITHUB_REPOSITORY/pages/builds" >/dev/null || echo "Pages will rebuild on its next run."
+
+      - name: Weekly release snapshot
+        if: ${{ steps.update.outputs.cut_release == 'true' }}
+        env:
+          RELEASE: ${{ steps.update.outputs.release }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "memprotmd-$RELEASE" memprotmd/data/entries.tsv memprotmd/data/index.json memprotmd/data/release.json \
+            --target "$(git rev-parse HEAD)" --title "MemProtMD data release $RELEASE" \
+            --notes "Weekly MemProtMD data release. Browse it at https://stansfeldlab.github.io/memprotmd/ ; the files attached here are the release as published."
+
+      - name: Keep the schedule running
+        # GitHub pauses scheduled workflows after 60 days without repository activity; re-enabling resets that
+        if: ${{ github.event_name == 'schedule' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/memprotmd-update.yml/enable" || true

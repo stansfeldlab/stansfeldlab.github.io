@@ -1,4 +1,4 @@
-"""Daily MemProtMD update: rebuild the site's data from the MemProtMD database at Oxford.
+"""MemProtMD update, run four times a day: rebuild the site's data from the MemProtMD database at Oxford.
 
 Reads the Oxford API (refs and simulations) and a few shared files, then rewrites, inside
 memprotmd/:
@@ -9,7 +9,12 @@ memprotmd/:
 
 Entries whose simulation has not changed keep their chain profile; only new or updated
 simulations have their profile CSV and thumbnail fetched again. Nothing is written unless an
-entry, a group or the pipeline status has actually changed, so most daily runs publish nothing.
+entry, a group or the pipeline status has actually changed, so most runs publish nothing.
+
+Changes go live as soon as they are found. Releases are weekly: on the first run of each Monday,
+if anything changed since the last release, the data is labelled with that Monday's date
+(index.json "built", release.json "release") and the workflow attaches a snapshot to a GitHub
+release. Between releases, "updated" records the date of the latest change.
 The run also stops without writing anything if the database looks incomplete (far fewer entries
 than the site already has).
 
@@ -146,7 +151,10 @@ def main(site, dry):
     sims = api('simulations', {}, SIM_FIELDS + ('accession', 'last_update_time'))
     groups = api('refs', {'db': {'$in': list(DBS)}}, ('db', 'accession', 'title', 'subtitle', 'parent', 'n_simulations', 'collection_members.accession') + GROUP_DETAIL)
     version = max((r.get('db_version') or '' for r in refs), default='')
-    release = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d')   # the date this release is published
+    now = datetime.datetime.now(datetime.timezone.utc)
+    today = os.environ.get('MEMPROTMD_TODAY') or now.strftime('%Y-%m-%d')   # override only for testing
+    last_release = str(old.get('built') or '')[:10]
+    release = last_release or today
 
     sim_by = {s['accession']: s for s in sims if s.get('accession') and s.get('sim_complete_time')}
     ref_by = {r['accession']: r for r in refs if r.get('accession') in sim_by}
@@ -242,7 +250,7 @@ def main(site, dry):
         sub = r.get('subtitle') if r.get('subtitle') and r.get('subtitle') != r.get('title') else 0
         return [pid, r.get('title') or 0, sub, r.get('experimental_method') or 0, r.get('resolution') or 0, r.get('first_published') or 0]
     index = {'pdb': [row(p, r3(ref_by[p])) for p in sorted(ref_by)], 'cols': cols, 'thick': thick, 'snap': old.get('snap') or {},
-             'noThumb': no_t, 'noGroupThumb': sorted(no_g), 'built': release}
+             'noThumb': no_t, 'noGroupThumb': sorted(no_g), 'built': release, 'updated': old.get('updated') or release}
 
     # pipeline status, from the pipeline's own status file
     status = load(os.path.join(site, 'data', 'status.json'), {'written': release, 'jobs': []})
@@ -277,11 +285,20 @@ def main(site, dry):
     reasons = [x for x, c in (('entries', pending or new_ids or removed), ('index', strip(index, 'built') != strip(old, 'built')),
                                ('groups', groups_changed), ('pipeline status', strip(status, 'written') != strip(old_status, 'written')),
                                ('change tracking', state != old_state)) if c]
-    if not reasons:
-        index['built'] = release = old.get('built') or release
+    def strip2(d):
+        return strip(d, 'built', 'updated')
+    reasons = [r for r in reasons if r != 'index'] + (['index'] if strip2(index) != strip2(old) else [])
+    if reasons:
+        index['updated'] = today
+    # weekly release: first run on a Monday, if anything changed since the last release
+    cut = (not dry and datetime.date.fromisoformat(today).weekday() == 0 and (last_release or '') < today
+           and str(index['updated']) > (last_release or ''))
+    if cut:
+        index['built'] = release = today
+        reasons.append('weekly release')
 
     summary = ['MemProtMD update, database version %s' % version,
-               ('Changed: %s, so this run publishes release %s' % (', '.join(reasons), release)) if reasons else 'Nothing has changed since release %s, so nothing is published' % release,
+               ('Changed: %s. Publishing; release %s, updated %s' % (', '.join(reasons), release, index['updated'])) if reasons else 'Nothing has changed since %s (release %s), so nothing is published' % (index['updated'], release),
                '%d entries (%+d): %d new, %d updated, %d removed; %d entry records changed' % (len(ref_by), len(ref_by) - n_old, len(new_ids), len(changed_ids), len(removed), written),
                'New: ' + (', '.join(new_ids[:40]) + (' …' if len(new_ids) > 40 else '') if new_ids else 'none'),
                'Pipeline status (%s): %d in progress, %d stalled; %s' % (status.get('written'), len(status.get('jobs') or []), len(status.get('stalled') or []), dict(counts.most_common()))]
@@ -313,7 +330,7 @@ def main(site, dry):
     gh = os.environ.get('GITHUB_OUTPUT')
     if gh:
         with open(gh, 'a') as f:
-            f.write('release=%s\nnew=%d\nchanged=%d\npublish=%s\n' % (release, len(new_ids), len(changed_ids), 'true' if reasons else 'false'))
+            f.write('release=%s\nnew=%d\nchanged=%d\npublish=%s\ncut_release=%s\n' % (release, len(new_ids), len(changed_ids), 'true' if reasons else 'false', 'true' if cut else 'false'))
 
 
 if __name__ == '__main__':

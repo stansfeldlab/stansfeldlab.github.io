@@ -165,7 +165,7 @@ def main(site):
         f.write('\t'.join(TSV_COLS) + '\n')
         for r in rows:
             f.write('\t'.join(tsv_cell(v) for v in r) + '\n')
-    rel = {'release': release, 'entries': len(idx['pdb']), 'groups': {db: len(c) for db, c in idx['cols'].items()},
+    rel = {'release': release, 'updated': str(idx.get('updated') or release)[:10], 'entries': len(idx['pdb']), 'groups': {db: len(c) for db, c in idx['cols'].items()},
            'site': SITE, 'files': STORE.rsplit('simulations/', 1)[0], 'license': 'https://creativecommons.org/licenses/by/4.0/',
            'citation': NAR, 'documentation': SITE + '#/api',
            'paths': {'index': 'data/index.json', 'table': 'data/entries.tsv', 'record': 'data/entries/{pdb}.json',
