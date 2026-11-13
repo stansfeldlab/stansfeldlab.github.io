@@ -116,7 +116,7 @@
       '<footer class="foot"><div class="wrap"><div><h3>Reuse this work</h3><p>Except where indicated otherwise, data on this site is part of the MemProtMD database, by Thomas D. Newport, Mark S.P. Sansom and Phillip J. Stansfeld, licensed under ' + extA('https://creativecommons.org/licenses/by/4.0/', 'Creative Commons Attribution 4.0') + '.</p>' +
         '<p style="margin-top:.5rem">Data release <span class="mono">' + esc(String(DB.built || '').slice(0, 10)) + '</span>' + (DB.updated && DB.updated > DB.built ? ', updated <span class="mono">' + esc(String(DB.updated).slice(0, 10)) + '</span>' : '') + ' · ' + num(DB.pdb.length) + ' entries · <a href="' + href('api') + '">API</a> · <a href="' + href('data') + '">Data files</a></p></div>' +
       '<div><h3>Cite</h3><p>Newport TD, Sansom MSP, Stansfeld PJ. The MemProtMD database. <i>Nucleic Acids Research</i> (2019). ' + extA('https://doi.org/10.1093/nar/gky1047', 'doi:10.1093/nar/gky1047') + '</p></div>' +
-      '<div><h3>Get in touch</h3><p>' + extA('https://stansfeldlab.github.io/', 'Stansfeld Research Group') + '<br>' + extA('https://twitter.com/memprotmd', '@memprotmd') + '</p><p style="margin-top:.5rem">Supported by BBSRC, Wellcome and EPSRC.</p></div></div></footer>';
+      '<div><h3>Get in touch</h3><p>' + extA('https://stansfeldlab.github.io/', 'Stansfeld Research Group') + '<br>' + extA('https://bsky.app/profile/pstansfeld.bsky.social', 'Bluesky: @pstansfeld.bsky.social') + '</p><p style="margin-top:.5rem">Supported by BBSRC, Wellcome and EPSRC.</p></div></div></footer>';
   }
   function show(active, main, title) {
     app.innerHTML = chrome(active, main); document.title = title ? title + ' · MemProtMD' : 'MemProtMD';
@@ -740,7 +740,12 @@
   /* ---------- statistics ---------- */
   var GROUP_NAMES = ['Negative', 'Positive', 'Hydrophilic polar', 'Low weight', 'Aromatic', 'Mildly hydrophobic', 'Low-weight hydrophobic', 'Hydrophobic'];
   var REDUCE = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  function heat(v) { var a = Math.min(0.85, Math.abs(v) / 100 * 0.85).toFixed(2); return v ? 'background:rgba(var(--' + (v > 0 ? 'hot' : 'cold') + '), ' + a + ')' : ''; }
+  /* diverging scale on a square-root ramp, so small differences from glycine still show; strong cells get white text */
+  function heat(v) {
+    if (!v) return '';
+    var t = Math.sqrt(Math.min(1, Math.abs(v) / 100)), pc = Math.round(t * 100);
+    return 'background:color-mix(in oklab, var(--heat-' + (v > 0 ? 'pos' : 'neg') + ') ' + pc + '%, var(--surface))' + (t > 0.62 ? ';color:var(--heat-on)' : '');
+  }
   function ctable(id, t) {
     var CW = 46, RH = 30, LW = 104, n = t.cols.length;
     var h = '<div class="scroll"><div class="ctable" id="' + id + '" style="width:' + (LW + n * CW) + 'px;height:' + ((t.rows.length + 1) * RH) + 'px">' +
@@ -895,13 +900,14 @@
           aas.map(function (aa, k) { return '<path class="sline s' + (k + 1) + '" data-line="1" data-aa="' + aa + '" d="' + path(modes[mode][aa], ym) + '"><title>' + aa + '</title></path>'; }).join('') +
           '</svg><div class="hlegend">' + aas.map(function (aa, k) { return '<button type="button" class="key s' + (k + 1) + '" data-aa="' + aa + '"><i></i>' + aa + '</button>'; }).join('') + '</div></figure>';
       }).join('');
-      show('stats', '<div class="stack-lg"><div class="pagehead"><h1>MemProtMD findings</h1><p class="muted" style="max-width:46rem">Ensemble analysis across every simulation in the database. Point at an amino acid in a table or chart to highlight it everywhere on the page.</p></div>' +
+      show('stats', '<div class="stack-lg"><div class="pagehead"><h1>MemProtMD findings</h1><p class="muted" style="max-width:46rem">Ensemble analysis across every simulation in the database.</p></div>' +
         '<section class="panel stack"><div class="head-row" style="margin:0"><h2>Growth of the database</h2>' + (counts.length > 1 ? '<div class="seg" role="group" aria-label="What to count">' + counts.map(function (c, i) { return '<button type="button" data-count="' + c[0] + '" aria-pressed="' + (i === 0) + '">' + c[1] + '</button>'; }).join('') + '</div>' : '') + '</div>' +
         '<div class="figures"><div><b>' + num(DB.pdb.length) + '</b><span>structures</span></div>' + (gj ? '<div><b>' + num(gj.uniprot.total) + '</b><span>distinct proteins</span></div><div><b>' + num(gj.pfam.total) + '</b><span>Pfam families</span></div>' : '') + '</div>' +
         '<div id="growth-box">' + GC.html + '</div></section>' +
-        '<section class="panel stack"><h2>Which residues touch what</h2><p class="small muted" style="max-width:46rem">Relative contact preference of each amino acid, from −100 to 100. Warm cells mean more contact than expected, cool cells less. Select a row to sort the amino acids by it; select it again to reverse.</p>' +
+        '<section class="panel stack"><h2>Amino acid interactions</h2><p class="small muted" style="max-width:46rem">How often each amino acid touches solvent, lipid head groups and lipid tails, relative to glycine (0) and scaled so the amino acid with most contact in each row is 100. Red cells mean more contact than glycine, blue cells less. Select a row to sort the amino acids by it; select it again to reverse. Point at an amino acid in a table or chart to highlight it everywhere on the page.</p>' +
+        '<div class="ct-key" aria-hidden="true"><span>Less contact than glycine</span><i></i><span>More</span></div>' +
         '<h3>Overview</h3>' + ctable('ct-over', d.overview) + '<h3>By lipid bead and solvent species</h3>' + ctable('ct-detail', d.detail) + '</section>' +
-        '<section class="panel stack"><div class="head-row" style="margin:0"><h2>Where residues sit in the membrane</h2>' + '<div class="seg" role="group" aria-label="Scale"><button type="button" data-mode="norm" aria-pressed="true">Normalised</button><button type="button" data-mode="abs" aria-pressed="false">Absolute</button></div></div>' +
+        '<section class="panel stack"><div class="head-row" style="margin:0"><h2>Where amino acids sit within membranes</h2>' + '<div class="seg" role="group" aria-label="Scale"><button type="button" data-mode="norm" aria-pressed="true">Normalised</button><button type="button" data-mode="abs" aria-pressed="false">Absolute</button></div></div>' +
         '<p class="small muted" style="max-width:46rem" id="h-note"></p><div class="hgrid">' + cards + '</div></section></div>', 'Statistics');
       GC.wire(app.querySelector('.growth'));
       each('[data-count]', function (b) { b.addEventListener('click', function () {
