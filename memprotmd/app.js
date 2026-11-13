@@ -23,7 +23,7 @@
   window.mpmPh = function (el) { el.onerror = null; el.src = PH; };
   /* Thumbnails are hosted with the site. Full-size renders stay on file storage and fall back to the thumbnail. */
   function pdbThumb(id) { return NOT[id] ? null : 'thumbs/pdb/' + id + '.jpg'; }
-  function colThumb(db, acc) { if (DERIVED[db]) { var m = sample(db, acc); return m ? pdbThumb(m) : null; } return NOG[db + '|' + acc] ? null : 'thumbs/' + db + '/' + enc(acc) + '.jpg'; }
+  function colThumb(db, acc) { if (DERIVED[db] || NOG[db + '|' + acc]) { var m = sample(db, acc); return m ? pdbThumb(m) : null; } return 'thumbs/' + db + '/' + enc(acc) + '.jpg'; }
   function sample(db, acc) { var c = colById[db + '|' + acc]; if (!c) return null; var m = members(c); for (var i = 0; i < m.length; i++) if (!NOT[m[i]] && byId[m[i]]) return m[i]; return null; }
   function remote(path) { return CFG.remoteImages === false ? null : STORE + path; }
   function imgUrl(kind, a) {
@@ -777,7 +777,8 @@
     GROUPS.forEach(function (g) { var c = 0; data.per[g[0]] = years.map(function (y) { return per[g[0]][y] || 0; }); data.cum[g[0]] = data.per[g[0]].map(function (v) { c += v; return c; }); });
     return { groups: GROUPS, years: years, data: data };
   }
-  function growthChart(G) {
+  function growthChart(G, meta) {
+    meta = meta || { noun: 'Structures', note: 'Structures in MemProtMD by the year they were released in the PDB.' };
     var W = 860, H = 300, L = 52, R = 16, T = 14, B = 30, mode = 'cum', on = { all: 1, xray: 1, em: 1, nmr: 1, other: 1 }, anim = null;
     var n = G.years.length;
     function X(i) { return L + i / (n - 1) * (W - L - R); }
@@ -794,12 +795,12 @@
     var ym = ymax(mode);
     var html = '<div class="growth"><div class="head-row" style="margin:0"><div class="chips" role="group" aria-label="Series">' + G.groups.map(function (g) { return '<button type="button" class="chip key g-' + g[0] + '" data-series="' + g[0] + '" aria-pressed="true"><i></i>' + g[1] + '</button>'; }).join('') + '</div>' +
       '<div class="seg" role="group" aria-label="Scale"><button type="button" data-gmode="cum" aria-pressed="true">Cumulative</button><button type="button" data-gmode="per" aria-pressed="false">Per year</button></div></div>' +
-      '<div class="gwrap"><svg class="gsvg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Structures in MemProtMD by PDB release year, ' + G.years[0] + ' to ' + G.years[n - 1] + '"><g class="gaxes">' + axes(ym) + '</g>' + xt +
+      '<div class="gwrap"><svg class="gsvg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(meta.noun) + ' in MemProtMD by year, ' + G.years[0] + ' to ' + G.years[n - 1] + '"><g class="gaxes">' + axes(ym) + '</g>' + xt +
       '<line class="baseline" x1="' + L + '" x2="' + (W - R) + '" y1="' + (H - B) + '" y2="' + (H - B) + '"/>' +
       G.groups.slice().reverse().map(function (g) { return '<path class="gline g-' + g[0] + '" data-series="' + g[0] + '" d="' + d(G.data[mode][g[0]], ym) + '"/>'; }).join('') +
       '<line class="guide" y1="' + T + '" y2="' + (H - B) + '" hidden/>' + G.groups.map(function (g) { return '<circle class="gdot g-' + g[0] + '" r="4" hidden/>'; }).join('') +
       '<rect class="hit" x="' + L + '" y="' + T + '" width="' + (W - L - R) + '" height="' + (H - T - B) + '"/></svg><div class="gtip" hidden></div></div>' +
-      '<p class="small muted">Structures in MemProtMD by the year they were released in the PDB. ' + G.years[n - 1] + ' is part of a year.</p></div>';
+      '<p class="small muted">' + esc(meta.note) + ' ' + G.years[n - 1] + ' is part of a year.</p></div>';
     function wire(root) {
       var svg = root.querySelector('.gsvg'), tip = root.querySelector('.gtip'), guide = root.querySelector('.guide');
       function redraw(fromMode, fromYm, fromOn) {
@@ -840,11 +841,25 @@
     }
     return { html: html, wire: wire };
   }
+  var COUNTS = [['structures', 'Structures'], ['uniprot', 'Proteins'], ['pfam', 'Pfam families']];
+  var COUNT_NOTE = {
+    structures: 'Structures in MemProtMD by the year they were released in the PDB.',
+    uniprot: 'Distinct proteins (UniProt accessions of the chains in the membrane), each counted in the year its first structure was released and under that structure\'s method.',
+    pfam: 'Distinct Pfam families with a structure in MemProtMD, each counted in the year its first structure was released and under that structure\'s method. Pfam assignments come from MemProtMD and the RCSB PDB.'
+  };
+  function growthOf(key, gj) {
+    if (key === 'structures' || !gj || !gj[key]) return growth();
+    var base = growth(), years = [], data = { per: {}, cum: {} };
+    for (var y = gj.years[0]; y <= gj.years[1]; y++) years.push(y);
+    base.groups.forEach(function (g) { var c = 0, per = (gj[key].per[g[0]] || []).slice(); data.per[g[0]] = per; data.cum[g[0]] = per.map(function (v) { c += v; return c; }); });
+    return { groups: base.groups.map(function (g) { return g[0] === 'all' ? ['all', key === 'uniprot' ? 'All proteins' : 'All Pfam families'] : g; }), years: years, data: data };
+  }
   function pageStats() {
     show('stats', '<p class="muted">Loading…</p>', 'Statistics');
-    getJSON('data/stats.json').then(function (d) {
+    Promise.all([getJSON('data/stats.json'), getJSON('data/growth.json').catch(function () { return null; })]).then(function (res) {
+      var d = res[0], gj = res[1];
       if (route.current !== 'stats') return;
-      var GC = growthChart(growth());
+      var GC = growthChart(growth()), counts = gj ? COUNTS : COUNTS.slice(0, 1);
       var W = 300, H = 170, L = 34, R = 8, T = 8, B = 26, x0 = d.bins[0][0], x1 = d.bins[d.bins.length - 1][1];
       var total = 0; d.groups.forEach(function (g) { Object.keys(g.counts).forEach(function (k) { total += g.counts[k]; }); });
       function series(mode) {
@@ -874,12 +889,20 @@
           '</svg><div class="hlegend">' + aas.map(function (aa, k) { return '<button type="button" class="key s' + (k + 1) + '" data-aa="' + aa + '"><i></i>' + aa + '</button>'; }).join('') + '</div></figure>';
       }).join('');
       show('stats', '<div class="stack-lg"><div class="pagehead"><h1>MemProtMD findings</h1><p class="muted" style="max-width:46rem">Ensemble analysis across every simulation in the database. Point at an amino acid in a table or chart to highlight it everywhere on the page.</p></div>' +
-        '<section class="panel stack"><h2>Growth of the database</h2>' + GC.html + '</section>' +
+        '<section class="panel stack"><div class="head-row" style="margin:0"><h2>Growth of the database</h2>' + (counts.length > 1 ? '<div class="seg" role="group" aria-label="What to count">' + counts.map(function (c, i) { return '<button type="button" data-count="' + c[0] + '" aria-pressed="' + (i === 0) + '">' + c[1] + '</button>'; }).join('') + '</div>' : '') + '</div>' +
+        '<div class="figures"><div><b>' + num(DB.pdb.length) + '</b><span>structures</span></div>' + (gj ? '<div><b>' + num(gj.uniprot.total) + '</b><span>distinct proteins</span></div><div><b>' + num(gj.pfam.total) + '</b><span>Pfam families</span></div>' : '') + '</div>' +
+        '<div id="growth-box">' + GC.html + '</div></section>' +
         '<section class="panel stack"><h2>Which residues touch what</h2><p class="small muted" style="max-width:46rem">Relative contact preference of each amino acid, from −100 to 100. Warm cells mean more contact than expected, cool cells less. Select a row to sort the amino acids by it; select it again to reverse.</p>' +
         '<h3>Overview</h3>' + ctable('ct-over', d.overview) + '<h3>By lipid bead and solvent species</h3>' + ctable('ct-detail', d.detail) + '</section>' +
         '<section class="panel stack"><div class="head-row" style="margin:0"><h2>Where residues sit in the membrane</h2>' + '<div class="seg" role="group" aria-label="Scale"><button type="button" data-mode="norm" aria-pressed="true">Normalised</button><button type="button" data-mode="abs" aria-pressed="false">Absolute</button></div></div>' +
         '<p class="small muted" style="max-width:46rem" id="h-note"></p><div class="hgrid">' + cards + '</div></section></div>', 'Statistics');
       GC.wire(app.querySelector('.growth'));
+      each('[data-count]', function (b) { b.addEventListener('click', function () {
+        var k = b.getAttribute('data-count'), box = document.getElementById('growth-box');
+        each('[data-count]', function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+        var C = growthChart(growthOf(k, gj), { noun: COUNTS.filter(function (c) { return c[0] === k; })[0][1], note: COUNT_NOTE[k] });
+        box.innerHTML = C.html; C.wire(box.querySelector('.growth'));
+      }); });
       wireTable('ct-over', d.overview, [2, 1]); wireTable('ct-detail', d.detail, [null, 1]);
       var note = { norm: 'Abundance of each amino acid at each depth, normalised so the area under each line is one. Dotted lines mark the phosphate groups of the lipids next to the protein; the shaded band is the membrane core.', abs: 'Abundance scaled by how common each amino acid is, so commoner residues have larger areas. Dotted lines mark the phosphate groups of the lipids next to the protein; the shaded band is the membrane core.' };
       document.getElementById('h-note').textContent = note.norm;

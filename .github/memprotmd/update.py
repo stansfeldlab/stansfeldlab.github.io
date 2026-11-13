@@ -46,7 +46,8 @@ RCSB_GQL = 'https://data.rcsb.org/graphql'
 ORG_QUERY = ('query($ids:[String!]!){entries(entry_ids:$ids){rcsb_id polymer_entities{'
              'rcsb_polymer_entity_container_identifiers{auth_asym_ids} '
              'rcsb_entity_source_organism{scientific_name ncbi_taxonomy_id taxonomy_lineage{name}} '
-             'uniprots{rcsb_id rcsb_uniprot_protein{name{value}}}}}}')
+             'uniprots{rcsb_id rcsb_uniprot_protein{name{value}}} '
+             'rcsb_polymer_entity_annotation{annotation_id type name}}}}')
 DOMAINS = ('Bacteria', 'Archaea', 'Eukaryota', 'Viruses')
 IN_MEMBRANE = ('membrane spanning', 'membrane embedded', 'single leaflet')
 UA = {'User-Agent': 'memprotmd-site-update (+https://stansfeldlab.github.io/memprotmd/)'}
@@ -132,7 +133,7 @@ def rcsb_lookup(refs, pids):
     """Source organisms and UniProt protein names for each entry, from the RCSB PDB.
 
     Returns {pdb: {"o": [[scientific name, NCBI taxonomy id, domain], ...], "u": {accession: name},
-    "um": [UniProt accessions of the membrane chains]}}.
+    "um": [UniProt accessions of the membrane chains], "pf": {Pfam id: name, for the membrane chains}}}.
     Organisms come only from polymer entities that contain a chain placed in the membrane (so an
     antibody or nanobody bound to a human protein does not add its species); if none qualify, all
     polymer entities are used.
@@ -152,7 +153,7 @@ def rcsb_lookup(refs, pids):
             tm = membrane_chains(refs.get(pid))
             ents = e.get('polymer_entities') or []
             chosen = [x for x in ents if tm & set((x.get('rcsb_polymer_entity_container_identifiers') or {}).get('auth_asym_ids') or [])] or ents
-            seen, uni, um = {}, {}, []
+            seen, uni, um, pf = {}, {}, [], {}
             for x in chosen:
                 for o in x.get('rcsb_entity_source_organism') or []:
                     name = (o.get('scientific_name') or '').strip()
@@ -167,9 +168,13 @@ def rcsb_lookup(refs, pids):
                         uni[u['rcsb_id']] = nm
                     if u.get('rcsb_id') and x in chosen and u['rcsb_id'] not in um:
                         um.append(u['rcsb_id'])
-            out[pid] = {'o': list(seen.values()), 'u': uni, 'um': um}
+            for x in chosen:
+                for an in x.get('rcsb_polymer_entity_annotation') or []:
+                    if an.get('type') == 'Pfam' and an.get('annotation_id'):
+                        pf[an['annotation_id']] = an.get('name') or an['annotation_id']
+            out[pid] = {'o': list(seen.values()), 'u': uni, 'um': um, 'pf': pf}
         for pid in batch:
-            out.setdefault(pid.lower(), {'o': [], 'u': {}, 'um': []})   # obsolete or unreleased in the PDB
+            out.setdefault(pid.lower(), {'o': [], 'u': {}, 'um': [], 'pf': {}})   # obsolete or unreleased in the PDB
     return out
 
 
@@ -208,6 +213,44 @@ def topology(sim, ref):
     if any(c.get('type') in IN_MEMBRANE for c in ch):
         return 'unclassified', 0   # spans the membrane, but no helices or strands were counted
     return 'other', 0
+
+
+def method_group(m):
+    m = ' '.join(m) if isinstance(m, list) else str(m or '')
+    return 'xray' if 'X-RAY' in m else 'em' if 'ELECTRON MICROSCOPY' in m else 'nmr' if 'NMR' in m else 'other'
+
+
+def growth_stats(ref_by, rcsb, cols):
+    """Distinct proteins (UniProt accessions of the membrane chains) and Pfam families per year: each is
+    counted in the year its first structure was released, under that structure's experimental method."""
+    first = {}
+    def see(measure, acc, pid):
+        d = str(ref_by[pid].get('first_published') or '')
+        if d[:4].isdigit() and ((measure, acc) not in first or (d, pid) < first[(measure, acc)]):
+            first[(measure, acc)] = (d, pid)
+    for pid, ref in ref_by.items():
+        tm = membrane_chains(ref)
+        ents = ref.get('entities') or []
+        mine = [en for en in ents if tm & set(str(en.get('chains') or '').split(','))] or ents
+        accs = [x['accession'] for en in mine for x in en.get('refs') or [] if x.get('db') == 'UniProt' and x.get('accession')]
+        for a in set(accs + ((rcsb.get(pid) or {}).get('um') or [])):
+            see('uniprot', a, pid)
+    for c in cols.get('Pfam') or []:
+        for pid in (c[5] or '').split():
+            if pid in ref_by:
+                see('pfam', c[0], pid)
+    years = [int(str(r.get('first_published'))[:4]) for r in ref_by.values() if str(r.get('first_published') or '')[:4].isdigit()]
+    y0, y1 = min(years), max(years)
+    out = {'years': [y0, y1]}
+    for m in ('uniprot', 'pfam'):
+        per = {g: [0] * (y1 - y0 + 1) for g in ('all', 'xray', 'em', 'nmr', 'other')}
+        for (mm, acc), (d, pid) in first.items():
+            if mm == m:
+                i = int(d[:4]) - y0
+                per['all'][i] += 1
+                per[method_group(ref_by[pid].get('experimental_method'))][i] += 1
+        out[m] = {'total': sum(per['all']), 'per': per}
+    return out
 
 
 def derived_groups(ref_by, sim_by, rcsb, old_cols):
@@ -444,7 +487,7 @@ def main(site, dry):
     # organisms and UniProt names from the RCSB PDB: looked up once per entry and kept in rcsb.json
     org_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rcsb.json')
     rcsb = load(org_path, {})
-    missing = sorted(p for p in ref_by if 'um' not in (rcsb.get(p) or {}))
+    missing = sorted(p for p in ref_by if 'pf' not in (rcsb.get(p) or {}))
     if missing:
         found = rcsb_lookup(ref_by, missing)
         rcsb.update(found)
@@ -461,6 +504,23 @@ def main(site, dry):
     count = collections.Counter(o[0] for p in ref_by for o in orgs.get(p) or [])
     dom = {o[0]: o[2] for p in ref_by for o in orgs.get(p) or []}
     tax = {o[0]: o[1] for p in ref_by for o in orgs.get(p) or []}
+
+    # Pfam: add the RCSB PDB's Pfam assignments for the membrane chains, which also cover entries the
+    # Oxford mapping has not reached (it stops in 2024); families new to MemProtMD get their own group
+    pfam = {c[0]: c for c in cols.get('Pfam') or []}
+    extra = collections.defaultdict(set)
+    for pid in ref_by:
+        for acc, nm in ((rcsb.get(pid) or {}).get('pf') or {}).items():
+            extra[acc].add(pid)
+            if acc not in pfam:
+                pfam[acc] = [acc, nm, 0, 0, 0, '']
+                cols['Pfam'].append(pfam[acc])
+                no_g.append('Pfam|' + acc)
+                details.setdefault('Pfam', {})['Pfam|' + acc] = {'href': 'https://www.ebi.ac.uk/interpro/entry/pfam/%s/' % acc, 'copyright': {'owner': 'InterPro'}}
+    for acc, c in pfam.items():
+        if acc in extra:
+            m = sorted(set(c[5].split()) | extra[acc])
+            c[5], c[2] = ' '.join(m), len(m)
 
     # groupings worked out from the records: proteins, organisms, topology, ligands
     dcols, ddetails = derived_groups(ref_by, sim_by, rcsb, old.get('cols'))
@@ -562,6 +622,7 @@ def main(site, dry):
         for db, d in details.items():
             dump(os.path.join(site, 'data', 'groups', db + '.json'), d)
         dump(os.path.join(site, 'data', 'status.json'), status)
+        dump(os.path.join(site, 'data', 'growth.json'), growth_stats(ref_by, rcsb, cols))
         dump(org_path, rcsb)
         with open(state_path, 'w') as f:
             json.dump(state, f, sort_keys=True, separators=(',', ':'))
