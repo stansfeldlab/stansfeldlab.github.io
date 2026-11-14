@@ -5,6 +5,7 @@
   --brand: #1f499e; --brand-strong: #17397b; --on-brand: #ffffff; --accent: #c8003f; --well: #ffffff;
   --bar: #1f499e; --bar-ink: #ffffff; --bar-field: rgba(255, 255, 255, 0.14); --bar-line: rgba(255, 255, 255, 0.22);
   --heat-pos: #b2182b; --heat-neg: #2166ac; --heat-on: #ffffff;   /* contact tables: a red/blue diverging scale */
+  --ss-helix: #2f6fd0; --ss-strand: #17946b; --sel: #f08c00;
   --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --r: 12px; --wrap: 1180px;
@@ -195,6 +196,38 @@ a.chip:hover, button.chip:hover { border-color: var(--brand); color: var(--brand
 .chainpick small { display: block; font-weight: 400; color: var(--muted); font-size: 0.8125rem; }
 .topology { padding: 0.5rem; }
 .topology svg { display: block; }
+/* chain analysis: topology and sequence views */
+.topo-box { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 0.5rem; }
+.topo { display: block; font-family: var(--sans); }
+.topo .topo-band { fill: var(--tint); pointer-events: none; }
+.topo .topo-ov, .topo .topo-sel, .topo .topo-plane, .topo .topo-coil { pointer-events: none; }
+.topo .topo-plane { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 4; }
+.topo .topo-measure { stroke: var(--muted); stroke-width: 1; }
+.topo .topo-lbl { fill: var(--muted); font-size: 11px; }
+.topo .topo-ov { fill: var(--heat-pos); fill-opacity: 0.32; }
+.topo .topo-el { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.topo .topo-coil { stroke: var(--muted); stroke-width: 1.5; }
+.topo .topo-helix { stroke: var(--ss-helix); stroke-width: 9; cursor: pointer; }
+.topo .topo-strand { stroke: var(--ss-strand); stroke-width: 6; cursor: pointer; }
+.topo .topo-helix:hover, .topo .topo-strand:hover, .topo .topo-el.on { stroke: var(--sel); }
+.topo .topo-el:focus-visible { outline: none; stroke: var(--sel); }
+.topo .topo-sel { fill: var(--sel); }
+.seq-block { margin-top: 0.25rem; }
+.seq-block p { margin: 0 0 0.15rem; }
+.seqv { display: block; font-family: var(--mono); }
+.seqv .seq-num { fill: var(--muted); font-size: 9px; }
+.seqv .seq-lab { fill: var(--muted); font-size: 10px; font-family: var(--sans); }
+.seqv .seq-ss.seq-coil { fill: var(--tint); }
+.seqv .seq-ss.seq-helix { fill: var(--ss-helix); }
+.seqv .seq-ss.seq-strand { fill: var(--ss-strand); }
+.seqv .seq-aa { font-size: 10px; fill: var(--ink); }
+.seqv .seq-aa-helix, .seqv .seq-aa-strand { fill: #ffffff; }
+.seqv .seq-bg { fill: var(--tint); }
+.seqv .seq-v { fill: var(--heat-pos); }
+.seqv .seq-selbox { fill: var(--sel); fill-opacity: 0.18; stroke: var(--sel); stroke-width: 1; }
+.seqv .seq-hit { fill: transparent; cursor: pointer; }
+.ct-key i.seq-key { background: linear-gradient(to right, var(--tint), var(--heat-pos)); }
+.linkbtn { border: 0; background: none; padding: 0; color: var(--brand); text-decoration: underline; cursor: pointer; font: inherit; }
 
 /* ---- status, statistics, prose ---- */
 .steps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin-top: 0.9rem; }
