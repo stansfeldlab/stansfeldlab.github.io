@@ -896,7 +896,7 @@
     if (ov) pts.forEach(function (q, i) { var v = rows[i] ? parseFloat(rows[i][ov]) || 0 : 0; if (q && v > 0.02) h += '<circle class="topo-ov" cx="' + X(q[0]) + '" cy="' + Y(q[1]) + '" r="' + (1.5 + Math.sqrt(v) * 9).toFixed(1) + '"/>'; });
     shapes.forEach(function (sh) {
       var a = Math.min.apply(null, sh.res), b = Math.max.apply(null, sh.res), on = sel && sh.res.some(function (i) { return i >= sel[0] && i <= sel[1]; });
-      var k = sh.cls === 'ssAlpha' ? 'helix' : sh.cls === 'ssBeta' ? 'strand' : 'coil';
+      var k = sh.res.length < (TOPO_MIN[sh.cls] || 0) ? 'coil' : sh.cls === 'ssAlpha' ? 'helix' : sh.cls === 'ssBeta' ? 'strand' : 'coil';
       h += '<path class="topo-el topo-' + k + (on ? ' on' : '') + '" d="' + line(sh.P) + '"' + (k === 'strand' ? ' marker-end="url(#topo-arrow)"' : '') + (k !== 'coil' ? ' data-res="' + a + '-' + b + '" tabindex="0" role="button" aria-label="Select residues ' + esc((rows[a] || {}).resSeq || '') + ' to ' + esc((rows[b] || {}).resSeq || '') + '"' : '') + '><title>' + (k === 'coil' ? 'Loop' : k === 'helix' ? 'Helix' : 'Strand') + ' ' + esc((rows[a] || {}).resSeq || '') + '–' + esc((rows[b] || {}).resSeq || '') + '</title></path>';
     });
     if (sel) pts.forEach(function (q, i) { if (q && i >= sel[0] && i <= sel[1]) h += '<circle class="topo-sel" cx="' + X(q[0]) + '" cy="' + Y(q[1]) + '" r="3"/>'; });
@@ -936,6 +936,8 @@
       host = document.getElementById('chain-view'); if (!host || route.current.indexOf('ref/PDB/' + pdb) !== 0) return;
       var rows = d.csv ? d.csv.rows.filter(function (r) { return r.chainID === chain && (r.chainInstance === '1' || r.chainInstance === undefined); }) : [];
       var ct = d.topo && (d.topo.topology || []).filter(function (t) { return t.chainID === chain && +t.chainInstance === 1; })[0];
+      /* the pipeline's file numbers residues along the whole table, so later chains are shifted back to their own rows */
+      if (ct && !ct.shifted) { var off = d.csv && rows.length ? d.csv.rows.indexOf(rows[0]) : 0; ct.shifted = true; if (off > 0) (ct.segments || []).forEach(function (sg) { (sg.elements || []).forEach(function (el) { el.resIdxs = (el.resIdxs || []).map(function (i) { return i - off; }); }); }); }
       if (!ct && rows.length) { try { ct = topoBuild(rows, th && th.bulk_mid != null ? +th.bulk_mid : 0); if (!ct.segments.length) ct = null; } catch (e) { ct = null; } }
       if (!ct && !rows.length) { host.innerHTML = '<p class="small muted">The analysis files for this chain could not be loaded from file storage.</p>'; return; }
       var tracks = d.csv ? seqTracks(d.csv.head) : [];
