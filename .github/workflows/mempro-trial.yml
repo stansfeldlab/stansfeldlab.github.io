@@ -1,0 +1,119 @@
+# Trial only: can MemPrO, MemPrOD and Insane4MemPrO set PDB entries up on GitHub's own runners?
+# It runs a handful of the structures waiting in the MemProtMD pipeline and reports the time and
+# output size of each stage. Nothing is published to the site; the outputs are kept as artifacts
+# for 14 days. The script is .github/memprotmd/mempro_trial.py.
+name: MemPrO trial
+
+on:
+  workflow_dispatch:
+    inputs:
+      pdb_ids:
+        description: PDB codes to run, separated by spaces (blank = the newest waiting structures)
+        type: string
+        default: ''
+      count:
+        description: How many waiting structures to run when no codes are given
+        type: string
+        default: '20'
+  push:
+    branches: [mempro-trial]
+    paths: ['.github/workflows/mempro-trial.yml', '.github/memprotmd/mempro_trial.py']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mempro-trial-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pick:
+    runs-on: ubuntu-latest
+    outputs:
+      ids: ${{ steps.pick.outputs.ids }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: memprotmd/data/status.json
+          sparse-checkout-cone-mode: false
+      - id: pick
+        env:
+          IDS: ${{ inputs.pdb_ids }}
+          COUNT: ${{ inputs.count || '4' }}   # a push to the trial branch runs four
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os, re
+          ids = re.findall(r'[0-9a-z]{4}', os.environ.get('IDS', '').lower())
+          if not ids:
+              waiting = [j for j in json.load(open('memprotmd/data/status.json')).get('stalled', []) if j.get('status') == 'identified']
+              waiting.sort(key=lambda j: j.get('time', ''), reverse=True)
+              ids = [j['id'] for j in waiting[:int(os.environ.get('COUNT') or 20)]]
+          print('ids=' + json.dumps(ids))
+          PY
+
+  run:
+    needs: pick
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        pdb: ${{ fromJson(needs.pick.outputs.ids) }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github/memprotmd/mempro_trial.py
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: .github/workflows/mempro-trial.yml
+      - name: Install MemPrO, MemPrOD, Insane4MemPrO and martinize2
+        run: |
+          pip install memprod vermouth mdtraj gemmi
+          pip list 2>/dev/null | grep -i -E "^(mempro|memprod|jax|vermouth|mdtraj|gemmi) "
+      - name: Set up ${{ matrix.pdb }}
+        run: python .github/memprotmd/mempro_trial.py "${{ matrix.pdb }}" "out/${{ matrix.pdb }}" --cpus "$(nproc)"
+      - name: Keep the outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mempro-trial-${{ matrix.pdb }}
+          path: out/${{ matrix.pdb }}
+          retention-days: 14
+          if-no-files-found: warn
+
+  report:
+    needs: run
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: mempro-trial-*
+          path: results
+      - name: Summary table
+        run: |
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import glob, json
+          stages = ['prepare', 'mempro', 'memprod', 'martinize2', 'insane4mempro']
+          def kb(n): return '%.0f' % (n / 1024) if n else ''
+          print('| PDB | residues | chains | ' + ' | '.join(s + ' (s)' for s in stages) + ' | total (min) | topology kB | oriented.pdb.gz kB | deformations kB | CG system .gz kB |')
+          print('|' + '---|' * (len(stages) + 8))
+          for f in sorted(glob.glob('results/*/result.json')):
+              r = json.load(open(f))
+              def cell(s):
+                  st = r['stages'].get(s)
+                  return '' if not st else (str(st.get('seconds', '')) if st['exit'] == 0 else 'FAILED (%s)' % st['exit'])
+              z = r.get('sizes', {})
+              print('| %s | %s | %s | %s | %.1f | %s | %s | %s | %s |' % (r['pdb'], r.get('residues', ''), r.get('chains', ''), ' | '.join(cell(s) for s in stages),
+                    r.get('total_seconds', 0) / 60, kb(z.get('topology')), kb(z.get('oriented.pdb.gz')), kb(z.get('deformations')), kb(z.get('CG-system.gro.gz'))))
+          print()
+          for f in sorted(glob.glob('results/*/result.json')):
+              r = json.load(open(f))
+              for s, st in r['stages'].items():
+                  if st['exit'] != 0:
+                      print('**%s, %s failed:**\n```\n%s\n```' % (r['pdb'], s, (st.get('log_tail') or '')[-700:]))
+          PY
