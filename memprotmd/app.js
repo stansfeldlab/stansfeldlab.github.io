@@ -293,7 +293,8 @@
     show('status', '<p class="muted">Loading…</p>', 'Pipeline status');
     getJSON('data/status.json').then(function (s) {
       if (route.current !== 'status') return;
-      var stalled = s.stalled || [], age = s.written ? Math.floor((Date.now() - new Date(s.written).getTime()) / 864e5) : 0, old = age > 14;
+      /* the waiting and stopped jobs are for the team: shown only at #/status?all */
+      var stalled = /(^|&)all(&|=|$)/.test(route.query) ? (s.stalled || []) : [], age = s.written ? Math.floor((Date.now() - new Date(s.written).getTime()) / 864e5) : 0, old = age > 14;
       var nSt = {}; stalled.forEach(function (j) { nSt[j.status] = (nSt[j.status] || 0) + 1; });
       var parts = [['identified', 'identified and waiting to be simulated'], ['simulating', 'stopped during simulation'], ['converting', 'stopped during conversion'], ['analysing', 'stopped during analysis']].filter(function (x) { return nSt[x[0]]; }).map(function (x) { return num(nSt[x[0]]) + ' ' + x[1]; });
       /* once the status file is old, a job whose entry is already on the site has finished since */
