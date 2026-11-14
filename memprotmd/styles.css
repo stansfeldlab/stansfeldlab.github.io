@@ -212,16 +212,13 @@ a.chip:hover, button.chip:hover { border-color: var(--brand); color: var(--brand
 .prose h2 { margin-top: 1.25rem; }
 .prose h3 { margin-top: 0.75rem; }
 .prose h4 { margin: 0.5rem 0 0; font-size: 1rem; }
-.team { display: grid; gap: 0.75rem; }
-.member { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 1rem; align-items: start; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 1rem; }
-.member img, .member .ph { width: 96px; height: 96px; border-radius: 10px; object-fit: cover; background: var(--tint); }
-.member .ph { display: grid; place-items: center; font-weight: 600; font-size: 1.6rem; letter-spacing: 0.02em; color: var(--brand); }
-.member h4 { margin: 0 0 0.3rem; }
-.member p { margin: 0; }
-@media (max-width: 480px) {
-  .member { grid-template-columns: 64px minmax(0, 1fr); gap: 0.8rem; padding: 0.85rem; }
-  .member img, .member .ph { width: 64px; height: 64px; font-size: 1.15rem; }
-}
+/* team cards, as on the lab's alumni page: small round photos of one size beside the text, one person per row */
+.team { display: grid; gap: 14px; }
+.member { display: grid; grid-template-columns: 68px minmax(0, 1fr); gap: 14px; align-items: start; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; }
+.member img, .member .ph { width: 68px; height: 68px; border-radius: 50%; object-fit: cover; background: var(--tint); }
+.member .ph { display: grid; place-items: center; font-weight: 600; font-size: 1.2rem; color: var(--brand); }
+.member h4 { margin: 0 0 0.25rem; font-size: 1.05rem; }
+.member p { margin: 0; font-size: 0.92rem; line-height: 1.45; color: var(--muted); }
 
 footer.foot { border-top: 1px solid var(--line); background: var(--surface); font-size: 0.875rem; color: var(--muted); }
 footer.foot .wrap { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 1.5rem 2.5rem; padding-block: 2rem; }
