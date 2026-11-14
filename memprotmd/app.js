@@ -765,10 +765,12 @@
     return { head: head, rows: lines.slice(1).map(function (l) { var f = l.split(','), o = {}; head.forEach(function (h, i) { o[h] = f[i]; }); return o; }) };
   }
   function chainData(base) {
-    if (!CHAIN_DATA[base]) CHAIN_DATA[base] = Promise.all([
-      Promise.all([loadYaml(), fetchText(base + 'build_ss_topology.latest.yml')]).then(function (r) { return r[0].load(r[1]); }).catch(function () { return null; }),
-      fetchText(base + 'files/contacts/by_resid_postprocess.csv').then(parseCsv).catch(function () { return null; })
-    ]).then(function (r) { return { topo: r[0], csv: r[1] }; });
+    /* the topology is worked out from the per-residue table for every entry; the pipeline's own topology
+       file is only fetched if that table cannot be loaded */
+    if (!CHAIN_DATA[base]) CHAIN_DATA[base] = fetchText(base + 'files/contacts/by_resid_postprocess.csv').then(parseCsv).catch(function () { return null; }).then(function (csv) {
+      if (csv && csv.rows.length) return { topo: null, csv: csv };
+      return Promise.all([loadYaml(), fetchText(base + 'build_ss_topology.latest.yml')]).then(function (r) { return { topo: r[0].load(r[1]), csv: csv }; }).catch(function () { return { topo: null, csv: csv }; });
+    });
     return CHAIN_DATA[base];
   }
   /* sequence tracks: [label, matching columns] — lipid columns are matched by leaflet and bead, whatever the lipid */
@@ -948,7 +950,7 @@
       }
       function paint() {
         host.innerHTML =
-          (ct ? '<h3>Topology of chain ' + esc(chain) + '</h3><p class="small muted">Helices and strands of at least five residues, arranged relative to the bilayer (shaded, with its local thickness). Choose an overlay to show contacts along the backbone: the larger the circle, the more of the simulation a residue spends in contact.' + (ct.computed ? ' This diagram was worked out in your browser from the per-residue analysis.' : '') + '</p>' +
+          (ct ? '<h3>Topology of chain ' + esc(chain) + '</h3><p class="small muted">Helices and strands of at least five residues, arranged relative to the bilayer (shaded, with its local thickness). Choose an overlay to show contacts along the backbone: the larger the circle, the more of the simulation a residue spends in contact.</p>' +
             '<div class="seg" role="group" aria-label="Overlay">' + OVERLAYS.map(function (o, i) { return '<button type="button" data-ov="' + i + '" aria-pressed="' + (i === cv.ov) + '">' + o[0] + '</button>'; }).join('') + '</div>' +
             '<div class="topo-box scroll">' + topoSvg(ct, rows, th, OVERLAYS[cv.ov][1], cv.sel) + '</div>' : '') +
           '<p class="small" id="cv-sel">' + selText() + '</p>' +
