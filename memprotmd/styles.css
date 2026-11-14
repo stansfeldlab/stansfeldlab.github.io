@@ -212,8 +212,8 @@ a.chip:hover, button.chip:hover { border-color: var(--brand); color: var(--brand
 .prose h2 { margin-top: 1.25rem; }
 .prose h3 { margin-top: 0.75rem; }
 .prose h4 { margin: 0.5rem 0 0; font-size: 1rem; }
-/* team cards, as on the lab's alumni page: small round photos of one size beside the text */
-.team { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 14px; }
+/* team cards, as on the lab's alumni page: small round photos of one size beside the text, one person per row */
+.team { display: grid; gap: 14px; }
 .member { display: grid; grid-template-columns: 68px minmax(0, 1fr); gap: 14px; align-items: start; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; }
 .member img, .member .ph { width: 68px; height: 68px; border-radius: 50%; object-fit: cover; background: var(--tint); }
 .member .ph { display: grid; place-items: center; font-weight: 600; font-size: 1.2rem; color: var(--brand); }
