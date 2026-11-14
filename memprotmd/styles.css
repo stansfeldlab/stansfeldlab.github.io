@@ -207,6 +207,7 @@ a.chip:hover, button.chip:hover { border-color: var(--brand); color: var(--brand
 .topo .topo-ov { fill: var(--heat-pos); fill-opacity: 0.32; }
 .topo .topo-el { fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .topo .topo-coil { stroke: var(--muted); stroke-width: 1.5; }
+.topo .topo-gap { stroke-dasharray: 2 4; }
 .topo .topo-helix { stroke: var(--ss-helix); stroke-width: 9; cursor: pointer; }
 .topo .topo-strand { stroke: var(--ss-strand); stroke-width: 6; cursor: pointer; }
 .topo .topo-helix:hover, .topo .topo-strand:hover, .topo .topo-el.on { stroke: var(--sel); }
