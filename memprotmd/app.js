@@ -782,6 +782,89 @@
   function isHelix(d) { return d === 'H' || d === 'G' || d === 'I'; }
   function isStrand(d) { return d === 'E' || d === 'B'; }
 
+  /* ---------- topology worked out in the browser ----------
+     Where a simulation has no build_ss_topology file, the same diagram is built here from the per-residue
+     table (DSSP code and average position of each residue). It follows the pipeline's build_ss_topology job,
+     as ported to Python in MemPrO (mempro/topology.py): positions are smoothed over about one turn, each run
+     of one DSSP class becomes an element whose x is the distance travelled in the membrane plane and whose
+     y is z, the ends of helices and strands are straightened, and a Bezier curve is fitted. */
+  var TOPO_WIN = { E: 4, B: 4, H: 3.6, G: 3, I: 4.1 }, TOPO_EDGE = { ssNone: [0, 1], ssAlpha: [5, 4], ssBeta: [1, 2] }, TOPO_MIN = { ssAlpha: 5, ssBeta: 4 };
+  function topoClass(d) { return isHelix(d) ? 'ssAlpha' : isStrand(d) ? 'ssBeta' : 'ssNone'; }
+  function topoBezier(n, vals) {
+    var deg = n - 1, bin = [1], k;
+    for (k = 1; k < n; k++) bin.push(bin[k - 1] * (deg - k + 1) / k);
+    return vals.map(function (v) { var row = []; for (var i = 0; i < n; i++) row.push(bin[i] * Math.pow(v, i) * Math.pow(1 - v, deg - i)); return row; });
+  }
+  function topoSpace(n) { var o = []; for (var i = 0; i < n; i++) o.push(n > 1 ? i / (n - 1) : 0); return o; }
+  /* least squares for the inner control points, the first and last fixed at the ends of the element */
+  function topoFit(P, n) {
+    var m = P.length, M = topoBezier(n, topoSpace(m)), a = P[0], b = P[m - 1], u = n - 2, i, j, k, r, c;
+    var nodes = topoSpace(n).map(function (x) { return [a[0] * (1 - x) + b[0] * x, a[1] * (1 - x) + b[1] * x]; });
+    if (u > 0 && m > 2) {
+      var A = [], B = [];
+      for (i = 0; i < u; i++) { A.push([]); B.push([0, 0]); for (j = 0; j < u; j++) A[i].push(i === j ? 1e-9 : 0); }
+      for (k = 0; k < m; k++) {
+        var tx = P[k][0] - M[k][0] * a[0] - M[k][n - 1] * b[0], ty = P[k][1] - M[k][0] * a[1] - M[k][n - 1] * b[1];
+        for (i = 0; i < u; i++) { B[i][0] += M[k][i + 1] * tx; B[i][1] += M[k][i + 1] * ty; for (j = 0; j < u; j++) A[i][j] += M[k][i + 1] * M[k][j + 1]; }
+      }
+      for (c = 0; c < u; c++) {
+        var p = c; for (r = c + 1; r < u; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r;
+        var t = A[c]; A[c] = A[p]; A[p] = t; t = B[c]; B[c] = B[p]; B[p] = t;
+        if (Math.abs(A[c][c]) < 1e-14) continue;
+        for (r = 0; r < u; r++) if (r !== c) { var f = A[r][c] / A[c][c]; if (f) { for (j = c; j < u; j++) A[r][j] -= f * A[c][j]; B[r][0] -= f * B[c][0]; B[r][1] -= f * B[c][1]; } }
+      }
+      for (i = 0; i < u; i++) if (Math.abs(A[i][i]) >= 1e-14 && isFinite(B[i][0] / A[i][i]) && isFinite(B[i][1] / A[i][i])) nodes[i + 1] = [B[i][0] / A[i][i], B[i][1] / A[i][i]];
+    }
+    var err = 0;
+    for (k = 0; k < m; k++) { var x = 0, y = 0; for (i = 0; i < n; i++) { x += M[k][i] * nodes[i][0]; y += M[k][i] * nodes[i][1]; } err += Math.sqrt((x - P[k][0]) * (x - P[k][0]) + (y - P[k][1]) * (y - P[k][1])); }
+    return { err: err / m, nodes: nodes };
+  }
+  function topoElement(S, cls) {
+    var n = S.length, ec = TOPO_EDGE[cls][0], es = TOPO_EDGE[cls][1], ex = [0], ey = S.map(function (q) { return q[2]; }), i;
+    if (n < ec * 2 + es) { ec = Math.floor(n / 3); es = Math.floor(n / 3) + 1; }
+    for (i = 1; i < n; i++) ex.push(ex[i - 1] + Math.sqrt(Math.pow(S[i][0] - S[i - 1][0], 2) + Math.pow(S[i][1] - S[i - 1][1], 2)));
+    if (es > 1) {
+      var s0 = [ex[ec], ey[ec]], s1 = [ex[ec + es - 1], ey[ec + es - 1]], e1 = [ex[n - ec - es], ey[n - ec - es]], e0 = [ex[n - ec - 1], ey[n - ec - 1]];
+      var sv = [(s1[0] - s0[0]) / (es - 1), (s1[1] - s0[1]) / (es - 1)], ev = [(e1[0] - e0[0]) / (es - 1), (e1[1] - e0[1]) / (es - 1)];
+      for (i = 0; i < ec; i++) {
+        ex[ec - (i + 1)] = s0[0] - (i + 1) * sv[0]; ey[ec - (i + 1)] = s0[1] - (i + 1) * sv[1];
+        ex[n - ec + i] = e0[0] - (i + 1) * ev[0]; ey[n - ec + i] = e0[1] - (i + 1) * ev[1];
+      }
+    }
+    var lo = Math.min.apply(null, ex), P = ex.map(function (x, j) { return [x - lo, ey[j]]; }), best = null;
+    for (var np = 2; np <= Math.min(n + 1, 16); np++) { var f = topoFit(P, np); if (!best || f.err < best.err) best = f; if (f.err < 1) break; }
+    var M = topoBezier(best.nodes.length, topoSpace(n));
+    return M.map(function (row) { var x = 0, y = 0; row.forEach(function (w, k) { x += w * best.nodes[k][0]; y += w * best.nodes[k][1]; }); return { x: x, y: y }; });
+  }
+  function topoBuild(rows, mid) {
+    var pos = rows.map(function (r) { var p = [parseFloat(r.x), parseFloat(r.y), parseFloat(r.z) + mid]; return isFinite(p[0]) && isFinite(p[1]) && isFinite(p[2]) ? p : null; });
+    var segs = [], cur = null, last = null;
+    pos.forEach(function (p, i) {
+      if (!p) { cur = null; return; }
+      if (!cur || Math.sqrt(Math.pow(p[0] - last[0], 2) + Math.pow(p[1] - last[1], 2) + Math.pow(p[2] - last[2], 2)) > 6) segs.push(cur = []);
+      cur.push(i); last = p;
+    });
+    return { computed: true, segments: segs.map(function (idxs) {
+      var n = idxs.length, raw = idxs.map(function (i) { return pos[i]; });
+      var sm = raw.map(function (_, i) {
+        var w = Math.min(Math.min(i, n - i - 1) + 1, TOPO_WIN[rows[idxs[i]].DSSP] || 3), nm = 1 / w, fl = (w - 1) / 2, o = 0, v = raw[i].map(function (c) { return c * nm; });
+        while (fl > 1e-9) { o++; var cv = Math.min(1, fl); for (var k = 0; k < 3; k++) v[k] += cv * nm * (raw[i + o][k] + raw[i - o][k]); fl -= cv; }
+        return v;
+      });
+      var els = [], prev = null;
+      idxs.forEach(function (ri, i) {
+        var d = rows[ri].DSSP, cls = topoClass(d), code = cls === 'ssNone' ? '' : d === 'B' ? 'E' : d;
+        if (code !== prev) { els.push({ DSSP: code, DSSPClass: cls, idxs: i ? [i - 1] : [], resIdxs: [] }); prev = code; }
+        els[els.length - 1].resIdxs.push(ri); els[els.length - 1].idxs.push(i);
+      });
+      els.forEach(function (el) {
+        el.plot = { basisFitted: topoElement(el.idxs.map(function (i) { return sm[i]; }), el.DSSPClass) }; delete el.idxs;
+        if (el.resIdxs.length < (TOPO_MIN[el.DSSPClass] || 0)) el.DSSPClass = 'ssNone';   /* too short to draw as a helix or strand */
+      });
+      return { elements: els };
+    }) };
+  }
+
   function topoSvg(ct, rows, th, ov, sel) {
     var S = 3, mid = th && th.bulk_mid != null ? +th.bulk_mid : 0, pts = [], shapes = [], xo = 0;
     (ct.segments || []).forEach(function (sg, si) {
@@ -853,6 +936,7 @@
       host = document.getElementById('chain-view'); if (!host || route.current.indexOf('ref/PDB/' + pdb) !== 0) return;
       var rows = d.csv ? d.csv.rows.filter(function (r) { return r.chainID === chain && (r.chainInstance === '1' || r.chainInstance === undefined); }) : [];
       var ct = d.topo && (d.topo.topology || []).filter(function (t) { return t.chainID === chain && +t.chainInstance === 1; })[0];
+      if (!ct && rows.length) { try { ct = topoBuild(rows, th && th.bulk_mid != null ? +th.bulk_mid : 0); if (!ct.segments.length) ct = null; } catch (e) { ct = null; } }
       if (!ct && !rows.length) { host.innerHTML = '<p class="small muted">The analysis files for this chain could not be loaded from file storage.</p>'; return; }
       var tracks = d.csv ? seqTracks(d.csv.head) : [];
       function selText() {
@@ -862,7 +946,7 @@
       }
       function paint() {
         host.innerHTML =
-          (ct ? '<h3>Topology of chain ' + esc(chain) + '</h3><p class="small muted">Helices and strands of at least five residues, arranged relative to the bilayer (shaded, with its local thickness). Choose an overlay to show contacts along the backbone: the larger the circle, the more of the simulation a residue spends in contact.</p>' +
+          (ct ? '<h3>Topology of chain ' + esc(chain) + '</h3><p class="small muted">Helices and strands of at least five residues, arranged relative to the bilayer (shaded, with its local thickness). Choose an overlay to show contacts along the backbone: the larger the circle, the more of the simulation a residue spends in contact.' + (ct.computed ? ' This diagram was worked out in your browser from the per-residue analysis.' : '') + '</p>' +
             '<div class="seg" role="group" aria-label="Overlay">' + OVERLAYS.map(function (o, i) { return '<button type="button" data-ov="' + i + '" aria-pressed="' + (i === cv.ov) + '">' + o[0] + '</button>'; }).join('') + '</div>' +
             '<div class="topo-box scroll">' + topoSvg(ct, rows, th, OVERLAYS[cv.ov][1], cv.sel) + '</div>' : '') +
           '<p class="small" id="cv-sel">' + selText() + '</p>' +
