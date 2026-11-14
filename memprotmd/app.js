@@ -868,18 +868,36 @@
   }
 
   function topoSvg(ct, rows, th, ov, sel) {
-    var S = 3, mid = th && th.bulk_mid != null ? +th.bulk_mid : 0, pts = [], shapes = [], xo = 0;
+    var S = 3, mid = th && th.bulk_mid != null ? +th.bulk_mid : 0, pts = [], shapes = [], xo = 0, prevEnd = null;
+    /* Elements are placed one after another along x and joined into one unbroken line, as MemPrO's layout does:
+       the ends of helices and strands are straightened, so each loop is eased to start and end exactly where its
+       neighbours are drawn; a helix that DSSP gives in several parts is one shape; a helix and a strand in a row
+       get a short joining line; and missing residues are bridged by a dashed line. */
     (ct.segments || []).forEach(function (sg, si) {
       if (si) xo += 12;
-      var sx = xo;
+      var sx = xo, placed = [], joined = [];
       (sg.elements || []).forEach(function (el) {
-        var P = ((el.plot || {}).basisFitted || []).map(function (q) { return [sx + q.x, q.y - mid]; });
+        var P = ((el.plot || {}).basisFitted || []).map(function (q) { return [sx + q.x, q.y - mid]; }), res = el.resIdxs || [];
         if (!P.length) return;
-        shapes.push({ cls: el.DSSPClass, P: P, res: el.resIdxs || [] });
-        (el.resIdxs || []).forEach(function (ri, j) { var a = P[Math.min(j, P.length - 1)], b = P[Math.min(j + 1, P.length - 1)]; pts[ri] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; });
+        var k = res.length < (TOPO_MIN[el.DSSPClass] || 0) ? 'coil' : el.DSSPClass === 'ssAlpha' ? 'helix' : el.DSSPClass === 'ssBeta' ? 'strand' : 'coil';
+        placed.push({ k: k, P: P, res: res.slice(), own: P.slice(Math.max(0, P.length - res.length)) });
         sx = P[P.length - 1][0];
       });
       xo = sx;
+      placed.forEach(function (pc, n) {
+        var before = joined[joined.length - 1], after = placed[n + 1];
+        if (pc.k === 'coil') {
+          var m = pc.P.length, d0 = before ? [before.P[before.P.length - 1][0] - pc.P[0][0], before.P[before.P.length - 1][1] - pc.P[0][1]] : [0, 0];
+          pc.P.forEach(function (q, i) { var w = m > 1 ? i / (m - 1) : 0; q[0] += (1 - w) * d0[0]; q[1] += (1 - w) * d0[1]; });
+          if (after && after.k !== 'coil') { var d1 = [after.P[0][0] - pc.P[m - 1][0], after.P[0][1] - pc.P[m - 1][1]]; pc.P.forEach(function (q, i) { var w = m > 1 ? i / (m - 1) : 1; q[0] += w * d1[0]; q[1] += w * d1[1]; }); }
+        } else if (before && before.k === pc.k) {
+          before.P = before.P.concat(pc.P); before.res = before.res.concat(pc.res); before.own = before.own.concat(pc.own); return;
+        } else if (before && before.k !== 'coil') joined.push({ k: 'coil', P: [before.P[before.P.length - 1].slice(), pc.P[0].slice()], res: [], own: [] });
+        joined.push(pc);
+      });
+      if (prevEnd && joined.length) shapes.push({ k: 'gap', P: [prevEnd.slice(), joined[0].P[0].slice()], res: [], own: [] });
+      joined.forEach(function (pc) { shapes.push(pc); pc.res.forEach(function (ri, j) { if (pc.own[j]) pts[ri] = pc.own[j]; }); });
+      if (joined.length) prevEnd = joined[joined.length - 1].P[joined[joined.length - 1].P.length - 1];
     });
     if (!shapes.length) return '';
     var am = th && th.annular_mid != null ? th.annular_mid - mid : 0, half = th && th.annular_thickness ? th.annular_thickness / 2 : 20;
@@ -888,6 +906,16 @@
     function X(x) { return (L + x * S).toFixed(1); }
     function Y(z) { return (T + (zmax - z) * S).toFixed(1); }
     function line(P) { return P.map(function (q, i) { return (i ? 'L' : 'M') + X(q[0]) + ',' + Y(q[1]); }).join(''); }
+    /* loops as a smooth curve through their points (Catmull-Rom, written as cubic Beziers) */
+    function curve(P) {
+      if (P.length < 3) return line(P);
+      var d = 'M' + X(P[0][0]) + ',' + Y(P[0][1]);
+      for (var i = 0; i < P.length - 1; i++) {
+        var a = P[Math.max(0, i - 1)], b = P[i], c = P[i + 1], e = P[Math.min(P.length - 1, i + 2)];
+        d += 'C' + X(b[0] + (c[0] - a[0]) / 6) + ',' + Y(b[1] + (c[1] - a[1]) / 6) + ' ' + X(c[0] - (e[0] - b[0]) / 6) + ',' + Y(c[1] - (e[1] - b[1]) / 6) + ' ' + X(c[0]) + ',' + Y(c[1]);
+      }
+      return d;
+    }
     var W = L + xo * S + R, H = T + (zmax - zmin) * S + 10, up = am + half, lo = am - half;
     var h = '<svg class="topo" viewBox="0 0 ' + W.toFixed(0) + ' ' + H.toFixed(0) + '" width="' + W.toFixed(0) + '" height="' + H.toFixed(0) + '" role="img" aria-label="Topology of the chain relative to the bilayer">' +
       '<defs><marker id="topo-arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="3.2" markerHeight="3.2" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(--ss-strand)"/></marker></defs>' +
@@ -897,9 +925,10 @@
       '<text class="topo-lbl" x="32" y="' + ((+Y(up) + +Y(lo)) / 2 + 4).toFixed(1) + '" text-anchor="end">' + (half * 2 / 10).toFixed(1) + '</text><text class="topo-lbl" x="32" y="' + ((+Y(up) + +Y(lo)) / 2 + 16).toFixed(1) + '" text-anchor="end">nm</text>';
     if (ov) pts.forEach(function (q, i) { var v = rows[i] ? parseFloat(rows[i][ov]) || 0 : 0; if (q && v > 0.02) h += '<circle class="topo-ov" cx="' + X(q[0]) + '" cy="' + Y(q[1]) + '" r="' + (1.5 + Math.sqrt(v) * 9).toFixed(1) + '"/>'; });
     shapes.forEach(function (sh) {
+      var k = sh.k;
+      if (k === 'gap' || !sh.res.length) { h += '<path class="topo-el topo-coil' + (k === 'gap' ? ' topo-gap' : '') + '" d="' + line(sh.P) + '"/>'; return; }
       var a = Math.min.apply(null, sh.res), b = Math.max.apply(null, sh.res), on = sel && sh.res.some(function (i) { return i >= sel[0] && i <= sel[1]; });
-      var k = sh.res.length < (TOPO_MIN[sh.cls] || 0) ? 'coil' : sh.cls === 'ssAlpha' ? 'helix' : sh.cls === 'ssBeta' ? 'strand' : 'coil';
-      h += '<path class="topo-el topo-' + k + (on ? ' on' : '') + '" d="' + line(sh.P) + '"' + (k === 'strand' ? ' marker-end="url(#topo-arrow)"' : '') + (k !== 'coil' ? ' data-res="' + a + '-' + b + '" tabindex="0" role="button" aria-label="Select residues ' + esc((rows[a] || {}).resSeq || '') + ' to ' + esc((rows[b] || {}).resSeq || '') + '"' : '') + '><title>' + (k === 'coil' ? 'Loop' : k === 'helix' ? 'Helix' : 'Strand') + ' ' + esc((rows[a] || {}).resSeq || '') + '–' + esc((rows[b] || {}).resSeq || '') + '</title></path>';
+      h += '<path class="topo-el topo-' + k + (on ? ' on' : '') + '" d="' + (k === 'coil' ? curve(sh.P) : line(sh.P)) + '"' + (k === 'strand' ? ' marker-end="url(#topo-arrow)"' : '') + (k !== 'coil' ? ' data-res="' + a + '-' + b + '" tabindex="0" role="button" aria-label="Select residues ' + esc((rows[a] || {}).resSeq || '') + ' to ' + esc((rows[b] || {}).resSeq || '') + '"' : '') + '><title>' + (k === 'coil' ? 'Loop' : k === 'helix' ? 'Helix' : 'Strand') + ' ' + esc((rows[a] || {}).resSeq || '') + '–' + esc((rows[b] || {}).resSeq || '') + '</title></path>';
     });
     if (sel) pts.forEach(function (q, i) { if (q && i >= sel[0] && i <= sel[1]) h += '<circle class="topo-sel" cx="' + X(q[0]) + '" cy="' + Y(q[1]) + '" r="3"/>'; });
     return h + '</svg>';
