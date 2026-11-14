@@ -65,6 +65,8 @@
     });
   }
   function groupInfo(db) { if (!GROUPS[db]) GROUPS[db] = getJSON('data/groups/' + db + '.json').catch(function () { return {}; }); return GROUPS[db]; }
+  /* PDB citation titles lose their superscripts: "Mg 2+ transport" should read "Mg2+ transport" */
+  function ionFix(t) { return String(t || '').replace(/\b(Mg|Ca|Zn|Na|K|Cu|Fe|Mn|Ni|Co|Cl|H|Li|Cd|Ba|Sr|Cs|Rb) (\d[+\-\u2212]|[+\-\u2212](?=[,.;:)\/]| [a-z]|$))/g, '$1$2'); }
   function pdbTitle(t, acc) { return t ? sentence(t) : 'PDB ' + String(acc).toUpperCase(); }
   function members(c) { return c.mem ? c.mem.split(' ') : []; }
   function lineage(id) { var out = [], g = 0; while (id && colById[id] && g++ < 20) { out.unshift(id); id = colById[id].parent; } return out; }
@@ -136,7 +138,6 @@
   function pageHome() {
     var latest = DB.pdb.slice().sort(function (a, b) { return String(b[5] || '').localeCompare(String(a[5] || '')); }).slice(0, 8);
     var tiles = [['gpcrs', '5t1a', 'G protein-coupled receptors'], ['ion_channels', '1k4c', 'Ion channels'], ['outer_membrane_proteins', '4kr4', 'Outer membrane proteins'], ['aquaporins', '5i32', 'Aquaporins'], ['abc_transporter', '4q4h', 'ABC transporters'], ['ligand_gated_ion_channels', '5tio', 'Ligand-gated ion channels']];
-    var ncol = Object.keys(colById).length;
     var roots = [['UniProt', 'UniProt', 'Proteins', 'Every structure of the same protein, by UniProt accession'], ['organism', 'organism', 'Organisms', 'By the source species of the membrane chains'],
       ['topology', 'topology', 'Membrane topology', 'By the number of transmembrane helices or β-strands'], ['ligand', 'ligand', 'Bound ligands', 'Structures sharing a ligand, lipid, detergent or ion'],
       ['mpm', 'membrane_proteins', 'MemProtMD groups', 'Fold and family groups assigned from the simulations'], ['TCDB', 'TCDB', 'Transporter Classification Database', 'Channels, carriers and pumps by transport mechanism'], ['mpstruc', 'mpstruc', 'mpstruc', 'Membrane proteins of known structure, curated by family']];
@@ -147,7 +148,7 @@
     var h = '<div class="stack-lg"><section class="hero"><div class="hero-main stack"><p class="eyebrow">MemProtMD</p><h1>Membrane proteins, simulated in their lipid bilayer</h1>' +
       '<p class="lede">Every intrinsic membrane protein structure in the Protein Data Bank, inserted into a lipid bilayer by coarse-grained self-assembly molecular dynamics. Browse the analysis, or download the files to run your own coarse-grained and atomistic simulations.</p>' +
       '<div class="find"><input class="field big" id="home-q" type="search" placeholder="Search by protein, family or PDB code, for example LeuT or 1a0s" aria-label="Search MemProtMD" autocomplete="off"><div class="rowlist" id="home-res" style="margin-top:.5rem"></div></div>' +
-      '<div class="figures"><div><b>' + num(DB.pdb.length) + '</b><span>simulated structures</span></div><div><b>' + num(ncol) + '</b><span>families and groups</span></div><div><b>' + esc(fmtDate(latest[0][5])) + '</b><span>most recent structure</span></div></div>' +
+      '<div class="figures"><div><b>' + num(DB.pdb.length) + '</b><span>simulated structures</span></div><div id="home-prot" hidden><b></b><span>distinct proteins</span></div><div><b>' + esc(fmtDate(latest[0][5])) + '</b><span>most recent structure</span></div></div>' +
       '<p class="small muted">The original MemProtMD site, at the University of Oxford: ' + extA('https://memprotmd.bioch.ox.ac.uk/', 'memprotmd.bioch.ox.ac.uk<span class="xa" aria-hidden="true">↗</span>') + '</p></div>' + card + '</section>' +
       '<section><div class="head-row"><h2>Browse by family</h2><a href="' + refHref('mpm', 'membrane_proteins') + '">All MemProtMD groups</a></div><div class="tiles">' + tiles.map(function (t) {
         var c = colById['mpm|' + t[0]];
@@ -164,6 +165,7 @@
       molMount(nw[0], STORE + 'simulations/' + nw[0] + '_default_dppc/');
     }
     var q = document.getElementById('home-q');
+    getJSON('data/growth.json').then(function (g) { var el = document.getElementById('home-prot'); if (el && g.uniprot && g.uniprot.total) { el.firstChild.textContent = num(g.uniprot.total); el.hidden = false; } }).catch(function () {});
     q.addEventListener('input', function () {
       var v = q.value.trim(), r = v ? search(v, 8) : [];
       document.getElementById('home-res').innerHTML = !v ? '' : r.length ? r.map(rowLink).join('') + (r.total > r.length ? '<p class="small" style="padding-top:.6rem"><a href="' + href('search/text') + '" id="home-all">All ' + num(r.total) + ' results</a></p>' : '') : '<p class="small muted">No matches. Search uses whole words, so <code>lipo</code> will not match lipoprotein.</p>';
@@ -291,17 +293,23 @@
     show('status', '<p class="muted">Loading…</p>', 'Pipeline status');
     getJSON('data/status.json').then(function (s) {
       if (route.current !== 'status') return;
-      var stalled = s.stalled || [];
-      show('status', '<div class="stack"><div class="pagehead"><h1>Pipeline status</h1><p class="muted" style="max-width:44rem">The MemProtMD pipeline handles around 40 new protein simulations per month. Proteins shown here are running through the pipeline, so may not be on the site yet.</p></div>' +
-        '<input class="field" id="st-q" type="search" placeholder="Filter by PDB code" aria-label="Filter by PDB code" style="max-width:20rem"><h2>In progress</h2><div class="jobs">' + s.jobs.map(function (j) {
+      /* the waiting and stopped jobs are for the team: shown only at #/status?all */
+      var stalled = /(^|&)all(&|=|$)/.test(route.query) ? (s.stalled || []) : [], age = s.written ? Math.floor((Date.now() - new Date(s.written).getTime()) / 864e5) : 0, old = age > 14;
+      var nSt = {}; stalled.forEach(function (j) { nSt[j.status] = (nSt[j.status] || 0) + 1; });
+      var parts = [['identified', 'identified and waiting to be simulated'], ['simulating', 'stopped during simulation'], ['converting', 'stopped during conversion'], ['analysing', 'stopped during analysis']].filter(function (x) { return nSt[x[0]]; }).map(function (x) { return num(nSt[x[0]]) + ' ' + x[1]; });
+      /* once the status file is old, a job whose entry is already on the site has finished since */
+      var jobs = (s.jobs || []).filter(function (j) { return !(old && byId[j.id]); });
+      show('status', '<div class="stack"><div class="pagehead"><h1>Pipeline status</h1><p class="muted" style="max-width:44rem">New membrane protein structures in the PDB are picked up by the MemProtMD pipeline, simulated and analysed. Proteins shown here are in the pipeline, so may not be on the site yet.</p>' +
+        (old ? '<p class="panel" role="status" style="max-width:44rem"><strong>The pipeline last reported on ' + esc(fmtDate(s.written)) + '.</strong> It has not reported since, so this page shows where each job stood on that date.</p>' : '') + '</div>' +
+        '<input class="field" id="st-q" type="search" placeholder="Filter by PDB code" aria-label="Filter by PDB code" style="max-width:20rem"><h2>' + (old ? 'In progress at the last report' : 'In progress') + '</h2><div class="jobs">' + jobs.map(function (j) {
           var at = STAGES.indexOf(j.status);
           return '<div class="panel" data-job="' + esc(j.id) + '"><div class="job-top">' + imgTag('pdb100', j.id) + '<div>' + (byId[j.id] ? '<a class="mono" style="font-size:1.25rem;font-weight:500;text-decoration:none" href="' + refHref('PDB', j.id) + '">' + esc(j.id) + '</a>' : '<span class="mono" style="font-size:1.25rem;font-weight:500">' + esc(j.id) + '</span>') + '<p class="small muted">' + esc(j.status.charAt(0).toUpperCase() + j.status.slice(1)) + ' since ' + esc(fmtDate(j.time)) + '</p></div></div>' +
             '<div class="steps">' + STAGES.map(function (st, i) { return '<span class="' + (i < at ? 'done' : i === at ? 'now' : '') + '">' + st.charAt(0).toUpperCase() + st.slice(1) + '</span>'; }).join('') + '</div></div>';
-        }).join('') + '</div>' + (s.jobs.length ? '' : '<p class="muted">Nothing is running through the pipeline at the moment.</p>') +
-        (stalled.length ? '<details class="stalled" id="st-stalled"><summary>Needs attention <span class="muted">· ' + num(stalled.length) + '</span></summary><p class="small muted">The pipeline has paused on these and they need restarting by hand.</p><ul>' + stalled.map(function (j) {
+        }).join('') + '</div>' + (jobs.length ? '' : '<p class="muted">' + (old ? 'Nothing was part-way through the pipeline at the last report.' : 'Nothing is running through the pipeline at the moment.') + '</p>') +
+        (stalled.length ? '<details class="stalled" id="st-stalled"><summary>Waiting or stopped <span class="muted">· ' + num(stalled.length) + '</span></summary><p class="small muted">Structures the pipeline has found but not finished, so they are not in the database yet: ' + parts.join(', ') + '. Stopped jobs need restarting by hand.</p><ul>' + stalled.map(function (j) {
           return '<li data-job="' + esc(j.id) + '">' + (byId[j.id] ? '<a class="mono" href="' + refHref('PDB', j.id) + '">' + esc(j.id) + '</a>' : '<span class="mono">' + esc(j.id) + '</span>') + '<span>' + esc(j.status.charAt(0).toUpperCase() + j.status.slice(1)) + ' since ' + esc(fmtDate(j.time)) + '</span><span class="muted">' + esc(j.error || '') + '</span></li>';
         }).join('') + '</ul></details>' : '') +
-        '<p class="small muted" id="st-none" hidden>No pipeline job matches that code.</p><p class="small muted">Status file written ' + esc(fmtDate(s.written)) + '.</p></div>', 'Pipeline status');
+        '<p class="small muted" id="st-none" hidden>No pipeline job matches that code.</p><p class="small muted">Pipeline last reported ' + esc(fmtDate(s.written)) + '.</p></div>', 'Pipeline status');
       var f = document.getElementById('st-q');
       f.addEventListener('input', function () { var n = 0, d = document.getElementById('st-stalled'); if (d && f.value.trim()) d.open = true; each('[data-job]', function (c) { c.hidden = c.getAttribute('data-job').indexOf(f.value.trim().toLowerCase()) === -1; if (!c.hidden) n++; }); document.getElementById('st-none').hidden = n > 0; });
     });
@@ -375,7 +383,7 @@
         (f.href ? '<p class="small">' + extA(f.href, 'View this group at ' + esc((f.copyright && f.copyright.owner) || 'its source') + ' ↗') + '</p>' : '') + '</div>' +
         '<div class="cols"><div class="stack">' +
         (children.length ? '<section class="panel"><h2>Subgroups</h2><div class="rowlist">' + kshow.map(function (k) { var kc = colById[k]; return rowLink({ db: kc.db, acc: kc.acc, title: kc.title, size: kc.n }); }).join('') + '</div>' + (children.length > 10 ? '<p style="margin-top:.9rem"><button class="btn ghost" type="button" data-act="kids">' + (st.kidsAll ? 'Show fewer' : 'Show all ' + children.length + ' subgroups') + '</button></p>' : '') + '</section>' : '') +
-        (mem.length ? '<section class="panel"><h2>Structures in this group</h2><div class="scroll"><table class="tbl"><thead><tr>' + th('id', 'PDB') + '<th>Title</th>' + th('date', 'Published', 'opt') + '<th class="opt">Method</th>' + th('res', 'Å', 'num') + '</tr></thead><tbody>' +
+        (mem.length ? '<section class="panel"><h2>Structures in this group</h2><div class="scroll"><table class="tbl"><thead><tr>' + th('id', 'PDB') + '<th>Title</th>' + th('date', 'Released', 'opt') + '<th class="opt">Method</th>' + th('res', 'Å', 'num') + '</tr></thead><tbody>' +
           list.slice(0, st.n).map(function (m) { var e = byId[m]; return '<tr><td class="id"><a href="' + refHref('PDB', m) + '">' + m + '</a></td><td>' + ttl(pdbTitle(e[1], m)) + '</td><td class="nw opt">' + esc(e[5] || '') + '</td><td class="opt small muted method">' + esc(sentence(e[3] || '')) + '</td><td class="num">' + (e[4] ? Number(e[4]).toFixed(1) : '') + '</td></tr>'; }).join('') +
           '</tbody></table></div>' + (mem.length > st.n ? '<p style="margin-top:1rem"><button class="btn ghost" type="button" data-act="more">Show 25 more of ' + num(mem.length) + '</button></p>' : '') + '</section>' : '') +
         '</div><aside class="stack">' + (hero ? '<div class="well"><img class="heroimg" src="' + hero + '" data-fb="hide" alt="Example structures from this group in their bilayers" onerror="mpmFb(this)"></div>' : '') +
@@ -685,6 +693,7 @@
       var groups = ['mpm', 'TCDB', 'mpstruc', 'Pfam', 'UniProt', 'organism', 'topology', 'ligand'].map(function (d) {
         var l = (byDb[d] || []).filter(function (c) { return !(DERIVED[d] && c.acc === d); }).sort(function (a, b) { return b.n - a.n; }); if (!l.length) return '';
         if (d === 'TCDB' || d === 'mpstruc') l = l.slice(-2);
+        l = l.filter(function (c, i) { return !(l[i + 1] && l[i + 1].title === c.title); });   /* a system named after its only family shows once */
         return '<span class="eyebrow">' + esc(DBNAMES[d]) + '</span><div class="chips">' + l.map(function (c) { return '<a class="chip" href="' + refHref(c.db, c.acc) + '"><span>' + ttl(c.title) + '</span><b>' + num(c.n) + '</b></a>'; }).join('') + '</div>';
       }).join('');
       var ch = s.chains || [], selc = ch.filter(function (c) { return c.chainID === chainSel; })[0];
@@ -693,9 +702,9 @@
           '<button type="button" class="btn mol-open" id="mol-open"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2 17 6v8l-7 4-7-4V6z M10 2v8m0 0 7-4m-7 4-7-4m7 4v8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>3D view</button></div><div id="mol-ctrl"></div></div>' +
         '<div class="stack"><div class="pagehead">' + crumbs([['Home', href('home')], ['Structures', refHref('mpm', 'membrane_proteins')], [pdb.toUpperCase(), null]]) +
         '<h1>' + ttl(pdbTitle(r.title || e[1], pdb)) + '</h1><div class="idline"><span class="tag">PDB ' + pdb + '</span>' + ((r.subtitle || e[2]) ? '<span>' + esc(sentence(r.subtitle || e[2])) + '</span>' : '') + '</div></div>' +
-        '<dl class="facts">' + [['Published', fmtDate(e[5])], ['Method', esc(sentence(e[3] || ''))], ['Resolution', e[4] ? Number(e[4]).toFixed(2).replace(/0$/, '') + ' Å' : ''], ['Organism', orgNames(e).map(function (n) { return '<a href="' + href('search/text') + '?o=' + encodeURIComponent(n) + '"><i>' + esc(n) + '</i></a>'; }).join(', ')],
+        '<dl class="facts">' + [['Released', fmtDate(e[5])], ['Method', esc(sentence(e[3] || ''))], ['Resolution', e[4] ? Number(e[4]).toFixed(2).replace(/0$/, '') + ' Å' : ''], ['Organism', orgNames(e).map(function (n) { return '<a href="' + href('search/text') + '?o=' + encodeURIComponent(n) + '"><i>' + esc(n) + '</i></a>'; }).join(', ')],
           ['Ligands', esc((r.ligands || []).map(function (l) { return sentence(l.description); }).join(', '))], ['Keywords', esc((r.keywords || []).join(', '))]].filter(function (p) { return p[1]; }).map(function (p) { return '<dt>' + p[0] + '</dt><dd>' + p[1] + '</dd>'; }).join('') + '</dl>' +
-        (cit.title ? '<p class="cite">' + esc(cit.title) + ' <span class="muted">' + esc((r.primary_authors || []).slice(0, 4).join(', ') + ((r.primary_authors || []).length > 4 ? ' et al.' : '')) + '. ' + esc([cit.journal, cit.year].filter(Boolean).join(' ')) + '.</span> ' + (cit.DOI ? extA('https://doi.org/' + cit.DOI, 'doi:' + esc(cit.DOI)) : '') + '</p>' : '') +
+        (cit.title ? '<p class="cite">' + esc(ionFix(cit.title)) + ' <span class="muted">' + esc(((r.primary_authors || []).slice(0, 4).join(', ') + ((r.primary_authors || []).length > 4 ? ' et al' : '')).replace(/\.$/, '')) + '. ' + esc([cit.journal, cit.year].filter(Boolean).join(' ')) + '.</span> ' + (cit.DOI ? extA('https://doi.org/' + cit.DOI, 'doi:' + esc(cit.DOI)) : '') + '</p>' : '') +
         '<div class="btns">' + extA(base + 'files/structures/at.pdb', 'Atomistic PDB ↓', 'btn') + extA('https://molstar.org/viewer/?structure-url=' + encodeURIComponent(base + 'files/structures/at.pdb') + '&structure-url-format=pdb', 'Open in Mol* ↗', 'btn ghost') + '</div>' + xlinks(pdb, r) + '</div></div>' +
         (groups ? '<section class="panel"><h2>Member of</h2><div class="groups">' + groups + '</div></section>' : '') +
         '<section class="stack"><div class="head-row" style="margin:0"><h2>Simulation</h2><span class="mono muted">' + sim + '</span></div>' +

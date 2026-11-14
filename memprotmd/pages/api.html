@@ -58,9 +58,9 @@ console.log(rec.ref.title, rec.sim.thinning.annular_thickness);</code></pre>
 <h2>Releases</h2>
 <p>The site checks the MemProtMD database four times a day, and new or updated entries appear as soon as they are found. Releases are weekly: each Monday, if anything has changed, the data is labelled with that date and a snapshot of <code>data/entries.tsv</code>, <code>data/index.json</code> and <code>data/release.json</code> is kept as a <a href="https://github.com/stansfeldlab/stansfeldlab.github.io/releases" target="_blank" rel="noopener">GitHub release</a>. <code>data/release.json</code> gives the current <code>release</code> and the date of the latest change (<code>updated</code>), and both are shown at the foot of every page. When you cite MemProtMD data, give the release you used.</p>
 
-<h2>Moving from the old API</h2>
-<p>The server-side API at <code>memprotmd.bioch.ox.ac.uk/api/</code> (requests such as <code>POST /api/search/advanced</code> with <code>collectionName</code> <code>refs</code> or <code>simulations</code>) is being retired along with that server. Use these files instead:</p>
-<div class="scroll"><table class="tbl"><thead><tr><th>Old request</th><th>Replacement</th></tr></thead><tbody>
+<h2>Coming from the server-side API</h2>
+<p>If you have used the server-side API at <code>memprotmd.bioch.ox.ac.uk/api/</code> (requests such as <code>POST /api/search/advanced</code> with <code>collectionName</code> <code>refs</code> or <code>simulations</code>), the same information is in these files:</p>
+<div class="scroll"><table class="tbl"><thead><tr><th>Server-side request</th><th>File</th></tr></thead><tbody>
 <tr><td><code>refs</code> for one PDB entry</td><td><code>ref</code> in <code>data/entries/{pdb}.json</code></td></tr>
 <tr><td><code>simulations</code> for one entry</td><td><code>sim</code> in <code>data/entries/{pdb}.json</code></td></tr>
 <tr><td>Searches and listings across entries</td><td><code>data/entries.tsv</code>, or <code>data/index.json</code> for group membership</td></tr>
