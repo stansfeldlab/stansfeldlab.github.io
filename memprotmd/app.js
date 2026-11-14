@@ -486,7 +486,7 @@
   var MOL_MEM = ['Phosphates', 'Lipids', 'Hidden'];
   var CON_PAL = { head: ['#eef1f6', '#f2b552', '#c8003f'], tail: ['#eef1f6', '#7fcfc0', '#0b6e60'], solvent: ['#eef1f6', '#8fb0f2', '#17397b'] };
   var AA = ' ALA ARG ASN ASP CYS GLN GLU GLY HIS HSD HSE HSP ILE LEU LYS MET PHE PRO SER THR TRP TYR VAL ';
-  function molFresh() { return { pdb: null, open: false, viewer: null, el: null, src: null, con: {}, color: 0, style: 0, mem: 0, busy: false, again: false, first: true, note: '', }; }
+  function molFresh() { return { pdb: null, open: false, viewer: null, el: null, src: null, con: {}, color: 0, style: 0, mem: 0, busy: false, again: false, first: true, note: '', sel: null }; }
   var MOL = molFresh();
   function molReset() {
     var m = MOL; MOL = molFresh();
@@ -549,6 +549,7 @@
       rep.children.push({ kind: 'color', params: { color: CHAIN_COLS[0] } });
       if (ch && ch.length > 1) ch.forEach(function (id, i) { rep.children.push({ kind: 'color', params: { selector: { auth_asym_id: id }, color: CHAIN_COLS[i % CHAIN_COLS.length] } }); });
     }
+    if (MOL.sel && MOL.sel.chain) rep.children.push({ kind: 'color', params: { selector: { auth_asym_id: MOL.sel.chain, beg_auth_seq_id: MOL.sel.a, end_auth_seq_id: MOL.sel.b }, color: '#f08c00' } });
     var prot = { kind: 'component', params: { selector: 'protein' }, children: [rep] };
     if (!s.rcsb) prot.children.push({ kind: 'focus', params: { direction: [0, 1, 0], up: [0, 0, 1], radius_factor: 1.15 } });
     kids.push(prot);
@@ -654,7 +655,7 @@
     var e = byId[pdb];
     if (!e) return notFound('PDB ' + pdb);
     var sim = pdb + '_default_dppc', base = STORE + 'simulations/' + sim + '/';
-    var st = { rec: null, tried: false, v: [1, 0], contact: 0, rep: 0, violins: null, topo: null };
+    var st = { rec: null, tried: false, v: [1, 0], contact: 0, rep: 0, violins: null, cv: null };
     function seg(g, labels, sel, aria) { return '<div class="seg" role="group" aria-label="' + esc(aria) + '">' + labels.map(function (l, i) { return '<button type="button" data-g="' + g + '" data-i="' + i + '" aria-pressed="' + (i === sel) + '">' + l + '</button>'; }).join('') + '</div>'; }
     function view(title, opts, sel, stage, mode, controls, note) {
       return '<div class="view"><h3>' + title + '</h3><div class="well stage stage-' + mode + '" data-stage="' + stage + '">' + opts.map(function (o, i) {
@@ -710,7 +711,7 @@
             return '<a href="' + href('ref/PDB/' + pdb + '/chain/' + c.chainID) + '"' + (c.chainID === chainSel ? ' aria-current="true"' : '') + '>' + (st.rec && st.rec.prof && st.rec.prof.c[c.chainID] ? '<span class="chainsvg">' + violin(st.rec.prof, c.chainID, s.thinning) + '</span>' : '') + '<span>Chain ' + esc(c.chainID) + '<small>' + esc(tm) + '</small></span></a>';
           }).join('') + '</div>' + (st.rec && st.rec.prof ? '<p class="small muted">Each icon shows where the chain\'s residues sit along the bilayer normal: all residues in white, helices in blue, strands in green. The shaded band is the bulk bilayer.</p>' : '') +
           (selc ? '<dl class="facts"><dt>Placement</dt><dd>' + esc(sentence(selc.type.toUpperCase())) + '</dd><dt>Membrane-spanning helices</dt><dd>' + selc.tm_alpha + '</dd><dt>Membrane-spanning strands</dt><dd>' + selc.tm_beta + '</dd><dt>Lipid-facing elements</dt><dd>' + (selc.tm_alpha_lipid + selc.tm_beta_lipid) + '</dd></dl>' +
-            (st.topo && st.topo.chain === chainSel ? '<h3>Topology of chain ' + esc(chainSel) + '</h3><p class="small muted">Helices and strands of at least five residues, arranged relative to the bilayer.</p><div class="well topology scroll">' + st.topo.svg + '</div>' : '') : '<p class="small muted">Choose a chain for its membrane placement.</p>')) + '</section>' +
+            '<div id="chain-view" class="stack"><p class="muted">Loading the chain analysis…</p></div>' : '<p class="small muted">Choose a chain for its membrane placement, topology and contacts along its sequence.</p>')) + '</section>' +
         '<section class="panel stack"><h2>Downloads</h2><p class="small muted">Files are served from file storage. Licensed under Creative Commons Attribution 4.0.</p><div class="files">' + FILES.map(function (g) {
           return '<div><h3>' + g[0] + '</h3><ul>' + g[1].map(function (f) { return '<li>' + extA(base + f[1], sim + '-' + f[0]) + '<span>' + f[2] + '</span></li>'; }).join('') + '</ul></div>';
         }).join('') + '</div></section>' + citeBox(pdb, cit) + '</div>';
@@ -718,6 +719,7 @@
       if (molMount.pdb !== pdb) { molMount.pdb = pdb; molMount.lipids = molMount.chains = null; }
       molMount(pdb, base, Object.keys(s.composition || {}), ch.map(function (c) { return c.chainID; }));
       mddbCount(pdb); wireCite(pdb, cit);
+      if (selc) chainView(pdb, base, chainSel, s.thinning, st);
       each('[data-g]', function (b) { b.addEventListener('click', function () {
         var g = b.getAttribute('data-g'), i = +b.getAttribute('data-i');
         if (g === 'v0') st.v[0] = i; else if (g === 'v1') st.v[1] = i; else st[g] = i;
@@ -730,11 +732,155 @@
     render();
     var jobs = [];
     jobs.push(getJSON('data/entries/' + pdb + '.json').then(function (j) { st.rec = j; }).catch(function () {}));
-    if (DB.snap[pdb]) jobs.push(getText('pages/chains_' + pdb + '.html').then(function (t) {
-      var d = document.createElement('div'); d.innerHTML = t;
-      var tp = d.querySelector('[data-topology]'); if (tp) st.topo = { chain: tp.getAttribute('data-topology'), svg: tp.innerHTML };
-    }).catch(function () {}));
     Promise.all(jobs).then(function () { st.tried = true; if (route.current.indexOf('ref/PDB/' + pdb) === 0) keep(); });
+  }
+
+  /* ---------- chain analysis: topology and sequence views, drawn from each simulation's own files ---------- */
+  var YAML_LIB = CFG.yaml || 'https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js', yamlLib = null, CHAIN_DATA = {};
+  var AA1 = { ALA: 'A', ARG: 'R', ASN: 'N', ASP: 'D', CYS: 'C', GLN: 'Q', GLU: 'E', GLY: 'G', HIS: 'H', ILE: 'I', LEU: 'L', LYS: 'K', MET: 'M', PHE: 'F', PRO: 'P', SER: 'S', THR: 'T', TRP: 'W', TYR: 'Y', VAL: 'V', HSD: 'H', HSE: 'H', HSP: 'H', HIE: 'H', HID: 'H', CYX: 'C', MSE: 'M' };
+  var OVERLAYS = [['Secondary structure', null], ['Tails', 'group=Tail'], ['Heads', 'group=Head'], ['Solvent', 'group=Solvent'], ['Upper leaflet', 'leaflet=a'], ['Lower leaflet', 'leaflet=b']];
+  var BEADS = ['Choline', 'Phosphate', 'Glycerol', 'Tail_1', 'Tail_2', 'Tail_3', 'Tail_4'];
+  function loadYaml() {
+    if (window.jsyaml) return Promise.resolve(window.jsyaml);
+    if (yamlLib) return yamlLib;
+    yamlLib = new Promise(function (ok, no) {
+      var sc = document.createElement('script'); sc.src = YAML_LIB; sc.async = true;
+      sc.onload = function () { window.jsyaml ? ok(window.jsyaml) : no(new Error('yaml')); };
+      sc.onerror = function () { yamlLib = null; sc.remove(); no(new Error('yaml')); };
+      document.head.appendChild(sc);
+    });
+    return yamlLib;
+  }
+  function parseCsv(t) {
+    var lines = t.split(/\r?\n/).filter(Boolean), head = lines[0].split(',');
+    return { head: head, rows: lines.slice(1).map(function (l) { var f = l.split(','), o = {}; head.forEach(function (h, i) { o[h] = f[i]; }); return o; }) };
+  }
+  function chainData(base) {
+    if (!CHAIN_DATA[base]) CHAIN_DATA[base] = Promise.all([
+      Promise.all([loadYaml(), fetchText(base + 'build_ss_topology.latest.yml')]).then(function (r) { return r[0].load(r[1]); }).catch(function () { return null; }),
+      fetchText(base + 'files/contacts/by_resid_postprocess.csv').then(parseCsv).catch(function () { return null; })
+    ]).then(function (r) { return { topo: r[0], csv: r[1] }; });
+    return CHAIN_DATA[base];
+  }
+  /* sequence tracks: [label, matching columns] — lipid columns are matched by leaflet and bead, whatever the lipid */
+  function seqTracks(head) {
+    function cols(re) { return head.filter(function (h) { return re.test(h); }); }
+    var t = [['Flip-flops', cols(/^leaflet=flip$/)], ['Water', cols(/^resname=W$/)], ['Ions', cols(/^resname=ION$/)]];
+    ['a', 'b'].forEach(function (l) { BEADS.forEach(function (b) { t.push([(l === 'a' ? 'Upper' : 'Lower') + ' ' + b.replace('_', ' ').toLowerCase(), cols(new RegExp('^leaflet=' + l + ';resname=[^;]+;bead=' + b + '$'))]); }); });
+    return t.filter(function (x) { return x[1].length; });
+  }
+  function trackVal(row, cols) { var v = 0; cols.forEach(function (c) { v += parseFloat(row[c]) || 0; }); return Math.min(1, v); }
+  function isHelix(d) { return d === 'H' || d === 'G' || d === 'I'; }
+  function isStrand(d) { return d === 'E' || d === 'B'; }
+
+  function topoSvg(ct, rows, th, ov, sel) {
+    var S = 3, mid = th && th.bulk_mid != null ? +th.bulk_mid : 0, pts = [], shapes = [], xo = 0;
+    (ct.segments || []).forEach(function (sg, si) {
+      if (si) xo += 12;
+      var sx = xo;
+      (sg.elements || []).forEach(function (el) {
+        var P = ((el.plot || {}).basisFitted || []).map(function (q) { return [sx + q.x, q.y - mid]; });
+        if (!P.length) return;
+        shapes.push({ cls: el.DSSPClass, P: P, res: el.resIdxs || [] });
+        (el.resIdxs || []).forEach(function (ri, j) { var a = P[Math.min(j, P.length - 1)], b = P[Math.min(j + 1, P.length - 1)]; pts[ri] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; });
+        sx = P[P.length - 1][0];
+      });
+      xo = sx;
+    });
+    if (!shapes.length) return '';
+    var am = th && th.annular_mid != null ? th.annular_mid - mid : 0, half = th && th.annular_thickness ? th.annular_thickness / 2 : 20;
+    var zs = [am + half + 10, am - half - 10]; shapes.forEach(function (sh) { sh.P.forEach(function (q) { zs.push(q[1]); }); });
+    var zmax = Math.max.apply(null, zs) + 4, zmin = Math.min.apply(null, zs) - 4, L = 70, R = 24, T = 10;
+    function X(x) { return (L + x * S).toFixed(1); }
+    function Y(z) { return (T + (zmax - z) * S).toFixed(1); }
+    function line(P) { return P.map(function (q, i) { return (i ? 'L' : 'M') + X(q[0]) + ',' + Y(q[1]); }).join(''); }
+    var W = L + xo * S + R, H = T + (zmax - zmin) * S + 10, up = am + half, lo = am - half;
+    var h = '<svg class="topo" viewBox="0 0 ' + W.toFixed(0) + ' ' + H.toFixed(0) + '" width="' + W.toFixed(0) + '" height="' + H.toFixed(0) + '" role="img" aria-label="Topology of the chain relative to the bilayer">' +
+      '<defs><marker id="topo-arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="3.2" markerHeight="3.2" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(--ss-strand)"/></marker></defs>' +
+      '<rect class="topo-band" x="' + L + '" y="' + Y(up) + '" width="' + (xo * S).toFixed(1) + '" height="' + (half * 2 * S).toFixed(1) + '"/>' +
+      '<line class="topo-plane" x1="' + L + '" x2="' + X(xo) + '" y1="' + Y(up) + '" y2="' + Y(up) + '"/><line class="topo-plane" x1="' + L + '" x2="' + X(xo) + '" y1="' + Y(lo) + '" y2="' + Y(lo) + '"/>' +
+      '<line class="topo-measure" x1="40" x2="40" y1="' + Y(up) + '" y2="' + Y(lo) + '"/><line class="topo-measure" x1="34" x2="46" y1="' + Y(up) + '" y2="' + Y(up) + '"/><line class="topo-measure" x1="34" x2="46" y1="' + Y(lo) + '" y2="' + Y(lo) + '"/>' +
+      '<text class="topo-lbl" x="32" y="' + ((+Y(up) + +Y(lo)) / 2 + 4).toFixed(1) + '" text-anchor="end">' + (half * 2 / 10).toFixed(1) + '</text><text class="topo-lbl" x="32" y="' + ((+Y(up) + +Y(lo)) / 2 + 16).toFixed(1) + '" text-anchor="end">nm</text>';
+    if (ov) pts.forEach(function (q, i) { var v = rows[i] ? parseFloat(rows[i][ov]) || 0 : 0; if (q && v > 0.02) h += '<circle class="topo-ov" cx="' + X(q[0]) + '" cy="' + Y(q[1]) + '" r="' + (1.5 + Math.sqrt(v) * 9).toFixed(1) + '"/>'; });
+    shapes.forEach(function (sh) {
+      var a = Math.min.apply(null, sh.res), b = Math.max.apply(null, sh.res), on = sel && sh.res.some(function (i) { return i >= sel[0] && i <= sel[1]; });
+      var k = sh.cls === 'ssAlpha' ? 'helix' : sh.cls === 'ssBeta' ? 'strand' : 'coil';
+      h += '<path class="topo-el topo-' + k + (on ? ' on' : '') + '" d="' + line(sh.P) + '"' + (k === 'strand' ? ' marker-end="url(#topo-arrow)"' : '') + (k !== 'coil' ? ' data-res="' + a + '-' + b + '" tabindex="0" role="button" aria-label="Select residues ' + esc((rows[a] || {}).resSeq || '') + ' to ' + esc((rows[b] || {}).resSeq || '') + '"' : '') + '><title>' + (k === 'coil' ? 'Loop' : k === 'helix' ? 'Helix' : 'Strand') + ' ' + esc((rows[a] || {}).resSeq || '') + '–' + esc((rows[b] || {}).resSeq || '') + '</title></path>';
+    });
+    if (sel) pts.forEach(function (q, i) { if (q && i >= sel[0] && i <= sel[1]) h += '<circle class="topo-sel" cx="' + X(q[0]) + '" cy="' + Y(q[1]) + '" r="3"/>'; });
+    return h + '</svg>';
+  }
+
+  function seqSvgs(rows, tracks, sel) {
+    var N = 80, CW = 11, LW = 112, out = [];
+    for (var b0 = 0; b0 < rows.length; b0 += N) {
+      var blk = rows.slice(b0, b0 + N), y = 0, h = '';
+      h += blk.map(function (r, j) { var i = b0 + j; return (+r.resSeq % 10 === 0 ? '<text class="seq-num" x="' + (LW + j * CW + CW / 2) + '" y="10" text-anchor="middle">' + esc(r.resSeq) + '</text>' : ''); }).join('');
+      y = 14;
+      h += '<text class="seq-lab" x="' + (LW - 8) + '" y="' + (y + 12) + '" text-anchor="end">Sequence</text>' + blk.map(function (r, j) {
+        var d = r.DSSP, k = isHelix(d) ? 'helix' : isStrand(d) ? 'strand' : 'coil';
+        return '<rect class="seq-ss seq-' + k + '" x="' + (LW + j * CW) + '" y="' + y + '" width="' + (CW - 1) + '" height="16" rx="2"/><text class="seq-aa seq-aa-' + k + '" x="' + (LW + j * CW + CW / 2 - 0.5) + '" y="' + (y + 12) + '" text-anchor="middle">' + (AA1[r.resName] || 'X') + '</text>';
+      }).join('');
+      y += 22;
+      tracks.forEach(function (t) {
+        h += '<text class="seq-lab" x="' + (LW - 8) + '" y="' + (y + 8) + '" text-anchor="end">' + t[0] + '</text>' + blk.map(function (r, j) {
+          var v = trackVal(r, t[1]);
+          return '<rect class="seq-bg" x="' + (LW + j * CW) + '" y="' + y + '" width="' + (CW - 1) + '" height="9"/>' + (v > 0.005 ? '<rect class="seq-v" x="' + (LW + j * CW) + '" y="' + y + '" width="' + (CW - 1) + '" height="9" fill-opacity="' + Math.sqrt(v).toFixed(2) + '"/>' : '');
+        }).join('');
+        y += 10;
+      });
+      if (sel) blk.forEach(function (r, j) { var i = b0 + j; if (i >= sel[0] && i <= sel[1]) h += '<rect class="seq-selbox" x="' + (LW + j * CW - 0.5) + '" y="13" width="' + CW + '" height="' + (y - 12) + '"/>'; });
+      h += blk.map(function (r, j) { return '<rect class="seq-hit" data-i="' + (b0 + j) + '" x="' + (LW + j * CW) + '" y="0" width="' + CW + '" height="' + y + '"><title>' + esc(r.resName + ' ' + r.resSeq) + '</title></rect>'; }).join('');
+      var W = LW + blk.length * CW + 8;
+      out.push('<div class="seq-block"><p class="small muted">Residues ' + esc(blk[0].resSeq) + '–' + esc(blk[blk.length - 1].resSeq) + '</p><div class="scroll"><svg class="seqv" viewBox="0 0 ' + W + ' ' + (y + 2) + '" width="' + W + '" height="' + (y + 2) + '" role="img" aria-label="Contacts along residues ' + esc(blk[0].resSeq) + ' to ' + esc(blk[blk.length - 1].resSeq) + '">' + h + '</svg></div></div>');
+    }
+    return out.join('');
+  }
+
+  function chainView(pdb, base, chain, th, st) {
+    var host = document.getElementById('chain-view'); if (!host) return;
+    var cv = st.cv && st.cv.chain === chain ? st.cv : (st.cv = { chain: chain, ov: 0, sel: null, anchor: null });
+    chainData(base).then(function (d) {
+      host = document.getElementById('chain-view'); if (!host || route.current.indexOf('ref/PDB/' + pdb) !== 0) return;
+      var rows = d.csv ? d.csv.rows.filter(function (r) { return r.chainID === chain && (r.chainInstance === '1' || r.chainInstance === undefined); }) : [];
+      var ct = d.topo && (d.topo.topology || []).filter(function (t) { return t.chainID === chain && +t.chainInstance === 1; })[0];
+      if (!ct && !rows.length) { host.innerHTML = '<p class="small muted">The analysis files for this chain could not be loaded from file storage.</p>'; return; }
+      var tracks = d.csv ? seqTracks(d.csv.head) : [];
+      function selText() {
+        if (!cv.sel) return 'Click a helix or strand, or a residue in the sequence, to select it.';
+        var a = rows[cv.sel[0]] || {}, b = rows[cv.sel[1]] || {};
+        return 'Selected ' + (cv.sel[0] === cv.sel[1] ? esc(a.resName + ' ' + a.resSeq) : 'residues ' + esc(a.resSeq) + '–' + esc(b.resSeq)) + (MOL.viewer && MOL.pdb === pdb ? ', also highlighted in the 3D view.' : '.') + ' <button type="button" class="linkbtn" id="cv-clear">Clear</button>';
+      }
+      function paint() {
+        host.innerHTML =
+          (ct ? '<h3>Topology of chain ' + esc(chain) + '</h3><p class="small muted">Helices and strands of at least five residues, arranged relative to the bilayer (shaded, with its local thickness). Choose an overlay to show contacts along the backbone: the larger the circle, the more of the simulation a residue spends in contact.</p>' +
+            '<div class="seg" role="group" aria-label="Overlay">' + OVERLAYS.map(function (o, i) { return '<button type="button" data-ov="' + i + '" aria-pressed="' + (i === cv.ov) + '">' + o[0] + '</button>'; }).join('') + '</div>' +
+            '<div class="topo-box scroll">' + topoSvg(ct, rows, th, OVERLAYS[cv.ov][1], cv.sel) + '</div>' : '') +
+          '<p class="small" id="cv-sel">' + selText() + '</p>' +
+          (rows.length ? '<h3>Sequence view</h3><p class="small muted">Contacts along the sequence, as the share of the simulation each residue spends within 6 Å of each group: pale is rarely, strong is always. Helices are blue, strands green. Click a residue to select it; shift-click to extend the selection.</p><div class="ct-key" aria-hidden="true"><span>0%</span><i class="seq-key"></i><span>100%</span></div>' + seqSvgs(rows, tracks, cv.sel) : '');
+        wire();
+      }
+      function setSel(a, b) {
+        cv.sel = a == null ? null : [Math.min(a, b), Math.max(a, b)];
+        var ra = cv.sel && rows[cv.sel[0]], rb = cv.sel && rows[cv.sel[1]];
+        MOL.sel = cv.sel && ra && rb ? { chain: chain, a: +ra.resSeq, b: +rb.resSeq } : null;
+        if (MOL.viewer && MOL.pdb === pdb) molPaint(base);
+        var y = window.scrollY; paint(); window.scrollTo(0, y);
+      }
+      function wire() {
+        Array.prototype.forEach.call(host.querySelectorAll('[data-ov]'), function (b) { b.addEventListener('click', function () { cv.ov = +b.getAttribute('data-ov'); var y = window.scrollY; paint(); window.scrollTo(0, y); }); });
+        Array.prototype.forEach.call(host.querySelectorAll('[data-res]'), function (e) {
+          function go() { var r = e.getAttribute('data-res').split('-'); cv.anchor = +r[0]; setSel(+r[0], +r[1]); }
+          e.addEventListener('click', go); e.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); go(); } });
+        });
+        Array.prototype.forEach.call(host.querySelectorAll('.seq-hit'), function (e) { e.addEventListener('click', function (ev) {
+          var i = +e.getAttribute('data-i');
+          if (ev.shiftKey && cv.anchor != null) setSel(cv.anchor, i); else { cv.anchor = i; setSel(i, i); }
+        }); });
+        var c = document.getElementById('cv-clear'); if (c) c.addEventListener('click', function () { cv.anchor = null; setSel(null); });
+      }
+      paint();
+    });
   }
 
   /* ---------- statistics ---------- */
