@@ -70,7 +70,8 @@ jobs:
           python-version: '3.12'
       - name: Install MemPrO, MemPrOD, Insane4MemPrO and martinize2
         run: |
-          pip install memprod vermouth mdtraj gemmi
+          # martinize2 from the group's fork of vermouth, to see whether it is quicker on large complexes
+          pip install memprod mdtraj gemmi "vermouth @ git+https://github.com/pstansfeld/vermouth-martinize"
           pip list 2>/dev/null | grep -i -E "^(mempro|memprod|jax|vermouth|mdtraj|gemmi) "
       - name: Set up ${{ matrix.pdb }}
         run: python .github/memprotmd/mempro_trial.py "${{ matrix.pdb }}" "out/${{ matrix.pdb }}" --cpus "$(nproc)"
