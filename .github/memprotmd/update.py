@@ -633,6 +633,28 @@ def contact_stats():
         return None
 
 
+def author_index(ref_by):
+    """The PDB primary authors of every entry, for the author network page: {"names": [...], "n": [structures
+    per author], "e": {pdb: [name indexes]}}. Spellings that differ only in spaces and full stops
+    ("Stansfeld, P.J." and "Stansfeld, P. J") count as one author, shown as the most common spelling."""
+    seen, spell, per = collections.Counter(), collections.defaultdict(collections.Counter), {}
+    for pid in sorted(ref_by):
+        keys = []
+        for a in ref_by[pid].get('primary_authors') or []:
+            a = re.sub(r'\s+', ' ', str(a)).strip()
+            k = re.sub(r'[\s.]', '', a).lower()
+            if a and k and k not in keys:
+                keys.append(k)
+                spell[k][a.rstrip('.') + ('.' if re.search(r'\b[A-Z]$', a.rstrip('.')) else '')] += 1
+        if keys:
+            per[pid] = keys
+            seen.update(keys)
+    order = sorted(seen, key=lambda k: (-seen[k], k))
+    at = {k: i for i, k in enumerate(order)}
+    return {'names': [spell[k].most_common(1)[0][0] for k in order], 'n': [seen[k] for k in order],
+            'e': {pid: [at[k] for k in keys] for pid, keys in per.items()}}
+
+
 def derived_groups(ref_by, sim_by, rcsb, old_cols):
     """Groupings worked out from the records themselves: protein (UniProt), organism, membrane topology
     and bound ligand. Returns ({db: rows}, {db: details}) in the same shape as the curated groups."""
@@ -939,6 +961,11 @@ def main(site, dry):
         if found is not None:
             mddb = found
 
+    # authors and who they published with, for the author network page
+    authors_path = os.path.join(site, 'data', 'authors.json')
+    old_authors = load(authors_path, None)
+    authors = author_index(ref_by)
+
     # residue contact tables and depth histograms for the Statistics page
     stats_path = os.path.join(site, 'data', 'stats.json')
     old_stats = load(stats_path, None)
@@ -1005,7 +1032,7 @@ def main(site, dry):
     groups_changed = any(load(os.path.join(site, 'data', 'groups', db + '.json'), None) != json.loads(json.dumps(d, ensure_ascii=False)) for db, d in details.items())
     reasons = [x for x, c in (('entries', pending or new_ids or removed), ('index', strip(index, 'built') != strip(old, 'built')),
                                ('groups', groups_changed), ('pipeline status', strip(status, 'written') != strip(old_status, 'written')),
-                               ('statistics', stats != old_stats), ('change tracking', state != old_state)) if c]
+                               ('statistics', stats != old_stats), ('authors', authors != old_authors), ('change tracking', state != old_state)) if c]
     def strip2(d):
         return strip(d, 'built', 'updated')
     reasons = [r for r in reasons if r != 'index'] + (['index'] if strip2(index) != strip2(old) else [])
@@ -1039,6 +1066,7 @@ def main(site, dry):
         dump(os.path.join(site, 'data', 'status.json'), status)
         if stats:
             dump(stats_path, stats)
+        dump(authors_path, authors)
         dump(os.path.join(site, 'data', 'growth.json'), growth_stats(ref_by, rcsb, cols))
         dump(org_path, rcsb)
         dump(tc_path, tc)
