@@ -1,0 +1,28 @@
+name: memprotmd-residues-test
+on:
+  push:
+    branches: [memprotmd-residues]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 1 }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install pyyaml==6.0.2 pyarrow==18.1.0
+      - run: python .github/memprotmd/residues.py memprotmd build --force
+      - run: ls -la build; du -sh memprotmd/data/residues; ls memprotmd/data/residues | head; python3 -c "import json; a=json.load(open('memprotmd/data/residues/all.json')); print(a['entries'], a['residues']); print(a['overview'])"; python3 -c "import json; print(json.load(open('memprotmd/data/stats.json'))['overview'])"
+      - name: Publish the parquet file
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          gh release view memprotmd-residues >/dev/null 2>&1 || gh release create memprotmd-residues --title "MemProtMD residues" --notes "Every residue of every MemProtMD simulation, one row each: depth in the membrane (z, Å from the bilayer centre), secondary structure (DSSP) and the share of the simulation spent in contact with lipid heads, tails, each lipid bead, water and ions. Rebuilt when simulations change. Read it with pandas, polars, DuckDB or R arrow."
+          gh release upload memprotmd-residues build/memprotmd-residues.parquet --clobber
+      - name: Commit back
+        run: |
+          git add -A memprotmd/data/residues .github/memprotmd/residues_state.json
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Residue summaries generated on this branch" || exit 0
+          git push -q
