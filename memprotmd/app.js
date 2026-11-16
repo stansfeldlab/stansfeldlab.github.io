@@ -496,7 +496,9 @@
   var MOL_MEM = ['Phosphates', 'Lipids', 'Hidden'];
   var CON_PAL = { head: ['#eef1f6', '#f2b552', '#c8003f'], tail: ['#eef1f6', '#7fcfc0', '#0b6e60'], solvent: ['#eef1f6', '#8fb0f2', '#17397b'] };
   var AA = ' ALA ARG ASN ASP CYS GLN GLU GLY HIS HSD HSE HSP ILE LEU LYS MET PHE PRO SER THR TRP TYR VAL ';
-  function molFresh() { return { pdb: null, open: false, viewer: null, el: null, src: null, con: {}, color: 0, style: 0, mem: 0, busy: false, again: false, first: true, note: '', sel: null }; }
+  function molFresh() { return { pdb: null, open: false, viewer: null, el: null, src: null, con: {}, color: 0, style: 0, mem: 0, cam: +(sessGet('mol-cam') || 0), busy: false, again: false, first: true, note: '', sel: null }; }
+  /* orthographic by default, as molecular graphics usually are; perspective on request */
+  function molCam() { try { MOL.viewer.plugin.canvas3d.setProps({ camera: { mode: MOL.cam ? 'perspective' : 'orthographic' } }); } catch (e) {} }
   var MOL = molFresh();
   function molReset() {
     var m = MOL; MOL = molFresh();
@@ -522,6 +524,15 @@
   function molSource(pdb, base) {
     return fetchText(base + 'files/structures/web_vis.pdb').then(function (t) {
       if (!/\n(ATOM|HETATM)/.test('\n' + t)) throw new Error('empty');
+      /* some snapshots leave the chain ID blank; Mol* then cannot match their HELIX and SHEET records to the
+         protein and draws helices as thin coils, so give the protein and those records chain A */
+      if (/\nATOM  .{15} /.test('\n' + t)) t = t.split('\n').map(function (l) {
+        var k = l.slice(0, 6);
+        if ((k === 'ATOM  ' || k === 'HETATM') && l.charAt(21) === ' ' && AA1[l.substr(17, 3)]) return l.slice(0, 21) + 'A' + l.slice(22);
+        if (k === 'HELIX ') return (l.charAt(19) === ' ' ? l.slice(0, 19) + 'A' + l.slice(20) : l).replace(/^(.{31}) /, '$1A');
+        if (k === 'SHEET ') return (l.charAt(21) === ' ' ? l.slice(0, 21) + 'A' + l.slice(22) : l).replace(/^(.{32}) /, '$1A');
+        return l;
+      }).join('\n');
       var ss = { h: [], s: [] };
       t.split('\n').forEach(function (l) {
         var k = l.slice(0, 5), b, e;
@@ -592,7 +603,7 @@
     (g ? molContacts(base, g) : Promise.resolve()).then(function () {
       if (m !== MOL) return;
       return m.viewer.loadMvsData(JSON.stringify(molTree()), 'mvsj', { keepCamera: !m.first, doNotReportErrors: true });
-    }).then(function () { m.first = false; }).catch(function () { molStatus('The structure could not be displayed.'); })
+    }).then(function () { m.first = false; molCam(); }).catch(function () { molStatus('The structure could not be displayed.'); })
       .then(function () { if (m !== MOL) return; m.busy = false; molStatus(''); molNote(); if (m.again) molPaint(base); });
   }
   function molControls(base) {
@@ -609,6 +620,7 @@
     c.innerHTML = '<div class="molbar">' + (rc ? '' : '<div class="molrow"><span class="eyebrow">Colour by</span>' + seg3('color', MOL_COLOR.map(function (x) { return x[0]; }), 'Colour by') + '</div>') +
       '<div class="molrow"><span class="eyebrow">Protein</span>' + seg3('style', MOL_STYLE, 'Protein style') + '</div>' +
       (rc ? '' : '<div class="molrow"><span class="eyebrow">Bilayer</span>' + seg3('mem', MOL_MEM, 'Bilayer') + '</div>') +
+      '<div class="molrow"><span class="eyebrow">Camera</span>' + seg3('cam', ['Orthographic', 'Perspective'], 'Camera') + '</div>' +
       '<p class="small muted" id="mol-note"></p><div class="btns"><button type="button" class="btn ghost" id="mol-close">Back to image</button></div></div>';
     molNote();
     Array.prototype.forEach.call(c.querySelectorAll('[data-mol]'), function (b) {
@@ -616,7 +628,7 @@
         var k = b.getAttribute('data-mol'), i = +b.getAttribute('data-i'); if (MOL[k] === i) return;
         MOL[k] = i;
         Array.prototype.forEach.call(c.querySelectorAll('[data-mol="' + k + '"]'), function (x) { x.setAttribute('aria-pressed', String(+x.getAttribute('data-i') === i)); });
-        if (MOL.viewer) molPaint(base);
+        if (k === 'cam') { sessSet('mol-cam', i); molCam(); } else if (MOL.viewer) molPaint(base);
       });
     });
     document.getElementById('mol-close').addEventListener('click', function () { molClose(MOL.pdb, base); });
@@ -657,7 +669,7 @@
         layoutIsExpanded: false, layoutShowControls: false, layoutShowRemoteState: false, layoutShowSequence: false, layoutShowLog: false, layoutShowLeftPanel: false,
         viewportShowExpand: true, viewportShowSelectionMode: false, viewportShowAnimation: false, viewportShowTrajectoryControls: false, viewportShowSettings: false,
         viewportShowControls: false, viewportBackgroundColor: '#ffffff', pdbProvider: 'rcsb', collapseLeftPanel: true, config: molXr(r[0])
-      }).then(function (v) { if (m !== MOL) { v.dispose(); return; } m.viewer = v; molPaint(base); });
+      }).then(function (v) { if (m !== MOL) { v.dispose(); return; } m.viewer = v; molCam(); molPaint(base); });
     }).catch(function (err) { if (m === MOL) molStatus('The 3D viewer could not be loaded. ' + (err && err.message ? err.message + '.' : '')); });
   }
 
