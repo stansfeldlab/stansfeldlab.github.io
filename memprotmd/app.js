@@ -108,7 +108,7 @@
   }
 
   /* ---------- chrome ---------- */
-  var NAV = [['search/text', 'Search'], ['about', 'About'], ['stats', 'Statistics'], ['authors', 'Authors'], ['status', 'Status'], ['data', 'Data'], ['api', 'API']];
+  var NAV = [['search/text', 'Search'], ['about', 'About'], ['stats', 'Statistics'], ['status', 'Status'], ['data', 'Data'], ['api', 'API']];
   function chrome(active, main) {
     return '<header class="bar"><div class="wrap"><a class="logo" href="' + href('home') + '" aria-label="MemProtMD home"><img src="logo.svg" alt="MemProtMD"></a>' +
       '<nav class="nav" aria-label="Main">' + NAV.map(function (n) { return '<a href="' + href(n[0]) + '"' + (active === n[0] ? ' aria-current="page"' : '') + '>' + n[1] + '</a>'; }).join('') + '</nav>' +
@@ -125,9 +125,9 @@
     var inp = document.getElementById('qs-input'), pop = document.getElementById('qs-pop');
     if (!inp) return;
     inp.addEventListener('input', function () {
-      var q = inp.value.trim(), r = q ? search(q, 7) : [];
+      var q = inp.value.trim(), r = q ? search(q, 7) : [], au = q ? authorHits(q, 3) : [];
       pop.hidden = !q;
-      pop.innerHTML = r.length ? r.map(rowLink).join('') + '<a class="more" href="' + href('search/text') + '" data-q="' + esc(q) + '">All ' + num(r.total) + ' results</a>' : '<p class="small muted" style="padding:.75rem">No matches. Search uses whole words.</p>';
+      pop.innerHTML = r.length || au.length ? au.map(authorRow).join('') + r.map(rowLink).join('') + '<a class="more" href="' + href('search/text') + '" data-q="' + esc(q) + '">All ' + num(r.total) + ' results</a>' : '<p class="small muted" style="padding:.75rem">No matches. Search uses whole words.</p>';
     });
     inp.addEventListener('keydown', function (e) { if (e.key === 'Escape') { pop.hidden = true; } if (e.key === 'Enter' && inp.value.trim()) { pending = inp.value.trim(); location.hash = href('search/text'); } });
     pop.addEventListener('click', function (e) { var a = e.target.closest('a[data-q]'); if (a) pending = a.getAttribute('data-q'); pop.hidden = true; });
@@ -168,7 +168,7 @@
     getJSON('data/growth.json').then(function (g) { var el = document.getElementById('home-prot'); if (el && g.uniprot && g.uniprot.total) { el.firstChild.textContent = num(g.uniprot.total); el.hidden = false; } }).catch(function () {});
     q.addEventListener('input', function () {
       var v = q.value.trim(), r = v ? search(v, 8) : [];
-      document.getElementById('home-res').innerHTML = !v ? '' : r.length ? r.map(rowLink).join('') + (r.total > r.length ? '<p class="small" style="padding-top:.6rem"><a href="' + href('search/text') + '" id="home-all">All ' + num(r.total) + ' results</a></p>' : '') : '<p class="small muted">No matches. Search uses whole words, so <code>lipo</code> will not match lipoprotein.</p>';
+      var au = v ? authorHits(v, 3) : []; document.getElementById('home-res').innerHTML = !v ? '' : r.length || au.length ? au.map(authorRow).join('') + r.map(rowLink).join('') + (r.total > r.length ? '<p class="small" style="padding-top:.6rem"><a href="' + href('search/text') + '" id="home-all">All ' + num(r.total) + ' results</a></p>' : '') : '<p class="small muted">No matches. Search uses whole words, so <code>lipo</code> will not match lipoprotein.</p>';
       var a = document.getElementById('home-all'); if (a) a.addEventListener('click', function () { pending = v; });
     });
   }
@@ -246,8 +246,10 @@
       document.getElementById('ts-src').hidden = !!test;
       var sum = [F.m.length ? F.m.map(function (k) { return METHODS.filter(function (m) { return m[0] === k; })[0][1]; }).join(', ') : '', F.r ? '≤ ' + F.r.toFixed(1) + ' Å' : '', F.y0 || F.y1 ? (F.y0 || '…') + '–' + (F.y1 || '…') : '', F.f ? plain(colById[F.f].title) : '', F.o.trim() ? F.o.trim() : '', F.d.length ? F.d.map(function (k) { return DOMAINS.filter(function (d) { return d[0] === k; })[0][1]; }).join(', ') : '', F.x ? 'Also in MDDB' : ''].filter(Boolean);
       document.getElementById('f-sum').textContent = sum.length ? '· ' + sum.join(' · ') : '';
-      document.getElementById('ts-panel').hidden = !r.length;
-      document.getElementById('ts-res').innerHTML = r.map(rowLink).join('');
+      var au = v && !test ? authorHits(v, 6) : [];
+      if (v && !test && !AUTHD) loadAuthors().then(function () { if (document.getElementById('ts-res')) run(); });
+      document.getElementById('ts-panel').hidden = !r.length && !au.length;
+      document.getElementById('ts-res').innerHTML = (au.length ? '<p class="eyebrow" style="margin:.25rem 0">Authors</p>' + au.map(authorRow).join('') + (r.length ? '<p class="eyebrow" style="margin:1rem 0 .25rem">Structures and groups</p>' : '') : '') + r.map(rowLink).join('');
       document.getElementById('ts-more').hidden = r.total <= r.length;
       if (v || test) msg.textContent = r.length ? 'Showing ' + num(r.length) + ' of ' + num(r.total) + (test ? ' structures' : ' results') + '.' : 'No results. Try another spelling, a related term or fewer filters.';
       else msg.innerHTML = tip;
@@ -1009,117 +1011,175 @@
     });
   }
 
-  /* ---------- authors: who published structures together ---------- */
-  var AUTH = null;
+  /* ---------- authors: found through search, shown as a live co-author network ---------- */
+  var AUTH = null, AUTHD = null;
+  function auKey(n) { return String(n).toLowerCase().replace(/[^a-zÀ-ɏ]/g, ''); }
   function loadAuthors() {
     if (!AUTH) AUTH = getJSON('data/authors.json').then(function (a) {
-      a.by = a.names.map(function () { return []; }); a.key = {};
+      a.by = a.names.map(function () { return []; }); a.key = {}; a.k = a.names.map(auKey);
       Object.keys(a.e).forEach(function (pdb) { a.e[pdb].forEach(function (i) { a.by[i].push(pdb); }); });
-      a.names.forEach(function (n, i) { a.key[auKey(n)] = i; });
-      return a;
+      a.k.forEach(function (k, i) { if (!(k in a.key)) a.key[k] = i; });
+      return (AUTHD = a);
     });
     return AUTH;
   }
-  function auKey(n) { return String(n).toLowerCase().replace(/[\s.]/g, ''); }
   function authorHref(name) { return /[^\x00-\xff]/.test(name) ? '#/authors/' + encodeURIComponent(name) : href('authors/' + name); }
-  function authorFind(a, q) {
-    q = q.toLowerCase().replace(/[\s.]/g, ''); if (!q) return [];
-    var out = [];
-    for (var i = 0; i < a.names.length && out.length < 8; i++) if (a.names[i].toLowerCase().replace(/[\s.]/g, '').indexOf(q) === 0) out.push(i);
-    if (out.length < 8) for (var j = 0; j < a.names.length && out.length < 8; j++) if (out.indexOf(j) < 0 && a.names[j].toLowerCase().replace(/[\s.]/g, '').indexOf(q) > 0) out.push(j);
+  /* authors whose name starts with the query (surname first, punctuation ignored), most structures first */
+  function authorHits(q, n) {
+    var a = AUTHD, k = auKey(q), out = [];
+    if (!a || k.length < 3 || /\d/.test(q) || q.split(/\s+/).length > 3) return out;
+    for (var i = 0; i < a.k.length && out.length < n; i++) if (a.k[i].indexOf(k) === 0) out.push(i);
     return out;
   }
-  /* the network around one author: their co-authors (strongest ties first), the links between those
-     co-authors, and a small force-directed layout worked out here */
-  function authorNet(a, c, K) {
-    var w = {};
-    a.by[c].forEach(function (pdb) { a.e[pdb].forEach(function (j) { if (j !== c) w[j] = (w[j] || 0) + 1; }); });
-    var ids = Object.keys(w).map(Number).sort(function (x, y) { return (w[y] - w[x]) || (a.n[y] - a.n[x]); }).slice(0, K), set = {}, nodes = [{ i: c, w: a.by[c].length }];
-    ids.forEach(function (j) { set[j] = nodes.length; nodes.push({ i: j, w: w[j] }); });
-    var links = ids.map(function (j) { return { s: 0, t: set[j], w: w[j] }; }), pw = {};
-    ids.forEach(function (j) { a.by[j].forEach(function (pdb) { a.e[pdb].forEach(function (k) { if (k > j && k in set) pw[j + ' ' + k] = (pw[j + ' ' + k] || 0) + 1; }); }); });
-    Object.keys(pw).forEach(function (k) { var q = k.split(' '); links.push({ s: set[q[0]], t: set[q[1]], w: pw[k] }); });
-    var n = nodes.length;
-    nodes.forEach(function (d, i) { var t = i * 2.399963; d.x = i ? Math.cos(t) * (40 + 6 * Math.sqrt(i)) : 0; d.y = i ? Math.sin(t) * (40 + 6 * Math.sqrt(i)) : 0; });
-    for (var it = 0; it < 360; it++) {
-      var cool = 1 - it / 360;
-      for (var x = 1; x < n; x++) { var A = nodes[x]; A.fx = -A.x * 0.012; A.fy = -A.y * 0.012; }
-      for (var u = 0; u < n; u++) for (var v = u + 1; v < n; v++) {
-        var P = nodes[u], Q = nodes[v], dx = Q.x - P.x, dy = Q.y - P.y, d2 = dx * dx + dy * dy + 0.01, f = 900 / d2, dd = Math.sqrt(d2);
-        if (u) { P.fx -= dx / dd * f; P.fy -= dy / dd * f; }
-        Q.fx += dx / dd * f; Q.fy += dy / dd * f;
-      }
-      links.forEach(function (l) {
-        var P = nodes[l.s], Q = nodes[l.t], dx = Q.x - P.x, dy = Q.y - P.y, dd = Math.sqrt(dx * dx + dy * dy) + 0.01, len = l.s ? 70 : 90 / Math.sqrt(1 + Math.log(l.w)), f = (dd - len) * 0.04;
-        if (l.s) { P.fx += dx / dd * f; P.fy += dy / dd * f; }
-        Q.fx -= dx / dd * f; Q.fy -= dy / dd * f;
-      });
-      for (var z = 1; z < n; z++) { var B = nodes[z], m = Math.min(12, Math.sqrt(B.fx * B.fx + B.fy * B.fy)) * cool, g = Math.sqrt(B.fx * B.fx + B.fy * B.fy) + 1e-6; B.x += B.fx / g * m; B.y += B.fy / g * m; }
-    }
-    return { nodes: nodes, links: links };
+  function authorRow(i) {
+    var a = AUTHD, nm = a.names[i], ini = nm.replace(/,.*$/, '').trim().charAt(0) + (nm.split(',')[1] || '').trim().charAt(0);
+    return '<a class="rowlink" href="' + authorHref(nm) + '"><span class="au-ico" aria-hidden="true">' + esc(ini) + '</span><span><span class="t">' + esc(nm) + '</span><span class="k">Author · co-author network</span></span><span class="m">' + num(a.n[i]) + ' structures</span></a>';
   }
-  function netSvg(a, net, pick) {
-    var N = net.nodes, W = 960, H = 620, M = 70, xs = N.map(function (d) { return d.x; }), ys = N.map(function (d) { return d.y; });
-    var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs), y0 = Math.min.apply(null, ys), y1 = Math.max.apply(null, ys);
-    var k = Math.min((W - 2 * M) / Math.max(1, x1 - x0), (H - 2 * M) / Math.max(1, y1 - y0));
-    function X(d) { return (M + (d.x - x0) * k + ((W - 2 * M) - (x1 - x0) * k) / 2).toFixed(1); }
-    function Y(d) { return (M + (d.y - y0) * k + ((H - 2 * M) - (y1 - y0) * k) / 2).toFixed(1); }
-    var lw = net.links.reduce(function (m, l) { return Math.max(m, l.w); }, 1), big = N.slice(1).map(function (d, i) { return [d.w, i + 1]; }).sort(function (p, q) { return q[0] - p[0]; }).slice(0, 12).map(function (p) { return p[1]; });
-    function r(d, i) { return i ? 4 + Math.min(9, Math.sqrt(a.n[d.i]) * 0.8) : 12; }
-    var h = '<svg class="net" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Co-author network of ' + esc(a.names[N[0].i]) + '">';
-    h += net.links.map(function (l) { var P = N[l.s], Q = N[l.t]; return '<line class="net-l' + (l.s ? '' : ' net-l0') + '" x1="' + X(P) + '" y1="' + Y(P) + '" x2="' + X(Q) + '" y2="' + Y(Q) + '" stroke-width="' + (0.6 + 3 * l.w / lw).toFixed(2) + '"/>'; }).join('');
-    h += N.map(function (d, i) {
-      var nm = esc(a.names[d.i]);
-      return '<g class="net-n' + (i ? '' : ' net-c') + (pick === d.i ? ' on' : '') + '" data-a="' + d.i + '" tabindex="0" role="button" aria-label="' + nm + (i ? ', ' + d.w + ' shared structures' : '') + '"><circle cx="' + X(d) + '" cy="' + Y(d) + '" r="' + r(d, i).toFixed(1) + '"/><title>' + nm + ': ' + (i ? d.w + ' shared, ' : '') + a.n[d.i] + ' structures in MemProtMD</title></g>';
-    }).join('');
-    h += '<g class="net-labels">' + N.map(function (d, i) {
-      var show = !i || big.indexOf(i) >= 0 || pick === d.i;
-      return show ? '<text class="' + (i ? '' : 'c') + '" x="' + X(d) + '" y="' + (+Y(d) - r(d, i) - 5).toFixed(1) + '" text-anchor="middle">' + esc(a.names[d.i]) + '</text>' : '';
-    }).join('') + '</g>';
-    return h + '</svg>';
-  }
+
   function pageAuthors(name) {
-    show('authors', '<div class="stack-lg"><div class="pagehead"><h1>Authors</h1><p class="muted" style="max-width:46rem">Who published the structures in MemProtMD, and with whom, from the primary citation of each PDB entry.</p></div><div id="au-body"><p class="muted">Loading authors…</p></div></div>', 'Authors');
+    if (!name) { location.replace(href('search/text')); return; }
+    show('authors', '<div class="stack-lg" id="au-body"><p class="muted">Loading authors…</p></div>', 'Authors');
     loadAuthors().then(function (a) {
       var body = document.getElementById('au-body'); if (!body || route.current.indexOf('authors') !== 0) return;
-      var c = name != null ? a.key[auKey(name)] : null, K = +(sessGet('au-k') || 40), pick = null;
-      var search = '<div class="au-search"><input class="field" id="au-q" type="search" placeholder="Find an author, e.g. Stansfeld" aria-label="Find an author" autocomplete="off"' + (c != null ? ' value="' + esc(a.names[c]) + '"' : '') + '><div class="pop" id="au-pop" hidden></div></div>';
-      if (c == null) {
-        body.innerHTML = '<div class="panel stack">' + search + (name ? '<p class="small">No author called ' + esc(name) + ' in MemProtMD.</p>' : '') +
-          '<p class="small muted">Most structures in MemProtMD</p><div class="chips">' + a.names.slice(0, 30).map(function (n, i) { return '<a class="chip" href="' + authorHref(n) + '">' + esc(n) + ' · ' + a.n[i] + '</a>'; }).join('') + '</div></div>';
-        wireSearch(); return;
-      }
-      function paint() {
-        var net = authorNet(a, c, K), mine = a.by[c].slice().sort(function (p, q) { return String((byId[q] || [])[5] || '').localeCompare(String((byId[p] || [])[5] || '')); });
-        var shared = pick != null ? mine.filter(function (pdb) { return a.e[pdb].indexOf(pick) >= 0; }) : null;
-        body.innerHTML = '<div class="panel stack">' + search +
-          '<div class="head-row" style="margin:0"><h2>' + esc(a.names[c]) + '</h2><span class="muted">' + num(mine.length) + ' structures · ' + num(net.nodes.length - 1) + ' of their co-authors shown</span></div>' +
-          '<div class="seg" role="group" aria-label="Co-authors shown">' + [20, 40, 80].map(function (k) { return '<button type="button" data-k="' + k + '" aria-pressed="' + (k === K) + '">' + k + ' co-authors</button>'; }).join('') + '</div>' +
-          '<div class="net-box">' + netSvg(a, net, pick) + '</div>' +
-          '<p class="small muted">Lines join authors on the same structures, thicker for more of them; circles grow with each author’s structures in MemProtMD. Select an author to see the structures they share; names are as the PDB gives them, so two people with the same surname and initials count as one.</p></div>' +
-          (shared ? '<section class="panel stack"><div class="head-row" style="margin:0"><h2>With ' + esc(a.names[pick]) + '</h2><a class="btn ghost" href="' + authorHref(a.names[pick]) + '">Centre on ' + esc(a.names[pick]) + '</a></div><div class="rowlist">' + shared.map(rowOf).join('') + '</div></section>' : '') +
-          '<section class="panel stack"><h2>Structures by ' + esc(a.names[c]) + '</h2><div class="rowlist">' + mine.map(rowOf).join('') + '</div></section>';
-        wireSearch();
-        Array.prototype.forEach.call(body.querySelectorAll('[data-k]'), function (b) { b.addEventListener('click', function () { K = +b.getAttribute('data-k'); sessSet('au-k', K); paint(); }); });
-        Array.prototype.forEach.call(body.querySelectorAll('.net-n'), function (g) {
-          function go() { var i = +g.getAttribute('data-a'); if (i === c) return; pick = pick === i ? null : i; var y = window.scrollY; paint(); window.scrollTo(0, y); }
-          g.addEventListener('click', go); g.addEventListener('dblclick', function () { location.hash = authorHref(a.names[+g.getAttribute('data-a')]); });
-          g.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
-        });
-      }
+      var c = a.key[auKey(name)];
+      if (c == null) { body.innerHTML = '<div class="pagehead"><h1>Author not found</h1><p class="muted">No author called ' + esc(name) + ' in MemProtMD. <a href="' + href('search/text') + '">Search</a> for another name.</p></div>'; return; }
+      var K = +(sessGet('au-k') || 40), trail = [], W = 960, H = 620, view = { x: 0, y: 0, k: 1 }, sim = { nodes: {}, list: [], links: [], alpha: 1, raf: 0 }, svg, vp, drag = null, hover = null, all = false;
+      document.title = a.names[c] + ' · MemProtMD';
+      body.innerHTML = '<div class="pagehead">' + crumbs([['Home', href('home')], ['Search', href('search/text')], ['Authors', null]]) + '<h1 id="au-h1"></h1><p class="muted" id="au-sub"></p></div>' +
+        '<div class="panel stack"><div class="au-tools"><div class="seg" role="group" aria-label="Co-authors shown">' + [20, 40, 80].map(function (k) { return '<button type="button" data-k="' + k + '" aria-pressed="' + (k === K) + '">' + k + ' co-authors</button>'; }).join('') + '</div>' +
+        '<div class="au-zoom"><button type="button" class="btn ghost" data-z="1.25" aria-label="Zoom in">+</button><button type="button" class="btn ghost" data-z="0.8" aria-label="Zoom out">−</button><button type="button" class="btn ghost" data-z="0">Reset view</button></div></div>' +
+        '<div class="net-box"><svg class="net" id="au-net" viewBox="0 0 ' + W + ' ' + H + '" role="group" aria-label="Co-author network"><g id="au-vp"></g></svg></div>' +
+        '<p class="small" id="au-trail"></p>' +
+        '<p class="small muted">Click an author to move the network onto them; drag authors to rearrange it, drag the background to move it, and scroll or use + and − to zoom. Lines join authors on the same structures, thicker for more; circles grow with each author’s structures in MemProtMD. Names are as the PDB gives them, so people with the same surname and initials count as one.</p></div>' +
+        '<section class="panel stack" id="au-shared" hidden></section><section class="panel stack" id="au-list"></section>';
+      svg = document.getElementById('au-net'); vp = document.getElementById('au-vp');
+      /* one unit = one screen pixel, so names stay readable on phones; narrow screens start zoomed out */
+      W = Math.round(svg.getBoundingClientRect().width) || 960; H = W < 600 ? 520 : 620; svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+      var k0 = Math.min(1, W / 760); view.k = k0;
+
       function rowOf(pdb) { var r = byId[pdb] || [pdb, '']; return rowLink({ db: 'PDB', acc: pdb, title: r[1], date: r[5] }); }
-      function wireSearch() {
-        var inp = document.getElementById('au-q'), pop = document.getElementById('au-pop'), hits = [];
-        if (!inp) return;
-        inp.addEventListener('input', function () {
-          hits = authorFind(a, inp.value);
-          pop.innerHTML = hits.map(function (i) { return '<a href="' + authorHref(a.names[i]) + '">' + esc(a.names[i]) + ' <span class="muted">' + a.n[i] + '</span></a>'; }).join('');
-          pop.hidden = !hits.length;
+      function newest(list) { return list.slice().sort(function (p, q) { return String((byId[q] || [])[5] || '').localeCompare(String((byId[p] || [])[5] || '')); }); }
+      function radius(i) { return i === c ? 12 : 4 + Math.min(9, Math.sqrt(a.n[i]) * 0.8); }
+
+      /* the network around the centre author; authors already on screen keep their places, so a new centre glides in */
+      function build() {
+        var w = {};
+        a.by[c].forEach(function (pdb) { a.e[pdb].forEach(function (j) { if (j !== c) w[j] = (w[j] || 0) + 1; }); });
+        var ids = Object.keys(w).map(Number).sort(function (x, y) { return (w[y] - w[x]) || (a.n[y] - a.n[x]); }).slice(0, K), set = {}, old = sim.nodes, nodes = {};
+        set[c] = 1; ids.forEach(function (j) { set[j] = 1; });
+        var from = old[c] || { x: 0, y: 0 };
+        [c].concat(ids).forEach(function (j, n) {
+          var o = old[j], t = n * 2.39996, rr = 60 + 9 * Math.sqrt(n);
+          nodes[j] = o ? { i: j, x: o.x, y: o.y, vx: 0, vy: 0 } : { i: j, x: from.x + Math.cos(t) * rr, y: from.y + Math.sin(t) * rr, vx: 0, vy: 0 };
         });
-        inp.addEventListener('keydown', function (e) { if (e.key === 'Enter' && hits.length) location.hash = authorHref(a.names[hits[0]]); });
-        inp.addEventListener('blur', function () { setTimeout(function () { pop.hidden = true; }, 200); });
+        var links = ids.map(function (j) { return { s: c, t: j, w: w[j] }; }), pw = {};
+        ids.forEach(function (j) { a.by[j].forEach(function (pdb) { a.e[pdb].forEach(function (k) { if (k > j && set[k]) pw[j + ' ' + k] = (pw[j + ' ' + k] || 0) + 1; }); }); });
+        Object.keys(pw).forEach(function (k) { var q = k.split(' '); links.push({ s: +q[0], t: +q[1], w: pw[k] }); });
+        var big = {}; ids.slice(0, W < 600 ? 5 : 12).forEach(function (j) { big[j] = 1; });
+        sim = { nodes: nodes, list: [c].concat(ids).map(function (j) { return nodes[j]; }), links: links, w: w, big: big, alpha: 1, raf: sim.raf, lw: links.reduce(function (m, l) { return Math.max(m, l.w); }, 1) };
+        draw(); text(); kick();
       }
-      if (c != null) paint();
+      function draw() {
+        var h = '<g class="net-links">' + sim.links.map(function (l) { return '<line class="net-l' + (l.s === c ? ' net-l0' : '') + '" stroke-width="' + (0.6 + 3 * l.w / sim.lw).toFixed(2) + '"/>'; }).join('') + '</g>';
+        h += sim.list.map(function (d) { var nm = esc(a.names[d.i]); return '<g class="net-n' + (d.i === c ? ' net-c' : '') + '" data-a="' + d.i + '" tabindex="0" role="button" aria-label="' + nm + (d.i === c ? '' : ', ' + sim.w[d.i] + ' shared structures; select to centre on them') + '"><circle r="' + radius(d.i).toFixed(1) + '"/><title>' + nm + ': ' + (d.i === c ? '' : sim.w[d.i] + ' shared, ') + a.n[d.i] + ' structures in MemProtMD</title></g>'; }).join('');
+        h += '<g class="net-labels">' + sim.list.map(function (d) { return '<text data-a="' + d.i + '" class="' + (d.i === c ? 'c' : '') + '" text-anchor="middle"' + (d.i === c || sim.big[d.i] ? '' : ' visibility="hidden"') + '>' + esc(a.names[d.i]) + '</text>'; }).join('') + '</g>';
+        vp.innerHTML = h;
+        Array.prototype.forEach.call(vp.querySelectorAll('.net-n'), function (g) {
+          var i = +g.getAttribute('data-a');
+          g.addEventListener('pointerdown', function (e) { if (e.button) return; e.stopPropagation(); drag = { node: sim.nodes[i], id: e.pointerId, sx: e.clientX, sy: e.clientY, moved: false }; svg.setPointerCapture(e.pointerId); });
+          g.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); recentre(i); } });
+          g.addEventListener('pointerenter', function () { hover = i; label(); });
+          g.addEventListener('pointerleave', function () { hover = null; label(); });
+          g.addEventListener('focus', function () { hover = i; label(); });
+          g.addEventListener('blur', function () { hover = null; label(); });
+        });
+        place();
+      }
+      function label() { Array.prototype.forEach.call(vp.querySelectorAll('.net-labels text'), function (t) { var i = +t.getAttribute('data-a'); t.setAttribute('visibility', i === c || sim.big[i] || i === hover || (drag && drag.node && drag.node.i === i) ? 'visible' : 'hidden'); }); }
+      function place() {
+        vp.setAttribute('transform', 'translate(' + (W / 2 + view.x).toFixed(1) + ',' + (H / 2 + view.y).toFixed(1) + ') scale(' + view.k.toFixed(3) + ')');
+        var ls = vp.querySelectorAll('.net-l'), gs = vp.querySelectorAll('.net-n circle'), ts = vp.querySelectorAll('.net-labels text');
+        sim.links.forEach(function (l, n) { var P = sim.nodes[l.s], Q = sim.nodes[l.t], e = ls[n]; e.setAttribute('x1', P.x.toFixed(1)); e.setAttribute('y1', P.y.toFixed(1)); e.setAttribute('x2', Q.x.toFixed(1)); e.setAttribute('y2', Q.y.toFixed(1)); });
+        var fs = (1 / view.k).toFixed(3);
+        sim.list.forEach(function (d, n) { gs[n].setAttribute('cx', d.x.toFixed(1)); gs[n].setAttribute('cy', d.y.toFixed(1)); ts[n].setAttribute('x', d.x.toFixed(1)); ts[n].setAttribute('y', (d.y - radius(d.i) - 5 / view.k).toFixed(1)); ts[n].style.fontSize = ((d.i === c ? 15 : 12) * fs) + 'px'; ts[n].style.strokeWidth = (4 * fs) + 'px'; });
+      }
+      /* forces: authors push apart, shared structures pull together, the centre author drifts to the middle */
+      function step() {
+        var L = sim.list, n = L.length, A = sim.alpha;
+        L.forEach(function (d) { var g = d.i === c ? 0.08 : 0.003; d.fx = -d.x * g; d.fy = -d.y * g; });
+        for (var u = 0; u < n; u++) for (var v = u + 1; v < n; v++) {
+          var P = L[u], Q = L[v], dx = Q.x - P.x, dy = Q.y - P.y, d2 = dx * dx + dy * dy + 1, f = Math.min(40, 9000 / d2), dd = Math.sqrt(d2);
+          P.fx -= dx / dd * f; P.fy -= dy / dd * f; Q.fx += dx / dd * f; Q.fy += dy / dd * f;
+        }
+        sim.links.forEach(function (l) {
+          var P = sim.nodes[l.s], Q = sim.nodes[l.t], dx = Q.x - P.x, dy = Q.y - P.y, dd = Math.sqrt(dx * dx + dy * dy) + 0.01, len = l.s === c ? 230 / (1 + 0.25 * Math.log(l.w)) : 150, f = (dd - len) * (l.s === c ? 0.03 : 0.012);
+          P.fx += dx / dd * f; P.fy += dy / dd * f; Q.fx -= dx / dd * f; Q.fy -= dy / dd * f;
+        });
+        L.forEach(function (d) {
+          if (drag && drag.moved && drag.node === d) { d.vx = d.vy = 0; return; }
+          d.vx = (d.vx + d.fx * A) * 0.62; d.vy = (d.vy + d.fy * A) * 0.62;
+          var sp = Math.sqrt(d.vx * d.vx + d.vy * d.vy); if (sp > 20) { d.vx *= 20 / sp; d.vy *= 20 / sp; }
+          d.x += d.vx; d.y += d.vy;
+        });
+        sim.alpha = Math.max(0, A * 0.985 - 0.0005);
+      }
+      function frame() {
+        sim.raf = 0;
+        if (!document.body.contains(svg)) return;
+        step(); place();
+        if (sim.alpha > 0.01 || drag) sim.raf = requestAnimationFrame(frame);
+      }
+      function kick(al) { sim.alpha = Math.max(sim.alpha, al || 1); if (!sim.raf) sim.raf = requestAnimationFrame(frame); }
+      function world(e) { var r = svg.getBoundingClientRect(), s = W / r.width; return { x: ((e.clientX - r.left) * s - W / 2 - view.x) / view.k, y: ((e.clientY - r.top) * s - H / 2 - view.y) / view.k }; }
+      svg.addEventListener('pointerdown', function (e) { if (e.button || e.pointerType === 'touch') return; drag = { pan: true, id: e.pointerId, sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y }; svg.setPointerCapture(e.pointerId); svg.classList.add('grab'); });
+      svg.addEventListener('pointermove', function (e) {
+        if (!drag || drag.id !== e.pointerId) return;
+        var r = svg.getBoundingClientRect(), s = W / r.width;
+        if (drag.pan) { view.x = drag.vx + (e.clientX - drag.sx) * s; view.y = drag.vy + (e.clientY - drag.sy) * s; place(); return; }
+        if (!drag.moved && Math.abs(e.clientX - drag.sx) + Math.abs(e.clientY - drag.sy) < 4) return;
+        drag.moved = true; var p = world(e); drag.node.x = p.x; drag.node.y = p.y; label(); kick(0.3);
+      });
+      function release(e) {
+        if (!drag || drag.id !== e.pointerId) return;
+        var d = drag; drag = null; svg.classList.remove('grab');
+        if (!d.pan && !d.moved) recentre(d.node.i); else if (!d.pan) { label(); kick(0.2); }
+      }
+      svg.addEventListener('pointerup', release); svg.addEventListener('pointercancel', release);
+      svg.addEventListener('wheel', function (e) { e.preventDefault(); var r = svg.getBoundingClientRect(), s = W / r.width; zoom(Math.exp(-e.deltaY * 0.0015), (e.clientX - r.left) * s, (e.clientY - r.top) * s); }, { passive: false });
+      function zoom(f, px, py) {
+        var k = Math.max(0.3, Math.min(4, view.k * f)); f = k / view.k;
+        px = px == null ? W / 2 : px; py = py == null ? H / 2 : py;
+        view.x = px - W / 2 - (px - W / 2 - view.x) * f; view.y = py - H / 2 - (py - H / 2 - view.y) * f; view.k = k; place();
+      }
+      Array.prototype.forEach.call(body.querySelectorAll('[data-z]'), function (b) { b.addEventListener('click', function () { var z = +b.getAttribute('data-z'); if (z) zoom(z); else { view = { x: 0, y: 0, k: k0 }; place(); } }); });
+      Array.prototype.forEach.call(body.querySelectorAll('[data-k]'), function (b) { b.addEventListener('click', function () {
+        K = +b.getAttribute('data-k'); sessSet('au-k', K);
+        Array.prototype.forEach.call(body.querySelectorAll('[data-k]'), function (x) { x.setAttribute('aria-pressed', x === b); });
+        build();
+      }); });
+
+      function recentre(i) {
+        if (i === c) return;
+        trail.push(c); c = i;
+        var nm = a.names[c];
+        try { history.pushState(null, '', authorHref(nm)); } catch (e) {}
+        route.current = route.last = 'authors/' + nm; document.title = nm + ' · MemProtMD';
+        build();
+      }
+      function text() {
+        var mine = newest(a.by[c]), prev = trail.length ? trail[trail.length - 1] : null;
+        document.getElementById('au-h1').textContent = a.names[c];
+        document.getElementById('au-sub').textContent = num(mine.length) + ' structures in MemProtMD with ' + num(Object.keys(sim.w).length) + ' co-authors; the network shows the ' + num(sim.list.length - 1) + ' closest.';
+        document.getElementById('au-trail').innerHTML = trail.length ? 'Visited: ' + trail.slice(-6).map(function (t) { return '<button type="button" class="linkbtn" data-back="' + t + '">' + esc(a.names[t]) + '</button>'; }).join(' → ') : '';
+        Array.prototype.forEach.call(body.querySelectorAll('[data-back]'), function (b) { b.addEventListener('click', function () { recentre(+b.getAttribute('data-back')); }); });
+        var sh = document.getElementById('au-shared'), shared = prev != null ? mine.filter(function (pdb) { return a.e[pdb].indexOf(prev) >= 0; }) : [];
+        sh.hidden = !shared.length;
+        sh.innerHTML = shared.length ? '<h2>Shared with ' + esc(a.names[prev]) + '</h2><div class="rowlist">' + shared.map(rowOf).join('') + '</div>' : '';
+        var lst = document.getElementById('au-list'), cap = all ? mine.length : 40;
+        lst.innerHTML = '<h2>Structures by ' + esc(a.names[c]) + '</h2><div class="rowlist">' + mine.slice(0, cap).map(rowOf).join('') + '</div>' + (mine.length > cap ? '<p><button type="button" class="btn ghost" id="au-all">Show all ' + num(mine.length) + '</button></p>' : '');
+        var ab = document.getElementById('au-all'); if (ab) ab.addEventListener('click', function () { all = true; text(); });
+      }
+      build();
     }).catch(function () { var b = document.getElementById('au-body'); if (b) b.innerHTML = '<p>The author list could not be loaded.</p>'; });
   }
   function sessGet(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
@@ -1357,6 +1417,6 @@
   }
   document.addEventListener('mousedown', function (e) { var qs = document.getElementById('qs'), pop = document.getElementById('qs-pop'); if (qs && pop && !qs.contains(e.target)) pop.hidden = true; });
   app.innerHTML = '<p style="padding:2rem">Loading MemProtMD…</p>';
-  load().then(function () { window.addEventListener('hashchange', route); route(); })
+  load().then(function () { window.addEventListener('hashchange', route); route(); setTimeout(function () { loadAuthors().catch(function () {}); }, 1200); })
     .catch(function () { app.innerHTML = '<p style="padding:2rem">Could not load the MemProtMD index. Reload the page to try again.</p>'; });
 })();
