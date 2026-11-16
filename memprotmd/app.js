@@ -539,6 +539,10 @@
         if (k === 'HELIX') { b = parseInt(l.substr(21, 4), 10); e = parseInt(l.substr(33, 4), 10); if (b <= e) ss.h.push({ beg_auth_seq_id: b, end_auth_seq_id: e }); }
         else if (k === 'SHEET') { b = parseInt(l.substr(22, 4), 10); e = parseInt(l.substr(33, 4), 10); if (b <= e) ss.s.push({ beg_auth_seq_id: b, end_auth_seq_id: e }); }
       });
+      /* the file's HELIX/SHEET records (from DSSP on the snapshot) often do not line up with the atoms, and Mol*
+         then draws helices as thin coils; without them Mol* works out the secondary structure from the
+         coordinates itself. The records are still used above to colour helices and strands. */
+      t = t.split('\n').filter(function (l) { return l.slice(0, 5) !== 'HELIX' && l.slice(0, 5) !== 'SHEET'; }).join('\n');
       return { url: URL.createObjectURL(new Blob([t], { type: 'text/plain' })), format: 'pdb', blob: true, ss: ss };
     }).catch(function () { return { url: 'https://models.rcsb.org/' + pdb + '.bcif', format: 'bcif', rcsb: true, chains: null }; });
   }
