@@ -476,3 +476,5 @@ details.stalled li { display: grid; grid-template-columns: 4.5rem minmax(0, 12re
 @media (prefers-reduced-motion: reduce) { .heroimg, .stage, .molview, .tipping, .flip-ico { transition: none !important; } }
 .dyn-well { aspect-ratio: 16 / 10; }
 .dyn-well .heroimg { object-fit: contain; }
+.herowell.dyn-well, .herowell.dyn-well.is-3d { aspect-ratio: 16 / 10; }
+.dyn-well .heroimg { position: absolute; inset: 0; width: 100%; height: 100%; aspect-ratio: auto; }

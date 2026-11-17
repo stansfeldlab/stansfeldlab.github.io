@@ -866,9 +866,7 @@
           view(VIEWS[1][0], VIEWS[1][1], st.v[1], 'lip', 'fade', seg('v1', VIEWS[1][1].map(function (o) { return o[0]; }), st.v[1], 'Lipid view'), VIEWS[1][3]) +
           view('Lipid contacts', contactImgs, st.contact * 2 + st.rep, 'con', 'fade', '<div class="btns">' + seg('contact', CONTACTS.map(function (c) { return c[0]; }), st.contact, 'Contact group') + seg('rep', REPS.map(function (c) { return c[0]; }), st.rep, 'Representation') + '</div>', 'Average occupancy of the chosen group within 6 Å of the protein over the final 800 ns.') + '</div></div>'
           : '<p class="small muted">Rendered images load from file storage, which this preview cannot reach.</p>') +
-          '<div class="panel stack" id="dyn" hidden><h3>Self-assembly</h3><div class="well herowell dyn-well"><img class="heroimg' + (fl ? ' flipped' : '') + '" src="' + (imgUrl('pdbhero', pdb) || PH) + '"' + fbAttr('pdbhero', pdb) + ' alt="" onerror="mpmFb(this)">' +
-          '<button type="button" class="btn mol-open" id="dyn-open"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 4v12l10-6z" fill="currentColor"/></svg>Play the simulation</button></div>' +
-          '<div class="btns dyn-ctl" hidden><button type="button" class="btn ghost" id="dyn-play">Pause</button></div><p class="small muted dyn-status"></p></div></section>' +
+          '</section>' +
         '<section class="panel stack"><h2>Polypeptide chains</h2>' + (!st.tried ? '<p class="muted">Loading…</p>' : !ch.length ? '<p class="muted">No chain analysis is recorded for this entry.</p>' :
           '<div class="chainpick">' + ch.map(function (c) {
             var tm = c.tm_alpha ? c.tm_alpha + ' TM helices' : c.tm_beta ? c.tm_beta + ' TM strands' : c.type;
@@ -876,6 +874,9 @@
           }).join('') + '</div>' + (st.rec && st.rec.prof ? '<p class="small muted">Each icon shows where the chain\'s residues sit along the bilayer normal: all residues in white, helices in blue, strands in green. The shaded band is the bulk bilayer.</p>' : '') +
           (selc ? '<dl class="facts"><dt>Placement</dt><dd>' + esc(sentence(selc.type.toUpperCase())) + '</dd><dt>Membrane-spanning helices</dt><dd>' + selc.tm_alpha + '</dd><dt>Membrane-spanning strands</dt><dd>' + selc.tm_beta + '</dd><dt>Lipid-facing elements</dt><dd>' + (selc.tm_alpha_lipid + selc.tm_beta_lipid) + '</dd></dl>' +
             '<div id="chain-view" class="stack"><p class="muted">Loading the chain analysis…</p></div>' : '<p class="small muted">Choose a chain for its membrane placement, topology and contacts along its sequence.</p>')) + '</section>' +
+          '<section class="panel stack" id="dyn" hidden><h2>Coarse-grained Molecular Dynamics Simulation</h2><div class="well herowell dyn-well"><img class="heroimg' + (fl ? ' flipped' : '') + '" src="' + (imgUrl('pdbhero', pdb) || PH) + '"' + fbAttr('pdbhero', pdb) + ' alt="" onerror="mpmFb(this)">' +
+          '<button type="button" class="btn mol-open" id="dyn-open"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 4v12l10-6z" fill="currentColor"/></svg>Play the simulation</button></div>' +
+          '<div class="btns dyn-ctl" hidden><button type="button" class="btn ghost" id="dyn-play">Pause</button></div><p class="small muted dyn-status"></p></section>' +
         '<section class="panel stack"><h2>Downloads</h2><p class="small muted">Files are served from file storage. Licensed under Creative Commons Attribution 4.0.</p><div class="files">' + FILES.map(function (g) {
           return '<div><h3>' + g[0] + '</h3><ul>' + g[1].map(function (f) { return '<li>' + extA(base + f[1], sim + '-' + f[0]) + '<span>' + f[2] + '</span></li>'; }).join('') + '</ul></div>';
         }).join('') + '</div></section>' + citeBox(pdb, cit) + '</div>';
