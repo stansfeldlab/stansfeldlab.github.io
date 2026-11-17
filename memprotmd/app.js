@@ -395,7 +395,7 @@
         hist('Domain of life', ALL.dom, mine.dom) + hist('Publication year', ALL.year, mine.year) + hist('Experimental method', ALL.method, mine.method) + hist('Resolution (Å)', ALL.res, mine.res) +
         '</div><p class="small muted">Each set is normalised separately. Thickness is measured from the simulations; values beyond the ends of each scale are counted in the end bars.</p></section></aside></div>' + (st.aa ? aaPanel(st.aa, st.aaAll, 'grp', 'in this group') : '') + '</div>';
       show(null, h, plain(c.title));
-      if (st.aa) aaWire(st.aa, 'grp');
+      if (st.aa) aaWire(st.aa, 'grp', st.aaAll);
       each('[data-act]', function (b) { b.addEventListener('click', function () { var a = b.getAttribute('data-act'); if (a === 'more') st.n += 25; else st.kidsAll = !st.kidsAll; keep(); }); });
       each('[data-sort]', function (b) { b.addEventListener('click', function () { var k = b.getAttribute('data-sort'); if (st.sort === k) st.dir = -st.dir; else { st.sort = k; st.dir = k === 'date' ? -1 : 1; } keep(); }); });
     }
@@ -423,6 +423,15 @@
       '<dl class="facts"><dt>Bulk bilayer</dt><dd>' + bulk.toFixed(1) + ' Å</dd><dt>Next to the protein</dt><dd>' + ann.toFixed(1) + ' Å</dd><dt>Change</dt><dd>' + (t.thickness_diff > 0 ? '+' : '−') + Math.abs(t.thickness_diff).toFixed(1) + ' Å</dd></dl></div>';
   }
   /* Residue density along the bilayer normal for one chain: all residues, helices and strands. */
+  /* ---------- flipping an entry the other way up ---------- */
+  /* Kept per entry in this browser. A flipped entry is turned 180° about the vertical axis of the view: depths
+     change sign, the leaflets swap, and pictures turn round. */
+  function isFlip(pdb) { try { return localStorage.getItem('mpm-flip-' + pdb) === '1'; } catch (e) { return false; } }
+  function setFlip(pdb, on) { try { if (on) localStorage.setItem('mpm-flip-' + pdb, '1'); else localStorage.removeItem('mpm-flip-' + pdb); } catch (e) {} }
+  function flipKey(k) { return k.replace(/^leaflet=a(?=;|$)/, 'leaflet=#').replace(/^leaflet=b(?=;|$)/, 'leaflet=a').replace(/^leaflet=#/, 'leaflet=b'); }
+  function flipRows(rows) { return rows.map(function (r) { var o = {}; Object.keys(r).forEach(function (k) { o[flipKey(k)] = r[k]; }); if (r.z != null && r.z !== '') o.z = String(-(+r.z)); return o; }); }
+  function flipTh(t) { if (!t || t.bulk_mid == null) return t; var o = {}; Object.keys(t).forEach(function (k) { o[k] = t[k]; }); if (t.annular_mid != null) o.annular_mid = 2 * t.bulk_mid - t.annular_mid; return o; }
+  function flipProf(p) { if (!p) return p; var c = {}; Object.keys(p.c).forEach(function (k) { c[k] = p.c[k].map(function (a) { return a.slice().reverse(); }); }); var n = (p.c[Object.keys(p.c)[0]] || [[]])[0].length; return { lo: -(p.lo + n * p.w), w: p.w, c: c }; }
   function violin(prof, chain, t) {
     var d = prof && prof.c[chain]; if (!d) return '';
     var n = d[0].length, mx = Math.max.apply(null, d[0].concat([1e-9])), Z = Math.max(Math.abs(prof.lo), Math.abs(prof.lo + n * prof.w), 25) * 1.04;
@@ -578,6 +587,7 @@
     }
     if (MOL.sel && MOL.sel.chain) rep.children.push({ kind: 'color', params: { selector: { auth_asym_id: MOL.sel.chain, beg_auth_seq_id: MOL.sel.a, end_auth_seq_id: MOL.sel.b }, color: '#f08c00' } });
     var prot = { kind: 'component', params: { selector: 'protein' }, children: [rep] };
+    if (isFlip(MOL.pdb)) kids.push({ kind: 'transform', params: { rotation: [-1, 0, 0, 0, 1, 0, 0, 0, -1] } });
     if (!s.rcsb) prot.children.push({ kind: 'focus', params: { direction: [0, 1, 0], up: [0, 0, 1], radius_factor: 1.15 } });
     kids.push(prot);
     if (s.rcsb) kids.push({ kind: 'component', params: { selector: 'ligand' }, children: [{ kind: 'representation', params: { type: 'ball_and_stick' }, children: [{ kind: 'color', params: { color: '#8a94a8' } }] }] });
@@ -686,8 +696,10 @@
     var st = { rec: null, tried: false, v: [1, 0], contact: 0, rep: 0, violins: null, cv: null };
     function seg(g, labels, sel, aria) { return '<div class="seg" role="group" aria-label="' + esc(aria) + '">' + labels.map(function (l, i) { return '<button type="button" data-g="' + g + '" data-i="' + i + '" aria-pressed="' + (i === sel) + '">' + l + '</button>'; }).join('') + '</div>'; }
     function view(title, opts, sel, stage, mode, controls, note) {
-      return '<div class="view"><h3>' + title + '</h3><div class="well stage stage-' + mode + '" data-stage="' + stage + '">' + opts.map(function (o, i) {
-        var u = imgUrl('sim', pdb + '/' + o[1]) || PH;
+      var fl = isFlip(pdb);
+      return '<div class="view"><h3>' + title + '</h3><div class="well stage stage-' + mode + (fl ? ' flipped' : '') + '" data-stage="' + stage + '">' + opts.map(function (o, i) {
+        /* turned over, the view from the top is the old view from the bottom */
+        var u = imgUrl('sim', pdb + '/' + (fl ? o[1].replace(/^top-/, '#-').replace(/^bottom-/, 'top-').replace(/^#-/, 'bottom-') : o[1])) || PH;
         var cls = mode === 'rotate' ? (i === sel ? 'is-front' : i < sel ? 'is-up' : 'is-down') : (i === sel ? 'is-on' : 'is-off');
         return '<img class="face ' + cls + '" data-i="' + i + '" ' + (i === sel ? 'src' : 'data-src') + '="' + u + '" alt="' + esc(title + ': ' + o[0]) + '"' + (i === sel ? '' : ' aria-hidden="true"') + ' onerror="mpmPh(this)">';
       }).join('') + '</div>' + controls + '<p>' + note + '</p></div>';
@@ -718,14 +730,15 @@
       }).join('');
       var ch = s.chains || [], selc = ch.filter(function (c) { return c.chainID === chainSel; })[0];
       var contactImgs = []; CONTACTS.forEach(function (cn) { REPS.forEach(function (rp) { contactImgs.push([cn[0] + ', ' + rp[0].toLowerCase(), 'front-contacts-' + cn[1] + '-' + rp[1]]); }); });
-      var h = '<div class="stack-lg"><div class="cols entry"><div class="herocol"><div class="well herowell" id="mol-host"><img class="heroimg" src="' + (imgUrl('pdbhero', pdb) || PH) + '"' + fbAttr('pdbhero', pdb) + ' alt="' + esc(pdb.toUpperCase()) + ' in its simulated bilayer" onerror="mpmFb(this)">' +
+      var fl = isFlip(pdb), th = fl ? flipTh(s.thinning) : s.thinning, prof = st.rec && st.rec.prof ? (fl ? flipProf(st.rec.prof) : st.rec.prof) : null;
+      var h = '<div class="stack-lg"><div class="cols entry"><div class="herocol"><div class="well herowell" id="mol-host"><img class="heroimg' + (fl ? ' flipped' : '') + '" src="' + (imgUrl('pdbhero', pdb) || PH) + '"' + fbAttr('pdbhero', pdb) + ' alt="' + esc(pdb.toUpperCase()) + ' in its simulated bilayer" onerror="mpmFb(this)">' +
           '<button type="button" class="btn mol-open" id="mol-open"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2 17 6v8l-7 4-7-4V6z M10 2v8m0 0 7-4m-7 4-7-4m7 4v8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>3D view</button></div><div id="mol-ctrl"></div></div>' +
         '<div class="stack"><div class="pagehead">' + crumbs([['Home', href('home')], ['Structures', refHref('mpm', 'membrane_proteins')], [pdb.toUpperCase(), null]]) +
         '<h1>' + ttl(pdbTitle(r.title || e[1], pdb)) + '</h1><div class="idline"><span class="tag">PDB ' + pdb + '</span>' + ((r.subtitle || e[2]) ? '<span>' + esc(sentence(r.subtitle || e[2])) + '</span>' : '') + '</div></div>' +
         '<dl class="facts">' + [['Released', fmtDate(e[5])], ['Method', esc(sentence(e[3] || ''))], ['Resolution', e[4] ? Number(e[4]).toFixed(2).replace(/0$/, '') + ' Å' : ''], ['Organism', orgNames(e).map(function (n) { return '<a href="' + href('search/text') + '?o=' + encodeURIComponent(n) + '"><i>' + esc(n) + '</i></a>'; }).join(', ')],
           ['Ligands', esc((r.ligands || []).map(function (l) { return sentence(l.description); }).join(', '))], ['Keywords', esc((r.keywords || []).join(', '))]].filter(function (p) { return p[1]; }).map(function (p) { return '<dt>' + p[0] + '</dt><dd>' + p[1] + '</dd>'; }).join('') + '</dl>' +
         (cit.title ? '<p class="cite">' + esc(ionFix(cit.title)) + ' <span class="muted">' + (r.primary_authors || []).slice(0, 4).map(function (n) { return '<a href="' + authorHref(String(n).trim()) + '">' + esc(String(n).trim().replace(/\.$/, '')) + '</a>'; }).join(', ') + ((r.primary_authors || []).length > 4 ? ' et al' : '') + '. ' + esc([cit.journal, cit.year].filter(Boolean).join(' ')) + '.</span> ' + (cit.DOI ? extA('https://doi.org/' + cit.DOI, 'doi:' + esc(cit.DOI)) : '') + '</p>' : '') +
-        '<div class="btns">' + extA(base + 'files/structures/at.pdb', 'Atomistic PDB ↓', 'btn') + extA('https://molstar.org/viewer/?structure-url=' + encodeURIComponent(base + 'files/structures/at.pdb') + '&structure-url-format=pdb', 'Open in Mol* ↗', 'btn ghost') + '<a class="btn ghost" href="' + href('compare/' + pdb) + '">Compare…</a></div>' + xlinks(pdb, r) + '</div></div>' +
+        '<div class="btns">' + extA(base + 'files/structures/at.pdb', 'Atomistic PDB ↓', 'btn') + extA('https://molstar.org/viewer/?structure-url=' + encodeURIComponent(base + 'files/structures/at.pdb') + '&structure-url-format=pdb', 'Open in Mol* ↗', 'btn ghost') + '<a class="btn ghost" href="' + href('compare/' + pdb) + '">Compare…</a><button type="button" class="btn ghost" id="flip" aria-pressed="' + fl + '" title="Show this entry the other way up, if you think it sits upside down in its membrane">' + (fl ? 'Flipped' : 'Flip') + '</button></div>' + (fl ? '<p class="small muted">Shown the other way up from the simulation: pictures, the 3D view, the chain icons, the topology and leaflets are all turned over. Select Flipped to undo.</p>' : '') + xlinks(pdb, r) + '</div></div>' +
         (groups ? '<section class="panel"><h2>Member of</h2><div class="groups">' + groups + '</div></section>' : '') +
         '<section class="stack"><div class="head-row" style="margin:0"><h2>Simulation</h2><span class="mono muted">' + sim + '</span></div>' +
         (s.thinning ? '<div class="panel stack"><h3>Bilayer thickness</h3>' + gauge(s.thinning) + (sv.n_lipid_molecules ? '<p class="small muted">' + num(sv.n_lipid_molecules) + ' ' + esc(Object.keys(s.composition || { lipid: 1 }).join('/')) + ' lipids around ' + num(sv.n_protein_residues) + ' protein residues.</p>' : '') + '</div>' : '') +
@@ -737,7 +750,7 @@
         '<section class="panel stack"><h2>Polypeptide chains</h2>' + (!st.tried ? '<p class="muted">Loading…</p>' : !ch.length ? '<p class="muted">No chain analysis is recorded for this entry.</p>' :
           '<div class="chainpick">' + ch.map(function (c) {
             var tm = c.tm_alpha ? c.tm_alpha + ' TM helices' : c.tm_beta ? c.tm_beta + ' TM strands' : c.type;
-            return '<a href="' + href('ref/PDB/' + pdb + '/chain/' + c.chainID) + '"' + (c.chainID === chainSel ? ' aria-current="true"' : '') + '>' + (st.rec && st.rec.prof && st.rec.prof.c[c.chainID] ? '<span class="chainsvg">' + violin(st.rec.prof, c.chainID, s.thinning) + '</span>' : '') + '<span>Chain ' + esc(c.chainID) + '<small>' + esc(tm) + '</small></span></a>';
+            return '<a href="' + href('ref/PDB/' + pdb + '/chain/' + c.chainID) + '"' + (c.chainID === chainSel ? ' aria-current="true"' : '') + '>' + (prof && prof.c[c.chainID] ? '<span class="chainsvg">' + violin(prof, c.chainID, th) + '</span>' : '') + '<span>Chain ' + esc(c.chainID) + '<small>' + esc(tm) + '</small></span></a>';
           }).join('') + '</div>' + (st.rec && st.rec.prof ? '<p class="small muted">Each icon shows where the chain\'s residues sit along the bilayer normal: all residues in white, helices in blue, strands in green. The shaded band is the bulk bilayer.</p>' : '') +
           (selc ? '<dl class="facts"><dt>Placement</dt><dd>' + esc(sentence(selc.type.toUpperCase())) + '</dd><dt>Membrane-spanning helices</dt><dd>' + selc.tm_alpha + '</dd><dt>Membrane-spanning strands</dt><dd>' + selc.tm_beta + '</dd><dt>Lipid-facing elements</dt><dd>' + (selc.tm_alpha_lipid + selc.tm_beta_lipid) + '</dd></dl>' +
             '<div id="chain-view" class="stack"><p class="muted">Loading the chain analysis…</p></div>' : '<p class="small muted">Choose a chain for its membrane placement, topology and contacts along its sequence.</p>')) + '</section>' +
@@ -748,7 +761,9 @@
       if (molMount.pdb !== pdb) { molMount.pdb = pdb; molMount.lipids = molMount.chains = null; }
       molMount(pdb, base, Object.keys(s.composition || {}), ch.map(function (c) { return c.chainID; }));
       mddbCount(pdb); wireCite(pdb, cit);
-      if (selc) chainView(pdb, base, chainSel, s.thinning, st);
+      if (selc) chainView(pdb, base, chainSel, th, st);
+      var fb = document.getElementById('flip');
+      if (fb) fb.addEventListener('click', function () { setFlip(pdb, !isFlip(pdb)); keep(); if (MOL.viewer && MOL.pdb === pdb) { MOL.first = true; molPaint(base); } var b2 = document.getElementById('flip'); if (b2) b2.focus(); });
       each('[data-g]', function (b) { b.addEventListener('click', function () {
         var g = b.getAttribute('data-g'), i = +b.getAttribute('data-i');
         if (g === 'v0') st.v[0] = i; else if (g === 'v1') st.v[1] = i; else st[g] = i;
@@ -986,7 +1001,8 @@
     chainData(base).then(function (d) {
       host = document.getElementById('chain-view'); if (!host || route.current.indexOf('ref/PDB/' + pdb) !== 0) return;
       var rows = d.csv ? d.csv.rows.filter(function (r) { return r.chainID === chain && (r.chainInstance === '1' || r.chainInstance === undefined); }) : [];
-      var ct = d.topo && (d.topo.topology || []).filter(function (t) { return t.chainID === chain && +t.chainInstance === 1; })[0];
+      if (rows.length && isFlip(pdb)) rows = flipRows(rows);
+      var ct = !rows.length && d.topo && (d.topo.topology || []).filter(function (t) { return t.chainID === chain && +t.chainInstance === 1; })[0];
       /* the pipeline's file numbers residues along the whole table, so later chains are shifted back to their own rows */
       if (ct && !ct.shifted) { var off = d.csv && rows.length ? d.csv.rows.indexOf(rows[0]) : 0; ct.shifted = true; if (off > 0) (ct.segments || []).forEach(function (sg) { (sg.elements || []).forEach(function (el) { el.resIdxs = (el.resIdxs || []).map(function (i) { return i - off; }); }); }); }
       if (!ct && rows.length) { try { ct = topoBuild(rows, th && th.bulk_mid != null ? +th.bulk_mid : 0); if (!ct.segments.length) ct = null; } catch (e) { ct = null; } }
@@ -1430,7 +1446,7 @@
         '<line class="phos" x1="' + X(-20) + '" x2="' + X(-20) + '" y1="' + T + '" y2="' + (H - B) + '"/><line class="phos" x1="' + X(20) + '" x2="' + X(20) + '" y1="' + T + '" y2="' + (H - B) + '"/>' +
         [-40, -20, 0, 20, 40].map(function (z) { return '<text class="xtick" x="' + X(z) + '" y="' + (H - B + 13) + '" text-anchor="middle">' + (z < 0 ? '−' + (-z) : z) + '</text>'; }).join('') +
         '<text class="xtick" x="' + (W - R) + '" y="' + (H - 2) + '" text-anchor="end">Å from bilayer centre</text>' +
-        aas.map(function (aa, k) { return allH[aa] ? '<path class="sline s' + (k + 1) + ' all" d="' + path(allH[aa]) + '"/>' : ''; }).join('') +
+        aas.map(function (aa, k) { return allH[aa] ? '<path class="sline s' + (k + 1) + ' all" data-all="' + aa + '" d="' + path(allH[aa]) + '"/>' : ''; }).join('') +
         aas.map(function (aa, k) { return '<path class="sline s' + (k + 1) + '" data-line="1" data-aa="' + aa + '" d="' + path(g.h[aa]) + '"><title>' + aa + ' (' + num(g.counts[aa]) + ' residues)</title></path>'; }).join('') +
         '</svg><div class="hlegend">' + aas.map(function (aa, k) { return '<button type="button" class="key s' + (k + 1) + '" data-aa="' + aa + '"><i></i>' + aa + '</button>'; }).join('') + '</div></figure>';
     }).join('');
@@ -1439,19 +1455,115 @@
     return '<section class="panel stack aa-panel"><h2>Amino acids ' + what + '</h2><p class="small muted" style="max-width:46rem">From the per-residue contacts of ' + num(d.entries) + ' simulation' + (d.entries === 1 ? '' : 's') + ' (' + num(d.residues) + ' residues). Contacts are relative to glycine (0), scaled so the amino acid with most contact in each row is 100: red means more contact than glycine, blue less. Select a row to sort by it.</p>' +
       '<div class="ct-key" aria-hidden="true"><span>Less contact than glycine</span><i></i><span>More</span></div>' + ctable(pfx + '-over', d.overview) +
       '<details class="aa-more"><summary>By lipid bead and solvent species</summary>' + ctable(pfx + '-detail', d.detail) + '</details>' +
-      '<h3>Where the amino acids sit</h3><p class="small muted" style="max-width:46rem">Share of each amino acid at each depth' + (all ? '; faint lines are all of MemProtMD, for comparison' : '') + '. Dotted lines mark the lipid phosphates; the shaded band is the membrane core.</p><div class="hgrid">' + depthCards(d, all) + '</div></section>';
+      '<h3>Where the amino acids sit</h3><p class="small muted" style="max-width:46rem">Share of each amino acid at each depth' + (all ? '; dashed lines are all of MemProtMD, for comparison. Select an amino acid, here or in the tables above, to set it against all of MemProtMD' : '') + '. Dotted lines mark the lipid phosphates; the shaded band is the membrane core.</p>' +
+      (all ? '<div class="aa-focus" id="' + pfx + '-focus"></div>' : '') + '<div class="hgrid">' + depthCards(d, all) + '</div></section>';
   }
-  function aaWire(d, pfx) {
+  /* one amino acid in this group (solid) against all of MemProtMD (dashed) */
+  function aaFocus(d, all, aa) {
+    function hmap(x) { var o = {}, n = {}; (x ? x.groups : []).forEach(function (g) { Object.keys(g.h).forEach(function (k) { o[k] = g.h[k]; n[k] = g.counts[k]; }); }); return { h: o, n: n }; }
+    var G = hmap(d), A = hmap(all), have = Object.keys(G.h).sort();
+    if (!G.h[aa]) aa = have[0];
+    var W = 640, H = 230, L = 40, R = 12, T = 10, B = 30, x0 = d.bins[0][0], x1 = d.bins[d.bins.length - 1][1], ym = 0;
+    (G.h[aa] || []).concat(A.h[aa] || []).forEach(function (v) { ym = Math.max(ym, v); }); ym = ym * 1.1 || 1;
+    function X(z) { return L + (z - x0) / (x1 - x0) * (W - L - R); }
+    function Y(v) { return T + (1 - v / ym) * (H - T - B); }
+    function path(vals) { return vals.map(function (v, i) { return (i ? 'L' : 'M') + X((d.bins[i][0] + d.bins[i][1]) / 2).toFixed(1) + ',' + Y(v).toFixed(1); }).join(''); }
+    function mean(vals) { var s = 0, w = 0; vals.forEach(function (v, i) { var z = Math.abs((d.bins[i][0] + d.bins[i][1]) / 2); s += v * z; w += v; }); return w ? s / w : null; }
+    var yt = [0, ym / 2 / 1.1, ym / 1.1].map(function (v) { return v; });
+    var mg = mean(G.h[aa]), ma = A.h[aa] ? mean(A.h[aa]) : null;
+    return '<div class="aa-chips" role="group" aria-label="Amino acid">' + have.map(function (k) { return '<button type="button" class="chip" data-focus="' + k + '" aria-pressed="' + (k === aa) + '">' + k + '</button>'; }).join('') + '</div>' +
+      '<figure class="hcard aa-fig"><figcaption>' + aa + ' at each depth</figcaption><svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Depth distribution of ' + aa + ' in this group and in all of MemProtMD">' +
+      '<rect class="band" x="' + X(-20) + '" y="' + T + '" width="' + (X(20) - X(-20)) + '" height="' + (H - T - B) + '"/>' +
+      '<line class="phos" x1="' + X(-20) + '" x2="' + X(-20) + '" y1="' + T + '" y2="' + (H - B) + '"/><line class="phos" x1="' + X(20) + '" x2="' + X(20) + '" y1="' + T + '" y2="' + (H - B) + '"/>' +
+      yt.map(function (v) { return '<text class="xtick" x="' + (L - 6) + '" y="' + (Y(v) + 3).toFixed(1) + '" text-anchor="end">' + Math.round(v * 100) + '%</text>'; }).join('') +
+      [-40, -20, 0, 20, 40].map(function (z) { return '<text class="xtick" x="' + X(z) + '" y="' + (H - B + 14) + '" text-anchor="middle">' + (z < 0 ? '−' + (-z) : z) + '</text>'; }).join('') +
+      '<text class="xtick" x="' + (W - R) + '" y="' + (H - 2) + '" text-anchor="end">Å from bilayer centre</text>' +
+      (A.h[aa] ? '<path class="fline all" d="' + path(A.h[aa]) + '"/>' : '') + '<path class="fline" d="' + path(G.h[aa]) + '"/></svg>' +
+      '<div class="hlegend"><span class="key"><i></i>This group · ' + num(G.n[aa]) + ' residues' + (mg != null ? ' · on average ' + mg.toFixed(1) + ' Å from the centre' : '') + '</span>' +
+      (A.h[aa] ? '<span class="key dashed"><i></i>All of MemProtMD · ' + num(A.n[aa]) + ' residues' + (ma != null ? ' · ' + ma.toFixed(1) + ' Å' : '') + '</span>' : '') + '</div></figure>';
+  }
+  function aaWire(d, pfx, all) {
     wireTable(pfx + '-over', d.overview, [2, 1]); wireTable(pfx + '-detail', d.detail, [null, 1]);
+    var box = document.getElementById(pfx + '-focus');
+    function focus(aa) {
+      if (!box) return; aaWire.sel = aa;
+      box.innerHTML = aaFocus(d, all, aa);
+      Array.prototype.forEach.call(box.querySelectorAll('[data-focus]'), function (b) { b.addEventListener('click', function () { focus(b.getAttribute('data-focus')); }); });
+    }
+    function hl(aa) { highlight(aa); each('.aa-panel [data-all]', function (e) { e.classList.toggle('hl', !!aa && e.getAttribute('data-all') === aa); }); }
+    focus(aaWire.sel || 'TRP');
     each('.aa-panel [data-aa]', function (e) {
-      e.addEventListener('mouseenter', function () { highlight(e.getAttribute('data-aa')); });
-      e.addEventListener('mouseleave', function () { highlight(null); });
-      e.addEventListener('focus', function () { highlight(e.getAttribute('data-aa')); });
-      e.addEventListener('blur', function () { highlight(null); });
+      e.addEventListener('mouseenter', function () { hl(e.getAttribute('data-aa')); });
+      e.addEventListener('mouseleave', function () { hl(null); });
+      e.addEventListener('focus', function () { hl(e.getAttribute('data-aa')); });
+      e.addEventListener('blur', function () { hl(null); });
+      if (box) e.addEventListener('click', function () { focus(e.getAttribute('data-aa')); });
     });
   }
 
   /* ---------- comparing two entries ---------- */
+  /* two Mol* viewers side by side, separate from the entry page's single viewer */
+  var CMPV = [];
+  function cmpDispose() { CMPV.forEach(function (v) { if (!v) return; v.dead = true; if (v.viewer) { try { v.viewer.dispose(); } catch (e) {} } if (v.src && v.src.blob) URL.revokeObjectURL(v.src.url); }); CMPV = []; }
+  function cmpTree(s, flip) {
+    var rep = { kind: 'representation', params: { type: 'cartoon' }, children: [] };
+    if (s.ss && (s.ss.h.length || s.ss.s.length)) {
+      rep.children.push({ kind: 'color', params: { color: '#dfe4ec' } });
+      if (s.ss.h.length) rep.children.push({ kind: 'color', params: { selector: s.ss.h, color: '#2f6fd0' } });
+      if (s.ss.s.length) rep.children.push({ kind: 'color', params: { selector: s.ss.s, color: '#17946b' } });
+    } else rep.children.push({ kind: 'color', params: { color: CHAIN_COLS[0] } });
+    var prot = { kind: 'component', params: { selector: 'protein' }, children: [rep] }, kids = [];
+    /* turned 180° about the viewing direction's vertical axis, as the flipped image is */
+    if (flip) kids.push({ kind: 'transform', params: { rotation: [-1, 0, 0, 0, 1, 0, 0, 0, -1] } });
+    if (!s.rcsb) prot.children.push({ kind: 'focus', params: { direction: [0, 1, 0], up: [0, 0, 1], radius_factor: 1.15 } });
+    kids.push(prot);
+    if (s.rcsb) kids.push({ kind: 'component', params: { selector: 'ligand' }, children: [{ kind: 'representation', params: { type: 'ball_and_stick' }, children: [{ kind: 'color', params: { color: '#8a94a8' } }] }] });
+    else kids.push({ kind: 'component', params: { selector: ['DPPC', 'DPP'].map(function (n) { return { label_comp_id: n, type_symbol: 'P' }; }) }, children: [{ kind: 'representation', params: { type: 'spacefill', size_factor: 0.85 }, children: [{ kind: 'color', params: { color: '#e0a526' } }] }] });
+    return { metadata: { version: '1' }, root: { kind: 'root', children: [{ kind: 'canvas', params: { background_color: '#ffffff' } },
+      { kind: 'download', params: { url: s.url }, children: [{ kind: 'parse', params: { format: s.format }, children: [{ kind: 'structure', params: { type: 'model' }, children: kids }] }] }] } };
+  }
+  function cmpCam(v) { try { v.viewer.plugin.canvas3d.setProps({ camera: { mode: MOL.cam ? 'perspective' : 'orthographic' } }); } catch (e) {} }
+  function cmpPaint(v, flip) {
+    if (!v.viewer) return;
+    v.viewer.loadMvsData(JSON.stringify(cmpTree(v.src, flip)), 'mvsj', { doNotReportErrors: true }).then(function () { cmpCam(v); }).catch(function () {});
+  }
+  /* rotating one view turns the other the same way, each about its own centre */
+  function cmpLink(i, link) {
+    var v = CMPV[i];
+    try {
+      v.viewer.plugin.canvas3d.camera.changed.subscribe(function () {
+        var o = CMPV[1 - i];
+        if (!link() || v.syncing || !o || !o.viewer || o.dead) return;
+        var a = v.viewer.plugin.canvas3d.camera.getSnapshot(), oc = o.viewer.plugin.canvas3d.camera, b = oc.getSnapshot();
+        var d = [a.position[0] - a.target[0], a.position[1] - a.target[1], a.position[2] - a.target[2]], la = Math.hypot(d[0], d[1], d[2]);
+        var lb = Math.hypot(b.position[0] - b.target[0], b.position[1] - b.target[1], b.position[2] - b.target[2]);
+        if (!la || !lb) return;
+        var pos = [b.target[0] + d[0] / la * lb, b.target[1] + d[1] / la * lb, b.target[2] + d[2] / la * lb];
+        o.syncing = true;
+        try { oc.setState({ position: pos, up: [a.up[0], a.up[1], a.up[2]] }, 0); o.viewer.plugin.canvas3d.requestDraw(); } catch (e) {}
+        o.syncing = false;
+      });
+    } catch (e) {}
+  }
+  function cmpOpen(i, p, el, flip, link) {
+    var v = CMPV[i] = { viewer: null, src: null, dead: false };
+    el.classList.add('is-3d');
+    el.innerHTML = '<div class="molview"><div class="mol-canvas" role="img" aria-label="Interactive 3D view of ' + esc(p.toUpperCase()) + ' in its simulated bilayer"></div><div class="mol-status">Loading the 3D viewer…</div></div>';
+    var stat = el.querySelector('.mol-status');
+    Promise.all([loadMolstar(), molSource(p, STORE + 'simulations/' + p + '_default_dppc/')]).then(function (r) {
+      if (v.dead) { if (r[1].blob) URL.revokeObjectURL(r[1].url); return; }
+      v.src = r[1];
+      return r[0].Viewer.create(el.querySelector('.mol-canvas'), {
+        layoutIsExpanded: false, layoutShowControls: false, layoutShowRemoteState: false, layoutShowSequence: false, layoutShowLog: false, layoutShowLeftPanel: false,
+        viewportShowExpand: true, viewportShowSelectionMode: false, viewportShowAnimation: false, viewportShowTrajectoryControls: false, viewportShowSettings: false,
+        viewportShowControls: false, viewportBackgroundColor: '#ffffff', pdbProvider: 'rcsb', collapseLeftPanel: true
+      }).then(function (vw) {
+        if (v.dead) { vw.dispose(); return; }
+        v.viewer = vw; cmpCam(v);
+        return vw.loadMvsData(JSON.stringify(cmpTree(v.src, flip())), 'mvsj', { doNotReportErrors: true }).then(function () { cmpCam(v); stat.hidden = true; cmpLink(i, link); });
+      });
+    }).catch(function () { if (!v.dead) stat.textContent = 'The 3D view could not be loaded.'; });
+  }
   var CMP_METRICS = [['z', 'Depth', 'Å from the bilayer centre'], ['group=Tail', 'Tails', 'share of the simulation in contact with lipid tails'], ['group=Head', 'Heads', 'share of the simulation in contact with lipid head groups'], ['group=Solvent', 'Solvent', 'share of the simulation in contact with water and ions']];
   function pageCompare(a, b) {
     a = (a || '').toLowerCase(); b = (b || '').toLowerCase();
@@ -1475,9 +1587,14 @@
     }
     if (!b || !byId[b]) { show(null, '<div class="stack-lg">' + head() + picker() + '</div>', 'Compare ' + a.toUpperCase()); wirePicker(); return; }
     var P = [a, b], baseOf = function (p) { return STORE + 'simulations/' + p + '_default_dppc/'; };
-    show(null, '<div class="stack-lg">' + head() + '<div id="cmp-body"><p class="muted">Loading both entries…</p></div>' + picker() + '</div>', 'Compare ' + a.toUpperCase() + ' and ' + b.toUpperCase());
+    var structs = '<section class="panel stack"><h2>Structures</h2><div class="cmp-structs">' + P.map(function (p, i) {
+      return '<figure class="cmp-struct"><div class="well herowell" id="cmp-mol-' + i + '"><img class="heroimg' + (isFlip(p) ? ' flipped' : '') + '" src="' + (imgUrl('pdbhero', p) || PH) + '"' + fbAttr('pdbhero', p) + ' alt="' + esc(p.toUpperCase()) + ' in its simulated bilayer" onerror="mpmFb(this)"></div>' +
+        '<figcaption><a href="' + refHref('PDB', p) + '"><b>' + p.toUpperCase() + '</b></a><div class="btns"><button type="button" class="btn ghost" data-cmp3d="' + i + '">3D view</button><button type="button" class="btn ghost" data-cmpflip="' + i + '" aria-pressed="' + isFlip(p) + '">Flip</button></div></figcaption></figure>';
+    }).join('') + '</div><div class="cmp-tools"><label class="small"><input type="checkbox" id="cmp-link" checked> Turn the 3D views together</label></div>' +
+      '<p class="small muted">If one structure sits upside down in its membrane, Flip turns it over everywhere: the picture, the 3D view, the plots and the topology, here and on its entry page. Your choice is remembered in this browser.</p></section>';
+    show(null, '<div class="stack-lg">' + head() + structs + '<div id="cmp-body"><p class="muted">Loading both entries…</p></div>' + picker() + '</div>', 'Compare ' + a.toUpperCase() + ' and ' + b.toUpperCase());
     wirePicker();
-    var st = { metric: 0, ch: [null, null], ov: 1 };
+    var st = { metric: 0, ch: [null, null], ov: 1, flip: [isFlip(a), isFlip(b)], link: true, d3: [false, false] };
     Promise.all(P.map(function (p) { return getJSON('data/entries/' + p + '.json').catch(function () { return null; }); }).concat(P.map(function (p) { return chainData(baseOf(p)); }))).then(function (res) {
       var rec = res.slice(0, 2), dat = res.slice(2), host = document.getElementById('cmp-body');
       if (!host || route.current !== 'compare/' + a + '/' + b) return;
@@ -1487,7 +1604,11 @@
       function chainIds(i) { var d = dat[i]; if (!d || !d.csv) return []; var seen = {}, out = []; d.csv.rows.forEach(function (r) { if ((r.chainInstance === '1' || r.chainInstance === undefined) && !seen[r.chainID]) { seen[r.chainID] = 1; out.push(r.chainID); } }); return out; }
       var ids = [chainIds(0), chainIds(1)];
       [0, 1].forEach(function (i) { var m = chainsOf[i].filter(function (c) { return c.type === 'membrane spanning'; })[0]; st.ch[i] = m && ids[i].indexOf(m.chainID) >= 0 ? m.chainID : ids[i][0] || null; });
-      function rowsOf(i) { var d = dat[i]; return d && d.csv ? d.csv.rows.filter(function (r) { return r.chainID === st.ch[i] && (r.chainInstance === '1' || r.chainInstance === undefined); }) : []; }
+      function rowsOf(i) {
+        var d = dat[i], rows = d && d.csv ? d.csv.rows.filter(function (r) { return r.chainID === st.ch[i] && (r.chainInstance === '1' || r.chainInstance === undefined); }) : [];
+        return st.flip[i] ? flipRows(rows) : rows;
+      }
+      function thOf(i) { return st.flip[i] ? flipTh(th[i]) : th[i]; }
       function tm(i, k) { return chainsOf[i].reduce(function (s, c) { return s + (+c[k] || 0); }, 0); }
       function f1(v) { return v == null || isNaN(v) ? '–' : (+v).toFixed(1); }
       function metricsTable() {
@@ -1516,13 +1637,13 @@
           yt.map(function (v) { return '<line class="grid" x1="' + L + '" x2="' + (W - Rr) + '" y1="' + Y(v).toFixed(1) + '" y2="' + Y(v).toFixed(1) + '"/><text class="ytick" x="' + (L - 6) + '" y="' + (Y(v) + 4).toFixed(1) + '" text-anchor="end">' + (isZ ? (v < 0 ? '−' + (-v) : v) : Math.round(v * 100) + '%') + '</text>'; }).join('') +
           ticks.map(function (t) { return '<text class="xtick" x="' + X(t).toFixed(1) + '" y="' + (H - 10) + '" text-anchor="middle">' + t + '</text>'; }).join('') +
           '<path class="cmp-a" d="' + line(A) + '"/><path class="cmp-b" d="' + line(Bv) + '"/></svg></div>' +
-          '<div class="legend"><span><i class="cmp-ka"></i>' + a.toUpperCase() + ' chain ' + esc(st.ch[0]) + '</span><span><i class="cmp-kb"></i>' + b.toUpperCase() + ' chain ' + esc(st.ch[1]) + '</span></div>' +
+          '<div class="legend"><span><i class="cmp-ka"></i>' + a.toUpperCase() + ' chain ' + esc(st.ch[0]) + (st.flip[0] ? ' (flipped)' : '') + '</span><span><i class="cmp-kb"></i>' + b.toUpperCase() + ' chain ' + esc(st.ch[1]) + (st.flip[1] ? ' (flipped)' : '') + '</span></div>' +
           '<p class="small muted">' + m[1] + ': ' + m[2] + ', by residue number. Residues are matched by number, which lines up for structures of the same protein; ' + num(both.length) + ' numbers appear in both chains' + (both.length ? ', and ' + Math.round(same / both.length * 100) + '% of them are the same amino acid' : '') + '.</p>';
       }
       function topo(i) {
-        var rows = rowsOf(i), thi = th[i], ct = null;
+        var rows = rowsOf(i), thi = thOf(i), ct = null;
         try { ct = rows.length ? topoBuild(rows, thi && thi.bulk_mid != null ? +thi.bulk_mid : 0) : null; } catch (e) { ct = null; }
-        return ct && ct.segments && ct.segments.length ? '<h3>' + P[i].toUpperCase() + ' chain ' + esc(st.ch[i]) + '</h3><div class="topo-box scroll">' + topoSvg(ct, rows, thi, OVERLAYS[st.ov][1], null) + '</div>' : '';
+        return ct && ct.segments && ct.segments.length ? '<h3>' + P[i].toUpperCase() + ' chain ' + esc(st.ch[i]) + (st.flip[i] ? ' <span class="small muted">(flipped)</span>' : '') + '</h3><div class="topo-box scroll">' + topoSvg(ct, rows, thi, OVERLAYS[st.ov][1], null) + '</div>' : '';
       }
       function chainSel(i) { return ids[i].length > 1 ? '<label class="small">' + P[i].toUpperCase() + ' chain <select class="field" data-cmpch="' + i + '">' + ids[i].map(function (c) { return '<option' + (c === st.ch[i] ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select></label>' : ''; }
       function paint() {
@@ -1535,6 +1656,22 @@
         each('[data-cmpch]', function (x) { x.addEventListener('change', function () { st.ch[+x.getAttribute('data-cmpch')] = x.value; var y = window.scrollY; paint(); window.scrollTo(0, y); }); });
       }
       paint();
+      var lk = document.getElementById('cmp-link'); if (lk) lk.addEventListener('change', function () { st.link = lk.checked; });
+      each('[data-cmp3d]', function (x) {
+        x.addEventListener('click', function () {
+          var i = +x.getAttribute('data-cmp3d'); if (st.d3[i]) return;
+          st.d3[i] = true; x.disabled = true;
+          cmpOpen(i, P[i], document.getElementById('cmp-mol-' + i), function () { return st.flip[i]; }, function () { return st.link; });
+        });
+      });
+      each('[data-cmpflip]', function (x) {
+        x.addEventListener('click', function () {
+          var i = +x.getAttribute('data-cmpflip'); st.flip[i] = !st.flip[i]; setFlip(P[i], st.flip[i]); x.setAttribute('aria-pressed', String(st.flip[i]));
+          var img = document.querySelector('#cmp-mol-' + i + ' .heroimg'); if (img) img.classList.toggle('flipped', st.flip[i]);
+          if (CMPV[i]) cmpPaint(CMPV[i], st.flip[i]);
+          var y = window.scrollY; paint(); window.scrollTo(0, y);
+        });
+      });
     });
   }
   function sameProtein(p) {
@@ -1554,6 +1691,7 @@
     route.current = p;
     var mp = p.match(/^ref\/PDB\/([0-9a-z]{4})/i);
     if (MOL.pdb && (!mp || mp[1].toLowerCase() !== MOL.pdb)) molReset();
+    cmpDispose();
     if (p === 'home') pageHome();
     else if (p === 'search/text') pageSearch();
     else if (p === 'stats') pageStats();
