@@ -1515,7 +1515,7 @@
   function cmpLink(i, link) {
     var v = CMPV[i];
     try {
-      v.viewer.plugin.canvas3d.camera.stateChanged.subscribe(function () {
+      v.viewer.plugin.canvas3d.camera.changed.subscribe(function () {
         var o = CMPV[1 - i];
         if (!link() || v.syncing || !o || !o.viewer || o.dead) return;
         var a = v.viewer.plugin.canvas3d.camera.getSnapshot(), oc = o.viewer.plugin.canvas3d.camera, b = oc.getSnapshot();
