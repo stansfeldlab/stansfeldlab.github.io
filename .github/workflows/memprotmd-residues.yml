@@ -2,7 +2,8 @@
 # simulation, rebuilds the per-group amino acid summaries the site shows (memprotmd/data/residues/) and
 # publishes one parquet file of every residue as the GitHub release "memprotmd-residues". It only does the
 # work when a simulation has changed since the last build; "force" rebuilds anyway.
-# The script is .github/memprotmd/residues.py.
+# Files already read are cached between runs; a run that reaches its time limit starts the next one, which
+# carries on. The script is .github/memprotmd/residues.py.
 name: MemProtMD residues
 
 on:
@@ -17,6 +18,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: memprotmd-update
@@ -25,15 +27,26 @@ concurrency:
 jobs:
   residues:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 200
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 1 }
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
       - run: pip install pyyaml==6.0.2 pyarrow==18.1.0
+      - name: Restore the files already read
+        uses: actions/cache/restore@v4
+        with: { path: build/cache, key: 'residues-${{ github.run_id }}', restore-keys: 'residues-' }
       - name: Build
-        run: python .github/memprotmd/residues.py memprotmd build ${{ inputs.force && '--force' || '' }}
+        run: python .github/memprotmd/residues.py memprotmd build --minutes=150 ${{ inputs.force && '--force' || '' }}
+      - name: Keep the files read for the next run
+        if: always()
+        uses: actions/cache/save@v4
+        with: { path: build/cache, key: 'residues-${{ github.run_id }}' }
+      - name: Carry on if stopped at the time limit
+        if: hashFiles('build/partial') != ''
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: gh workflow run memprotmd-residues.yml --ref ${{ github.ref_name }} -f force=${{ inputs.force || false }}
       - name: Publish the parquet file
         if: hashFiles('build/changed') != ''
         env: { GH_TOKEN: '${{ github.token }}' }

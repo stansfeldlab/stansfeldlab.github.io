@@ -11,7 +11,10 @@ Reads each simulation's files/contacts/by_resid_postprocess.csv from file storag
 The JSON files have the shape of data/stats.json (overview, detail, bins, groups), so the site draws them with
 the same code. Contacts are scaled as there: glycine 0, the amino acid with most contact in each row 100.
 
-  python residues.py SITE OUT [--force] [--limit N]
+Each entry read is kept in OUT/cache (restored between runs by the workflow), so a run stopped by --minutes
+carries on where it left off: it then writes OUT/partial instead of the outputs, and the workflow starts itself again.
+
+  python residues.py SITE OUT [--force] [--limit=N] [--minutes=M]
 """
 import collections
 import csv
@@ -20,6 +23,9 @@ import json
 import math
 import os
 import sys
+import time
+import urllib.error
+import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -63,12 +69,24 @@ def f(x):
         return 0.0
 
 
+def fetch(url, tries=3):
+    """Like update.get, but with a short timeout, so one slow file cannot hold up the run."""
+    for i in range(tries):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=U.UA), timeout=30) as r:
+                return r.read()
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return None
+        except Exception:
+            pass
+        time.sleep(2 * (i + 1))
+    return None
+
+
 def read_entry(pid):
     """One simulation's residues: (per-amino-acid sums, rows for the parquet file), or None if it has no file."""
-    try:
-        raw = U.get(U.DATA + 'simulations/%s_default_dppc/files/contacts/by_resid_postprocess.csv' % pid, tries=3)
-    except RuntimeError:
-        return None
+    raw = fetch(U.DATA + 'simulations/%s_default_dppc/files/contacts/by_resid_postprocess.csv' % pid)
     if not raw:
         return None
     rd = csv.DictReader(io.StringIO(raw.decode('utf-8', 'replace')))
@@ -126,7 +144,7 @@ def summary(sums, hist):
             'residues': int(sum(n))}
 
 
-def main(site, out, force=False, limit=None):
+def main(site, out, force=False, limit=None, minutes=None):
     idx = json.load(open(os.path.join(site, 'data', 'index.json')))
     pids = sorted(r[0] for r in idx['pdb'])[:limit] if limit else sorted(r[0] for r in idx['pdb'])
     here = os.path.dirname(os.path.abspath(__file__))
@@ -141,24 +159,52 @@ def main(site, out, force=False, limit=None):
         return False
     import pyarrow as pa
     import pyarrow.parquet as pq
-    os.makedirs(out, exist_ok=True)
-    pq_path = os.path.join(out, 'memprotmd-residues.parquet')
     schema = pa.schema([('pdb', pa.string()), ('chain', pa.string()), ('instance', pa.int16()), ('resSeq', pa.int32()), ('iCode', pa.string()),
                         ('resName', pa.string()), ('dssp', pa.string())] + [(c, pa.float32()) for c in NUM])
-    writer = pq.ParquetWriter(pq_path, schema, compression='zstd')
+    cache = os.path.join(out, 'cache')
+    os.makedirs(cache, exist_ok=True)
+    for fn in ('partial', 'changed'):
+        if os.path.exists(os.path.join(out, fn)):
+            os.remove(os.path.join(out, fn))
+
+    def cached(p):
+        c = U.load(os.path.join(cache, p + '.json'), None)
+        return c if c and c.get('stamp') == stamp[p] else None
+    todo = [p for p in pids if not cached(p)]
+    print('Residues: %d of %d entries to read (the rest are cached)' % (len(todo), len(pids)), flush=True)
+    deadline = time.time() + minutes * 60 if minutes else None
+
+    def work(p):
+        if deadline and time.time() > deadline:
+            return p, 'late'
+        return p, read_entry(p)
+    late = 0
+    with ThreadPoolExecutor(8) as ex:
+        for i, (p, res) in enumerate(ex.map(work, todo)):
+            if res == 'late':
+                late += 1
+                continue
+            if res is not None and res[2]:
+                pq.write_table(pa.Table.from_pylist(res[2], schema=schema), os.path.join(cache, p + '.parquet'))
+            U.dump(os.path.join(cache, p + '.json'), {'stamp': stamp[p], 'sums': res and res[0], 'hist': res and res[1]})
+            if i % 500 == 0:
+                print('Residues: %d of %d read' % (i, len(todo)), flush=True)
+    if late:
+        open(os.path.join(out, 'partial'), 'w').write(str(late))
+        print('Residues: stopped at the time limit with %d entries still to read; the next run carries on' % late)
+        return False
     per = {}
     missing = []
-    with ThreadPoolExecutor(6) as ex:
-        for i, (p, res) in enumerate(zip(pids, ex.map(read_entry, pids))):
-            if res is None:
-                missing.append(p)
-                continue
-            sums, hist, rows = res
-            per[p] = (sums, hist)
-            if rows:
-                writer.write_table(pa.Table.from_pylist(rows, schema=schema))
-            if i % 500 == 0:
-                print('Residues: %d of %d entries read' % (i, len(pids)), flush=True)
+    pq_path = os.path.join(out, 'memprotmd-residues.parquet')
+    writer = pq.ParquetWriter(pq_path, schema, compression='zstd')
+    for p in pids:
+        c = cached(p)
+        if not c or not c.get('sums'):
+            missing.append(p)
+            continue
+        per[p] = (c['sums'], c['hist'])
+        if os.path.exists(os.path.join(cache, p + '.parquet')):
+            writer.write_table(pq.read_table(os.path.join(cache, p + '.parquet')))
     writer.close()
     print('Residues: %d entries read, %d without a contacts file; parquet %.0f MB' % (len(per), len(missing), os.path.getsize(pq_path) / 1e6))
 
@@ -214,4 +260,5 @@ def main(site, out, force=False, limit=None):
 if __name__ == '__main__':
     a = [x for x in sys.argv[1:] if not x.startswith('--')]
     lim = next((int(x.split('=')[1]) for x in sys.argv[1:] if x.startswith('--limit=')), None)
-    main(a[0], a[1], force='--force' in sys.argv, limit=lim)
+    mins = next((float(x.split('=')[1]) for x in sys.argv[1:] if x.startswith('--minutes=')), None)
+    main(a[0], a[1], force='--force' in sys.argv, limit=lim, minutes=mins)
