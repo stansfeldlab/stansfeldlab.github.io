@@ -463,3 +463,5 @@ details.stalled li { display: grid; grid-template-columns: 4.5rem minmax(0, 12re
 .cmp-struct .btn[aria-pressed="true"] { border-color: var(--sel); color: var(--ink); }
 .heroimg { transition: transform 0.35s; }
 .heroimg.flipped { transform: rotate(180deg); }
+.stage.flipped { transform: rotate(180deg); }
+#flip[aria-pressed="true"] { border-color: var(--sel); color: var(--ink); }
