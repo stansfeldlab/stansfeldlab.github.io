@@ -505,7 +505,7 @@
         return (my - mx) || String(y.creationDate || '').localeCompare(String(x.creationDate || ''));
       }), other = (r[1] || []).length, xa = '<span class="xa" aria-hidden="true">↗</span>';
       var links = ox.slice(0, 4).map(function (x) {
-        return extA(MDDB_OX + '#/id/' + encodeURIComponent(x.accession) + '.' + ((+x.mdref || 0) + 1) + '/overview/data', 'MDDB ' + esc(x.accession) + xa);
+        return extA(MDDB_OX + '#/id/' + encodeURIComponent(x.accession) + '/overview', 'MDDB ' + esc(x.accession) + xa);
       });
       if (ox.length > 4) links.push(extA(MDDB_BROWSE, (ox.length - 4) + ' more' + xa));
       if (other) links.push(extA(MDDB + '#/browse?search=' + pdb, other + (links.length ? ' more' : '') + ' at other MDDB nodes' + xa));
