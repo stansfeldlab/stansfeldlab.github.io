@@ -474,3 +474,5 @@ details.stalled li { display: grid; grid-template-columns: 4.5rem minmax(0, 12re
 .flip-ico { width: 1em; height: 1em; margin-right: 0.35em; vertical-align: -0.15em; flex: none; transition: transform 0.6s; }
 [aria-pressed="true"] > .flip-ico { transform: rotate(180deg); }
 @media (prefers-reduced-motion: reduce) { .heroimg, .stage, .molview, .tipping, .flip-ico { transition: none !important; } }
+.dyn-well { aspect-ratio: 16 / 10; }
+.dyn-well .heroimg { object-fit: contain; }
