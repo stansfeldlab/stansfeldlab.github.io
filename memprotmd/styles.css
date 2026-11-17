@@ -426,3 +426,22 @@ details.stalled li { display: grid; grid-template-columns: 4.5rem minmax(0, 12re
 .net .net-n:focus { outline: none; }
 .net .net-labels text { font-size: 12px; fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; pointer-events: none; }
 .net .net-labels text.c { font-size: 15px; font-weight: 600; }
+
+/* amino acids in a group */
+.aa-more summary { cursor: pointer; color: var(--brand); font-weight: 500; margin: 0.25rem 0; }
+.hcard .sline.all { stroke-opacity: 0.25; stroke-dasharray: 3 3; pointer-events: none; }
+/* comparing two entries */
+.cmp-tbl th[scope="row"] { font-weight: 500; color: var(--muted); text-align: left; }
+.cmp-tbl td, .cmp-tbl thead th { min-width: 12rem; }
+.cmp-tools { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
+.cmp-tools select { margin-left: 0.35rem; padding: 0.3rem 0.5rem; }
+.cmp-chart { display: block; width: 100%; min-width: 640px; height: auto; font-family: var(--sans); }
+.cmp-chart .band { fill: var(--tint); }
+.cmp-chart .grid { stroke: var(--line); }
+.cmp-chart .xtick, .cmp-chart .ytick { fill: var(--muted); font-size: 11px; }
+.cmp-chart .cmp-a, .cmp-chart .cmp-b { fill: none; stroke-width: 1.6; stroke-linejoin: round; }
+.cmp-chart .cmp-a { stroke: var(--ss-helix); }
+.cmp-chart .cmp-b { stroke: var(--sel); }
+.legend i.cmp-ka, .legend i.cmp-kb { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px; }
+.legend i.cmp-ka { background: var(--ss-helix); }
+.legend i.cmp-kb { background: var(--sel); }
