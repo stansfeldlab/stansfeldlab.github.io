@@ -483,8 +483,7 @@
     return '<dl class="xlinks">' + rows.map(function (rw, i) { return '<dt>' + rw[0] + '</dt><dd>' + rw[1].join('') + (i >= 3 && more ? more : '') + '</dd>'; }).join('') + '</dl>';
   }
   /* MDDB lists simulations by PDB code (its PDBIDS field, or failing that a name ending in the code). Links go to each
-     simulation at MDDB's Oxford node, MemProtMD's own first and newest first; simulations at other MDDB nodes
-     are counted and linked to MDDB's global search. */
+     simulation at MDDB's Oxford node, MemProtMD's own first and newest first. */
   var MDDB_OX = 'https://oxford.mddbr.eu/';
   function mddbHits(base, pdb) {
     return fetch(base + 'api/rest/v1/projects?search=' + pdb).then(function (r) { if (!r.ok) throw 0; return r.json(); })
@@ -497,19 +496,20 @@
   }
   function mddbCount(pdb) {
     var c = mddbCount.c || (mddbCount.c = {});
-    if (!(pdb in c)) c[pdb] = Promise.all([mddbHits(MDDB_OX, pdb), mddbHits(MDDB, pdb)]);
+    if (!(pdb in c)) c[pdb] = Promise.all([mddbHits(MDDB_OX, pdb)]);
     c[pdb].then(function (r) {
-      var el = document.getElementById('xl-mddb'); if (!el || (r[0] === null && r[1] === null)) return;
+      var el = document.getElementById('xl-mddb'); if (!el || r[0] === null) return;
       var ox = (r[0] || []).slice().sort(function (x, y) {
         var mx = ((x.metadata || {}).COLLECTIONS || []).indexOf('MemProtMD') >= 0, my = ((y.metadata || {}).COLLECTIONS || []).indexOf('MemProtMD') >= 0;
         return (my - mx) || String(y.creationDate || '').localeCompare(String(x.creationDate || ''));
-      }), other = (r[1] || []).length, xa = '<span class="xa" aria-hidden="true">↗</span>';
+      }), xa = '<span class="xa" aria-hidden="true">↗</span>';
       var links = ox.slice(0, 4).map(function (x) {
         return extA(MDDB_OX + '#/id/' + encodeURIComponent(x.accession) + '/overview', 'MDDB ' + esc(x.accession) + xa);
       });
       if (ox.length > 4) links.push(extA(MDDB_BROWSE, (ox.length - 4) + ' more' + xa));
-      if (other) links.push(extA(MDDB + '#/browse?search=' + pdb, other + (links.length ? ' more' : '') + ' at other MDDB nodes' + xa));
       el.innerHTML = links.length ? links.join(' · ') : '<span class="muted">None in MDDB yet</span>';
+      var own = ox.filter(function (x) { return ((x.metadata || {}).COLLECTIONS || []).indexOf('MemProtMD') >= 0; })[0];
+      if (own) dynOffer(pdb, own);
     });
   }
   var CITE = 'Newport TD, Sansom MSP, Stansfeld PJ (2019). The MemProtMD database: a resource for membrane-embedded protein structures and their lipid interactions. Nucleic Acids Research 47(D1):D390–D397. doi:10.1093/nar/gky1047';
@@ -701,6 +701,88 @@
     molControls(base);
     if (MOL.viewer) MOL.viewer.handleResize();
   }
+
+  /* ---------- the coarse-grained simulation itself, streamed from MDDB's Oxford node ---------- */
+  /* About 40 frames from the whole run, from scattered lipids to the assembled bilayer: the coordinates are cut
+     down by MDDB on request (about 2 MB, which takes MDDB around half a minute), then played in Mol*. */
+  var DYN = null, SIM_NS = 1000;
+  function dynDispose() { if (!DYN) return; DYN.dead = true; if (DYN.viewer) { try { DYN.viewer.dispose(); } catch (e) {} } if (DYN.blob) URL.revokeObjectURL(DYN.blob); DYN = null; }
+  function dynOffer(pdb, proj) {
+    var box = document.getElementById('dyn'); if (!box) return;
+    box.hidden = false;
+    var n = +((proj.metadata || {}).mdFrames) || 4001, step = Math.max(1, Math.round((n - 1) / 40)), frames = Math.floor((n - 1) / step) + 1;
+    var gap = Math.round(SIM_NS * step / (n - 1)), well = box.querySelector('.dyn-well'), stat = box.querySelector('.dyn-status');
+    stat.innerHTML = frames + ' frames, ' + gap + ' ns apart, from the coarse-grained simulation at MDDB (' + extA(MDDB_OX + '#/id/' + encodeURIComponent(proj.accession) + '/overview', esc(proj.accession)) + '): lipids start scattered and assemble into a bilayer around the protein. Loading takes about half a minute.';
+    if (DYN && DYN.pdb === pdb && DYN.el) { well.classList.add('is-3d'); well.innerHTML = ''; well.appendChild(DYN.el); dynWire(box); if (DYN.viewer) DYN.viewer.handleResize(); return; }
+    var b = document.getElementById('dyn-open');
+    if (b) b.addEventListener('click', function () { dynOpen(box, pdb, proj.accession, n, step); });
+  }
+  function dynFetch(url, prog) {
+    return fetch(url).then(function (r) {
+      if (!r.ok) throw new Error('status ' + r.status);
+      if (!r.body || !r.body.getReader) return r.blob();
+      var rd = r.body.getReader(), parts = [], got = 0;
+      function pump() { return rd.read().then(function (c) { if (c.done) return new Blob(parts); parts.push(c.value); got += c.value.length; prog(got); return pump(); }); }
+      return pump();
+    });
+  }
+  function dynAnim(on) {
+    var pl = DYN && DYN.viewer && DYN.viewer.plugin; if (!pl) return;
+    var am = pl.managers.animation, a = am.animations.filter(function (x) { return x.name === 'built-in.animate-model-index'; })[0];
+    if (on && a) am.play(a, { mode: { name: 'loop', params: { direction: 'forward' } }, duration: { name: 'fixed', params: { durationInS: 12 } } });
+    else am.stop();
+    DYN.playing = !!(on && a);
+    var b = document.getElementById('dyn-play'); if (b) b.textContent = DYN.playing ? 'Pause' : 'Play';
+  }
+  function dynWire(box) {
+    var c = box.querySelector('.dyn-ctl'); if (c) c.hidden = false;
+    var b = document.getElementById('dyn-play'); if (!b) return;
+    b.textContent = DYN.playing ? 'Pause' : 'Play';
+    b.addEventListener('click', function () { dynAnim(!DYN.playing); });
+  }
+  function dynOpen(box, pdb, acc, n, step) {
+    dynDispose();
+    var v = DYN = { pdb: pdb, dead: false, viewer: null, blob: null, playing: false };
+    var well = box.querySelector('.dyn-well'), stat = box.querySelector('.dyn-status'), api = MDDB_OX + 'api/rest/v1/projects/' + encodeURIComponent(acc) + '.1/', keep = stat.innerHTML;
+    v.el = document.createElement('div'); v.el.className = 'molview';
+    v.el.innerHTML = '<div class="mol-canvas" role="img" aria-label="Coarse-grained simulation of ' + esc(pdb.toUpperCase()) + ', played as a movie"></div><div class="mol-status">Asking MDDB for the trajectory…</div>';
+    well.classList.add('is-3d'); well.innerHTML = ''; well.appendChild(v.el);
+    var ms = v.el.querySelector('.mol-status');
+    Promise.all([loadMolstar(), dynFetch(api + 'trajectory?frames=1:' + n + ':' + step + '&format=xtc', function (b) { if (!v.dead) ms.textContent = 'Loading the trajectory from MDDB… ' + (b / 1e6).toFixed(1) + ' MB'; })]).then(function (r) {
+      if (v.dead) return;
+      v.blob = URL.createObjectURL(r[1]); ms.textContent = 'Building the movie…';
+      return r[0].Viewer.create(v.el.querySelector('.mol-canvas'), {
+        layoutIsExpanded: false, layoutShowControls: false, layoutShowRemoteState: false, layoutShowSequence: false, layoutShowLog: false, layoutShowLeftPanel: false,
+        viewportShowExpand: true, viewportShowSelectionMode: false, viewportShowAnimation: false, viewportShowTrajectoryControls: true, viewportShowSettings: false,
+        viewportShowControls: false, viewportBackgroundColor: '#ffffff', collapseLeftPanel: true
+      }).then(function (vw) {
+        if (v.dead) { vw.dispose(); return; }
+        v.viewer = vw;
+        return vw.loadTrajectory({ model: { kind: 'model-url', url: api + 'structure', format: 'pdb' }, coordinates: { kind: 'coordinates-url', url: v.blob, format: 'xtc', isBinary: true }, preset: 'default' }).then(function () { return dynStyle(vw.plugin, isFlip(pdb)); });
+      });
+    }).then(function () {
+      if (v.dead || !v.viewer) return;
+      ms.hidden = true; stat.innerHTML = keep; dynWire(box); dynAnim(true);
+    }).catch(function () { if (!v.dead) ms.textContent = 'The simulation could not be loaded from MDDB just now. Please try again later.'; });
+  }
+  /* protein beads by chain, lipid phosphates in gold, the rest of each lipid faint; seen side on, membrane level */
+  function dynStyle(pl, flip) {
+    var s = pl.managers.structure.hierarchy.current.structures[0]; if (!s) return;
+    function comp(expr, key) { return pl.builders.structure.tryCreateComponent(s.cell, { type: { name: 'script', params: { language: 'pymol', expression: expr } }, nullIfEmpty: true, label: key }, key); }
+    function show(c, p) { return c ? pl.builders.structure.representation.addRepresentation(c, p) : null; }
+    return pl.managers.structure.component.clear([s]).then(function () {
+      return Promise.all([comp('polymer.protein', 'protein'), comp('name PO4', 'phosphates'), comp('not polymer.protein and not name PO4 and not resn W+ION+NA+CL+PW', 'lipids')]);
+    }).then(function (c) {
+      return Promise.all([show(c[0], { type: 'spacefill', color: 'chain-id', typeParams: { sizeFactor: 1 } }),
+        show(c[1], { type: 'spacefill', color: 'uniform', colorParams: { value: 0xe0a526 }, typeParams: { sizeFactor: 1 } }),
+        show(c[2], { type: 'spacefill', color: 'uniform', colorParams: { value: 0xc9ced8 }, typeParams: { sizeFactor: 0.5, alpha: 0.35 } })]);
+    }).then(function () {
+      pl.managers.camera.reset();
+      var cam = pl.canvas3d.camera, sn = cam.getSnapshot(), t = sn.target, d = Math.hypot(sn.position[0] - t[0], sn.position[1] - t[1], sn.position[2] - t[2]);
+      cam.setState({ position: [t[0], t[1] - d, t[2]], up: [0, 0, flip ? -1 : 1] }, 0);
+      try { pl.canvas3d.setProps({ camera: { mode: 'orthographic' } }); } catch (e) {}
+    });
+  }
   function molClose(pdb, base) {
     molReset();
     var host = document.getElementById('mol-host'), c = document.getElementById('mol-ctrl');
@@ -783,7 +865,10 @@
           view(VIEWS[0][0], VIEWS[0][1], st.v[0], 'dist', 'rotate', seg('v0', VIEWS[0][1].map(function (o) { return o[0]; }), st.v[0], 'Membrane distortion view'), VIEWS[0][3]) +
           view(VIEWS[1][0], VIEWS[1][1], st.v[1], 'lip', 'fade', seg('v1', VIEWS[1][1].map(function (o) { return o[0]; }), st.v[1], 'Lipid view'), VIEWS[1][3]) +
           view('Lipid contacts', contactImgs, st.contact * 2 + st.rep, 'con', 'fade', '<div class="btns">' + seg('contact', CONTACTS.map(function (c) { return c[0]; }), st.contact, 'Contact group') + seg('rep', REPS.map(function (c) { return c[0]; }), st.rep, 'Representation') + '</div>', 'Average occupancy of the chosen group within 6 Å of the protein over the final 800 ns.') + '</div></div>'
-          : '<p class="small muted">Rendered images load from file storage, which this preview cannot reach.</p>') + '</section>' +
+          : '<p class="small muted">Rendered images load from file storage, which this preview cannot reach.</p>') +
+          '<div class="panel stack" id="dyn" hidden><h3>Self-assembly</h3><div class="well herowell dyn-well"><img class="heroimg' + (fl ? ' flipped' : '') + '" src="' + (imgUrl('pdbhero', pdb) || PH) + '"' + fbAttr('pdbhero', pdb) + ' alt="" onerror="mpmFb(this)">' +
+          '<button type="button" class="btn mol-open" id="dyn-open"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 4v12l10-6z" fill="currentColor"/></svg>Play the simulation</button></div>' +
+          '<div class="btns dyn-ctl" hidden><button type="button" class="btn ghost" id="dyn-play">Pause</button></div><p class="small muted dyn-status"></p></div></section>' +
         '<section class="panel stack"><h2>Polypeptide chains</h2>' + (!st.tried ? '<p class="muted">Loading…</p>' : !ch.length ? '<p class="muted">No chain analysis is recorded for this entry.</p>' :
           '<div class="chainpick">' + ch.map(function (c) {
             var tm = c.tm_alpha ? c.tm_alpha + ' TM helices' : c.tm_beta ? c.tm_beta + ' TM strands' : c.type;
@@ -1743,6 +1828,7 @@
     var mp = p.match(/^ref\/PDB\/([0-9a-z]{4})/i);
     if (MOL.pdb && (!mp || mp[1].toLowerCase() !== MOL.pdb)) molReset();
     cmpDispose();
+    if (DYN && (!mp || mp[1].toLowerCase() !== DYN.pdb)) dynDispose();
     if (p === 'home') pageHome();
     else if (p === 'search/text') pageSearch();
     else if (p === 'stats') pageStats();

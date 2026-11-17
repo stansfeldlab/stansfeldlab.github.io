@@ -54,7 +54,7 @@ IN_MEMBRANE = ('membrane spanning', 'membrane embedded', 'single leaflet')
 UA = {'User-Agent': 'memprotmd-site-update (+https://stansfeldlab.github.io/memprotmd/)'}
 TCDB_PUBLIC = 'https://www.tcdb.org/cgi-bin/projectv/public/'
 MDDB_API = 'https://mdposit.mddbr.eu/api/rest/v1/projects'
-MDDB_NODES = [MDDB_API, 'https://oxford.mddbr.eu/api/rest/v1/projects']   # global MDDB, and its Oxford node, where MemProtMD's own simulations are
+MDDB_NODES = ['https://oxford.mddbr.eu/api/rest/v1/projects']   # MDDB's Oxford node, where MemProtMD's own simulations are
 TCDB_FASTA = 'https://www.tcdb.org/public/tcdb'
 MPSTRUC_XML = 'https://blanco.biomol.uci.edu/mpstruc/listAll/mpstrucTblXml'
 TCDB_MIN = {'acc': 5000, 'pdb': 200, 'fam': 500}   # fewer rows than this means TCDB sent something else (an error page)
@@ -580,7 +580,7 @@ def mpstruc_build(cols, details, ref_by, ms):
 
 def mddb_lookup(ref_by):
     """How many MDDB simulations list each entry's PDB code, as {pdb: count} for MemProtMD entries, read from
-    global MDDB and its Oxford node. A simulation is matched by its PDBIDS field or, without one, by a name
+    MDDB's Oxford node. A simulation is matched by its PDBIDS field or, without one, by a name
     ending in the code. None if any node's project list could not be read in full."""
     from concurrent.futures import ThreadPoolExecutor
     out = collections.Counter()
