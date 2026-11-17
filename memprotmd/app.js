@@ -462,7 +462,8 @@
   }
   /* ---------- links out and citation ---------- */
   var SITE = CFG.siteUrl || 'https://stansfeldlab.github.io/memprotmd/';
-  var MDDB = 'https://mdposit.mddbr.eu/';
+  var MDDB = 'https://mdposit.mddbr.eu/';   /* the API, for counting an entry's simulations */
+  var MDDB_BROWSE = 'https://oxford.mddbr.eu/#/browse?option=MemProtMD';   /* MemProtMD's simulations at the Oxford MDDB node */
   function uniAccs(r) {
     var seen = {}, out = [];
     (r.entities || []).forEach(function (en) { (en.refs || []).forEach(function (x) { if (x.db === 'UniProt' && x.accession && !seen[x.accession]) { seen[x.accession] = 1; out.push(x.accession); } }); });
@@ -474,7 +475,7 @@
     acc = acc.slice(0, 6);
     var rows = [['Structure', [a('https://www.rcsb.org/structure/' + pdb, 'RCSB PDB'), a('https://www.ebi.ac.uk/pdbe/entry/pdb/' + pdb, 'PDBe'), a('https://pdbj.org/mine/summary/' + pdb, 'PDBj')]],
       ['Membrane', [a('https://opm.phar.umich.edu/proteins?search=' + pdb, 'OPM'), a('https://pdbtm.unitmp.org/entry/' + pdb, 'PDBTM')]],
-      ['Simulations', ['<span id="xl-mddb">' + a(MDDB + '#/browse?search=' + pdb, 'MDDB') + '</span>']]];
+      ['Simulations', ['<span id="xl-mddb">' + a(MDDB_BROWSE, 'MDDB') + '</span>']]];
     if (acc.length) {
       rows.push(['UniProt', acc.map(function (x) { return a('https://www.uniprot.org/uniprotkb/' + x + '/entry', x); })]);
       rows.push(['AlphaFold', acc.map(function (x) { return a('https://alphafold.ebi.ac.uk/entry/' + x, x); })]);
@@ -489,7 +490,7 @@
       .catch(function () { return null; });
     c[pdb].then(function (n) {
       var el = document.getElementById('xl-mddb'); if (!el || n === null) return;
-      el.innerHTML = n ? extA(MDDB + '#/browse?search=' + pdb, 'MDDB · ' + n + (n > 1 ? ' simulations' : ' simulation') + '<span class="xa" aria-hidden="true">↗</span>') : '<span class="muted">None in MDDB yet</span>';
+      el.innerHTML = n ? extA(MDDB_BROWSE, 'MDDB · ' + n + (n > 1 ? ' simulations' : ' simulation') + '<span class="xa" aria-hidden="true">↗</span>') : '<span class="muted">None in MDDB yet</span>';
     });
   }
   var CITE = 'Newport TD, Sansom MSP, Stansfeld PJ (2019). The MemProtMD database: a resource for membrane-embedded protein structures and their lipid interactions. Nucleic Acids Research 47(D1):D390–D397. doi:10.1093/nar/gky1047';
