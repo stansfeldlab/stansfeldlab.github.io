@@ -703,16 +703,16 @@
   }
 
   /* ---------- the coarse-grained simulation itself, streamed from MDDB's Oxford node ---------- */
-  /* About 40 frames from the whole run, from scattered lipids to the assembled bilayer: the coordinates are cut
-     down by MDDB on request (about 2 MB, which takes MDDB around half a minute), then played in Mol*. */
+  /* About 25 frames from the whole run, from scattered lipids to the assembled bilayer: the coordinates are cut
+     down by MDDB on request (about 1 MB, which can take MDDB a minute or two), then played in Mol*. */
   var DYN = null, SIM_NS = 1000;
   function dynDispose() { if (!DYN) return; DYN.dead = true; if (DYN.viewer) { try { DYN.viewer.dispose(); } catch (e) {} } if (DYN.blob) URL.revokeObjectURL(DYN.blob); DYN = null; }
   function dynOffer(pdb, proj) {
     var box = document.getElementById('dyn'); if (!box) return;
     box.hidden = false;
-    var n = +((proj.metadata || {}).mdFrames) || 4001, step = Math.max(1, Math.round((n - 1) / 40)), frames = Math.floor((n - 1) / step) + 1;
+    var n = +((proj.metadata || {}).mdFrames) || 4001, step = Math.max(1, Math.round((n - 1) / 25)), frames = Math.floor((n - 1) / step) + 1;
     var gap = Math.round(SIM_NS * step / (n - 1)), well = box.querySelector('.dyn-well'), stat = box.querySelector('.dyn-status');
-    stat.innerHTML = frames + ' frames, ' + gap + ' ns apart, from the coarse-grained simulation at MDDB (' + extA(MDDB_OX + '#/id/' + encodeURIComponent(proj.accession) + '/overview', esc(proj.accession)) + '): lipids start scattered and assemble into a bilayer around the protein. Loading takes about half a minute.';
+    stat.innerHTML = frames + ' frames, ' + gap + ' ns apart, from the coarse-grained simulation at MDDB (' + extA(MDDB_OX + '#/id/' + encodeURIComponent(proj.accession) + '/overview', esc(proj.accession)) + '): lipids start scattered and assemble into a bilayer around the protein. MDDB prepares the frames on request, so loading can take a minute or two.';
     if (DYN && DYN.pdb === pdb && DYN.el) { well.classList.add('is-3d'); well.innerHTML = ''; well.appendChild(DYN.el); dynWire(box); if (DYN.viewer) DYN.viewer.handleResize(); return; }
     var b = document.getElementById('dyn-open');
     if (b) b.addEventListener('click', function () { dynOpen(box, pdb, proj.accession, n, step); });
