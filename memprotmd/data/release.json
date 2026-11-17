@@ -1,11 +1,11 @@
 {
   "release": "2026-11-16",
-  "updated": "2026-11-13",
+  "updated": "2026-11-17",
   "entries": 9509,
   "groups": {
     "mpm": 10,
     "TCDB": 2021,
-    "mpstruc": 3164,
+    "mpstruc": 3167,
     "Pfam": 1102,
     "UniProt": 2181,
     "organism": 349,
