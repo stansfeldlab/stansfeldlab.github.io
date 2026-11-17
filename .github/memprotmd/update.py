@@ -54,6 +54,7 @@ IN_MEMBRANE = ('membrane spanning', 'membrane embedded', 'single leaflet')
 UA = {'User-Agent': 'memprotmd-site-update (+https://stansfeldlab.github.io/memprotmd/)'}
 TCDB_PUBLIC = 'https://www.tcdb.org/cgi-bin/projectv/public/'
 MDDB_API = 'https://mdposit.mddbr.eu/api/rest/v1/projects'
+MDDB_NODES = [MDDB_API, 'https://oxford.mddbr.eu/api/rest/v1/projects']   # global MDDB, and its Oxford node, where MemProtMD's own simulations are
 TCDB_FASTA = 'https://www.tcdb.org/public/tcdb'
 MPSTRUC_XML = 'https://blanco.biomol.uci.edu/mpstruc/listAll/mpstrucTblXml'
 TCDB_MIN = {'acc': 5000, 'pdb': 200, 'fam': 500}   # fewer rows than this means TCDB sent something else (an error page)
@@ -578,30 +579,37 @@ def mpstruc_build(cols, details, ref_by, ms):
 
 
 def mddb_lookup(ref_by):
-    """How many MDDB simulations list each entry's PDB code (MDDB's PDBIDS field), as {pdb: count} for
-    MemProtMD entries; None if MDDB's project list could not be read in full."""
+    """How many MDDB simulations list each entry's PDB code, as {pdb: count} for MemProtMD entries, read from
+    global MDDB and its Oxford node. A simulation is matched by its PDBIDS field or, without one, by a name
+    ending in the code. None if any node's project list could not be read in full."""
     from concurrent.futures import ThreadPoolExecutor
-
-    def page(n):
-        return json.loads(get('%s?limit=100&page=%d' % (MDDB_API, n), tries=3) or b'{}')
-    try:
-        first = page(1)
-        total = int(first.get('filteredCount') or 0)
-        with ThreadPoolExecutor(6) as ex:
-            pages = [first] + list(ex.map(page, range(2, (total + 99) // 100 + 1)))
-    except (RuntimeError, ValueError, TypeError) as e:
-        print('MDDB: could not read the project list, keeping the last counts:', e)
-        return None
-    projects = [x for pg in pages for x in pg.get('projects') or []]
-    if total < 1000 or len(projects) < 0.95 * total:
-        print('MDDB: got %d of %d projects, keeping the last counts' % (len(projects), total))
-        return None
     out = collections.Counter()
-    for x in projects:
-        for pid in {str(i).lower() for i in (x.get('metadata') or {}).get('PDBIDS') or []}:
-            if pid in ref_by:
-                out[pid] += 1
-    print('MDDB: %d projects, %d of them list %d MemProtMD entries' % (len(projects), sum(out.values()), len(out)))
+    for api in MDDB_NODES:
+        def page(n, api=api):
+            return json.loads(get('%s?limit=100&page=%d' % (api, n), tries=3) or b'{}')
+        try:
+            first = page(1)
+            total = int(first.get('filteredCount') or 0)
+            with ThreadPoolExecutor(6) as ex:
+                pages = [first] + list(ex.map(page, range(2, (total + 99) // 100 + 1)))
+        except (RuntimeError, ValueError, TypeError) as e:
+            print('MDDB: could not read the project list of %s, keeping the last counts: %s' % (api, e))
+            return None
+        projects = [x for pg in pages for x in pg.get('projects') or []]
+        if total < 1000 or len(projects) < 0.95 * total:
+            print('MDDB: got %d of %d projects from %s, keeping the last counts' % (len(projects), total, api))
+            return None
+        n0 = sum(out.values())
+        for x in projects:
+            m = x.get('metadata') or {}
+            ids = {str(i).lower() for i in m.get('PDBIDS') or []}
+            if not ids:
+                t = re.search(r'\b([0-9][a-z0-9]{3})$', str(m.get('NAME') or '').lower())
+                ids = {t.group(1)} if t else set()
+            for pid in ids:
+                if pid in ref_by:
+                    out[pid] += 1
+        print('MDDB: %d projects at %s, %d of them list MemProtMD entries' % (len(projects), api, sum(out.values()) - n0))
     return dict(sorted(out.items()))
 
 
