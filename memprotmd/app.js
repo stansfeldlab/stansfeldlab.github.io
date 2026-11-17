@@ -482,15 +482,34 @@
     }
     return '<dl class="xlinks">' + rows.map(function (rw, i) { return '<dt>' + rw[0] + '</dt><dd>' + rw[1].join('') + (i >= 3 && more ? more : '') + '</dd>'; }).join('') + '</dl>';
   }
-  /* MDDB lists simulations by PDB code; say how many there are, or that there are none yet. */
+  /* MDDB lists simulations by PDB code (its PDBIDS field, or failing that a name ending in the code). Links go to each
+     simulation at MDDB's Oxford node, MemProtMD's own first and newest first; simulations at other MDDB nodes
+     are counted and linked to MDDB's global search. */
+  var MDDB_OX = 'https://oxford.mddbr.eu/';
+  function mddbHits(base, pdb) {
+    return fetch(base + 'api/rest/v1/projects?search=' + pdb).then(function (r) { if (!r.ok) throw 0; return r.json(); })
+      .then(function (j) {
+        return (j.projects || []).filter(function (x) {
+          var m = x.metadata || {}, ids = (m.PDBIDS || []).map(function (id) { return String(id).toLowerCase(); });
+          return ids.length ? ids.indexOf(pdb) >= 0 : new RegExp('\\b' + pdb + '$', 'i').test(m.NAME || '');
+        });
+      }).catch(function () { return null; });
+  }
   function mddbCount(pdb) {
     var c = mddbCount.c || (mddbCount.c = {});
-    if (!(pdb in c)) c[pdb] = fetch(MDDB + 'api/rest/v1/projects?search=' + pdb).then(function (r) { if (!r.ok) throw 0; return r.json(); })
-      .then(function (j) { return (j.projects || []).filter(function (x) { return ((x.metadata || {}).PDBIDS || []).some(function (id) { return String(id).toLowerCase() === pdb; }); }).length; })
-      .catch(function () { return null; });
-    c[pdb].then(function (n) {
-      var el = document.getElementById('xl-mddb'); if (!el || n === null) return;
-      el.innerHTML = n ? extA(MDDB_BROWSE, 'MDDB · ' + n + (n > 1 ? ' simulations' : ' simulation') + '<span class="xa" aria-hidden="true">↗</span>') : '<span class="muted">None in MDDB yet</span>';
+    if (!(pdb in c)) c[pdb] = Promise.all([mddbHits(MDDB_OX, pdb), mddbHits(MDDB, pdb)]);
+    c[pdb].then(function (r) {
+      var el = document.getElementById('xl-mddb'); if (!el || (r[0] === null && r[1] === null)) return;
+      var ox = (r[0] || []).slice().sort(function (x, y) {
+        var mx = ((x.metadata || {}).COLLECTIONS || []).indexOf('MemProtMD') >= 0, my = ((y.metadata || {}).COLLECTIONS || []).indexOf('MemProtMD') >= 0;
+        return (my - mx) || String(y.creationDate || '').localeCompare(String(x.creationDate || ''));
+      }), other = (r[1] || []).length, xa = '<span class="xa" aria-hidden="true">↗</span>';
+      var links = ox.slice(0, 4).map(function (x) {
+        return extA(MDDB_OX + '#/id/' + encodeURIComponent(x.accession) + '.' + ((+x.mdref || 0) + 1) + '/overview/data', 'MDDB ' + esc(x.accession) + xa);
+      });
+      if (ox.length > 4) links.push(extA(MDDB_BROWSE, (ox.length - 4) + ' more' + xa));
+      if (other) links.push(extA(MDDB + '#/browse?search=' + pdb, other + (links.length ? ' more' : '') + ' at other MDDB nodes' + xa));
+      el.innerHTML = links.length ? links.join(' · ') : '<span class="muted">None in MDDB yet</span>';
     });
   }
   var CITE = 'Newport TD, Sansom MSP, Stansfeld PJ (2019). The MemProtMD database: a resource for membrane-embedded protein structures and their lipid interactions. Nucleic Acids Research 47(D1):D390–D397. doi:10.1093/nar/gky1047';
