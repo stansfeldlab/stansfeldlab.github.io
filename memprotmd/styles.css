@@ -461,7 +461,16 @@ details.stalled li { display: grid; grid-template-columns: 4.5rem minmax(0, 12re
 .cmp-struct { margin: 0; display: grid; gap: 0.5rem; min-width: 0; }
 .cmp-struct figcaption { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem; }
 .cmp-struct .btn[aria-pressed="true"] { border-color: var(--sel); color: var(--ink); }
-.heroimg { transition: transform 0.35s; }
+.heroimg { transition: transform 0.6s cubic-bezier(0.45, 0.05, 0.25, 1); }
 .heroimg.flipped { transform: rotate(180deg); }
 .stage.flipped { transform: rotate(180deg); }
 #flip[aria-pressed="true"] { border-color: var(--sel); color: var(--ink); }
+.stage { transition: transform 0.6s cubic-bezier(0.45, 0.05, 0.25, 1); }
+.molview { transition: transform 0.6s cubic-bezier(0.45, 0.05, 0.25, 1); }
+.molview.turning { transform: rotate(180deg); }
+.molview.still { transition: none; }
+.tipping { transform: scaleY(-1); transform-box: fill-box; transform-origin: center; transition: transform 0.6s cubic-bezier(0.45, 0.05, 0.25, 1); }
+.chainsvg svg, .topo-box svg, .cmp-chart, .cmp-chart path { transition: transform 0.6s cubic-bezier(0.45, 0.05, 0.25, 1); transform-origin: center; transform-box: fill-box; }
+.flip-ico { width: 1em; height: 1em; margin-right: 0.35em; vertical-align: -0.15em; flex: none; transition: transform 0.6s; }
+[aria-pressed="true"] > .flip-ico { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .heroimg, .stage, .molview, .tipping, .flip-ico { transition: none !important; } }
