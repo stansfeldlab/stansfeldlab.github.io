@@ -428,6 +428,22 @@
      change sign, the leaflets swap, and pictures turn round. */
   function isFlip(pdb) { try { return localStorage.getItem('mpm-flip-' + pdb) === '1'; } catch (e) { return false; } }
   function setFlip(pdb, on) { try { if (on) localStorage.setItem('mpm-flip-' + pdb, '1'); else localStorage.removeItem('mpm-flip-' + pdb); } catch (e) {} }
+  var FLIP_ICO = '<svg class="flip-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M15.5 8A6 6 0 0 0 4.6 6.2M4.5 12a6 6 0 0 0 10.9 1.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M4 2.8v3.8h3.8M16 17.2v-3.8h-3.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  /* turns what is on screen over, then calls done to draw the new orientation: pictures and 3D views turn
+     round, plots tip over top to bottom */
+  function flipAnim(root, done) {
+    var still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (still) { done(); return; }
+    Array.prototype.forEach.call(root.querySelectorAll('.heroimg, .stage'), function (e) { e.classList.toggle('flipped'); });
+    Array.prototype.forEach.call(root.querySelectorAll('.molview'), function (e) { e.classList.add('turning'); });
+    Array.prototype.forEach.call(root.querySelectorAll('.chainsvg svg, .topo-box svg, .cmp-chart'), function (e) { e.classList.add('tipping'); });
+    setTimeout(done, 650);
+  }
+  /* once a 3D view has redrawn the other way up, its turned canvas is put straight again without a jump */
+  function unturn(el) {
+    if (!el) return; var m = el.classList.contains('molview') ? el : el.querySelector('.molview'); if (!m) return;
+    m.classList.add('still'); m.classList.remove('turning'); void m.offsetWidth; m.classList.remove('still');
+  }
   function flipKey(k) { return k.replace(/^leaflet=a(?=;|$)/, 'leaflet=#').replace(/^leaflet=b(?=;|$)/, 'leaflet=a').replace(/^leaflet=#/, 'leaflet=b'); }
   function flipRows(rows) { return rows.map(function (r) { var o = {}; Object.keys(r).forEach(function (k) { o[flipKey(k)] = r[k]; }); if (r.z != null && r.z !== '') o.z = String(-(+r.z)); return o; }); }
   function flipTh(t) { if (!t || t.bulk_mid == null) return t; var o = {}; Object.keys(t).forEach(function (k) { o[k] = t[k]; }); if (t.annular_mid != null) o.annular_mid = 2 * t.bulk_mid - t.annular_mid; return o; }
@@ -611,8 +627,9 @@
     else if (MOL.src && !MOL.src.rcsb) t.push('Final atomistic snapshot: helices in blue, strands in green, and lipid phosphorus atoms in gold.');
     n.textContent = t.join(' ');
   }
-  function molPaint(base) {
+  function molPaint(base, done) {
     var m = MOL;
+    if (done) m.done = done;
     if (m.busy) { m.again = true; return; }
     m.busy = true; m.again = false;
     var g = MOL_COLOR[m.color][1];
@@ -620,7 +637,7 @@
       if (m !== MOL) return;
       return m.viewer.loadMvsData(JSON.stringify(molTree()), 'mvsj', { keepCamera: !m.first, doNotReportErrors: true });
     }).then(function () { m.first = false; molCam(); }).catch(function () { molStatus('The structure could not be displayed.'); })
-      .then(function () { if (m !== MOL) return; m.busy = false; molStatus(''); molNote(); if (m.again) molPaint(base); });
+      .then(function () { if (m !== MOL) return; m.busy = false; molStatus(''); molNote(); if (m.again) molPaint(base); else if (m.done) { var d = m.done; m.done = null; d(); } });
   }
   function molControls(base) {
     var c = document.getElementById('mol-ctrl'); if (!c) return;
@@ -738,7 +755,7 @@
         '<dl class="facts">' + [['Released', fmtDate(e[5])], ['Method', esc(sentence(e[3] || ''))], ['Resolution', e[4] ? Number(e[4]).toFixed(2).replace(/0$/, '') + ' Å' : ''], ['Organism', orgNames(e).map(function (n) { return '<a href="' + href('search/text') + '?o=' + encodeURIComponent(n) + '"><i>' + esc(n) + '</i></a>'; }).join(', ')],
           ['Ligands', esc((r.ligands || []).map(function (l) { return sentence(l.description); }).join(', '))], ['Keywords', esc((r.keywords || []).join(', '))]].filter(function (p) { return p[1]; }).map(function (p) { return '<dt>' + p[0] + '</dt><dd>' + p[1] + '</dd>'; }).join('') + '</dl>' +
         (cit.title ? '<p class="cite">' + esc(ionFix(cit.title)) + ' <span class="muted">' + (r.primary_authors || []).slice(0, 4).map(function (n) { return '<a href="' + authorHref(String(n).trim()) + '">' + esc(String(n).trim().replace(/\.$/, '')) + '</a>'; }).join(', ') + ((r.primary_authors || []).length > 4 ? ' et al' : '') + '. ' + esc([cit.journal, cit.year].filter(Boolean).join(' ')) + '.</span> ' + (cit.DOI ? extA('https://doi.org/' + cit.DOI, 'doi:' + esc(cit.DOI)) : '') + '</p>' : '') +
-        '<div class="btns">' + extA(base + 'files/structures/at.pdb', 'Atomistic PDB ↓', 'btn') + extA('https://molstar.org/viewer/?structure-url=' + encodeURIComponent(base + 'files/structures/at.pdb') + '&structure-url-format=pdb', 'Open in Mol* ↗', 'btn ghost') + '<a class="btn ghost" href="' + href('compare/' + pdb) + '">Compare…</a><button type="button" class="btn ghost" id="flip" aria-pressed="' + fl + '" title="Show this entry the other way up, if you think it sits upside down in its membrane">' + (fl ? 'Flipped' : 'Flip') + '</button></div>' + (fl ? '<p class="small muted">Shown the other way up from the simulation: pictures, the 3D view, the chain icons, the topology and leaflets are all turned over. Select Flipped to undo.</p>' : '') + xlinks(pdb, r) + '</div></div>' +
+        '<div class="btns">' + extA(base + 'files/structures/at.pdb', 'Atomistic PDB ↓', 'btn') + extA('https://molstar.org/viewer/?structure-url=' + encodeURIComponent(base + 'files/structures/at.pdb') + '&structure-url-format=pdb', 'Open in Mol* ↗', 'btn ghost') + '<a class="btn ghost" href="' + href('compare/' + pdb) + '">Compare…</a><button type="button" class="btn ghost" id="flip" aria-pressed="' + fl + '" title="Show this entry the other way up, if you think it sits upside down in its membrane">' + FLIP_ICO + (fl ? 'Flipped' : 'Flip') + '</button></div>' + (fl ? '<p class="small muted">Shown the other way up from the simulation: pictures, the 3D view, the chain icons, the topology and leaflets are all turned over. Select Flipped to undo.</p>' : '') + xlinks(pdb, r) + '</div></div>' +
         (groups ? '<section class="panel"><h2>Member of</h2><div class="groups">' + groups + '</div></section>' : '') +
         '<section class="stack"><div class="head-row" style="margin:0"><h2>Simulation</h2><span class="mono muted">' + sim + '</span></div>' +
         (s.thinning ? '<div class="panel stack"><h3>Bilayer thickness</h3>' + gauge(s.thinning) + (sv.n_lipid_molecules ? '<p class="small muted">' + num(sv.n_lipid_molecules) + ' ' + esc(Object.keys(s.composition || { lipid: 1 }).join('/')) + ' lipids around ' + num(sv.n_protein_residues) + ' protein residues.</p>' : '') + '</div>' : '') +
@@ -763,7 +780,14 @@
       mddbCount(pdb); wireCite(pdb, cit);
       if (selc) chainView(pdb, base, chainSel, th, st);
       var fb = document.getElementById('flip');
-      if (fb) fb.addEventListener('click', function () { setFlip(pdb, !isFlip(pdb)); keep(); if (MOL.viewer && MOL.pdb === pdb) { MOL.first = true; molPaint(base); } var b2 = document.getElementById('flip'); if (b2) b2.focus(); });
+      if (fb) fb.addEventListener('click', function () {
+        if (st.flipping) return; st.flipping = true;
+        flipAnim(document.getElementById('app') || document.body, function () {
+          setFlip(pdb, !isFlip(pdb)); keep(); st.flipping = false;
+          if (MOL.viewer && MOL.pdb === pdb) { MOL.first = true; molPaint(base, function () { unturn(document.getElementById('mol-host')); }); }
+          var b2 = document.getElementById('flip'); if (b2) b2.focus();
+        });
+      });
       each('[data-g]', function (b) { b.addEventListener('click', function () {
         var g = b.getAttribute('data-g'), i = +b.getAttribute('data-i');
         if (g === 'v0') st.v[0] = i; else if (g === 'v1') st.v[1] = i; else st[g] = i;
@@ -1524,8 +1548,8 @@
   }
   function cmpCam(v) { try { v.viewer.plugin.canvas3d.setProps({ camera: { mode: MOL.cam ? 'perspective' : 'orthographic' } }); } catch (e) {} }
   function cmpPaint(v, flip) {
-    if (!v.viewer) return;
-    v.viewer.loadMvsData(JSON.stringify(cmpTree(v.src, flip)), 'mvsj', { doNotReportErrors: true }).then(function () { cmpCam(v); }).catch(function () {});
+    if (!v.viewer) return Promise.resolve();
+    return v.viewer.loadMvsData(JSON.stringify(cmpTree(v.src, flip)), 'mvsj', { doNotReportErrors: true }).then(function () { cmpCam(v); }).catch(function () {});
   }
   /* rotating one view turns the other the same way, each about its own centre */
   function cmpLink(i, link) {
@@ -1589,7 +1613,7 @@
     var P = [a, b], baseOf = function (p) { return STORE + 'simulations/' + p + '_default_dppc/'; };
     var structs = '<section class="panel stack"><h2>Structures</h2><div class="cmp-structs">' + P.map(function (p, i) {
       return '<figure class="cmp-struct"><div class="well herowell" id="cmp-mol-' + i + '"><img class="heroimg' + (isFlip(p) ? ' flipped' : '') + '" src="' + (imgUrl('pdbhero', p) || PH) + '"' + fbAttr('pdbhero', p) + ' alt="' + esc(p.toUpperCase()) + ' in its simulated bilayer" onerror="mpmFb(this)"></div>' +
-        '<figcaption><a href="' + refHref('PDB', p) + '"><b>' + p.toUpperCase() + '</b></a><div class="btns"><button type="button" class="btn ghost" data-cmp3d="' + i + '">3D view</button><button type="button" class="btn ghost" data-cmpflip="' + i + '" aria-pressed="' + isFlip(p) + '">Flip</button></div></figcaption></figure>';
+        '<figcaption><a href="' + refHref('PDB', p) + '"><b>' + p.toUpperCase() + '</b></a><div class="btns"><button type="button" class="btn ghost" data-cmp3d="' + i + '">3D view</button><button type="button" class="btn ghost" data-cmpflip="' + i + '" aria-pressed="' + isFlip(p) + '">' + FLIP_ICO + 'Flip</button></div></figcaption></figure>';
     }).join('') + '</div><div class="cmp-tools"><label class="small"><input type="checkbox" id="cmp-link" checked> Turn the 3D views together</label></div>' +
       '<p class="small muted">If one structure sits upside down in its membrane, Flip turns it over everywhere: the picture, the 3D view, the plots and the topology, here and on its entry page. Your choice is remembered in this browser.</p></section>';
     show(null, '<div class="stack-lg">' + head() + structs + '<div id="cmp-body"><p class="muted">Loading both entries…</p></div>' + picker() + '</div>', 'Compare ' + a.toUpperCase() + ' and ' + b.toUpperCase());
@@ -1666,10 +1690,17 @@
       });
       each('[data-cmpflip]', function (x) {
         x.addEventListener('click', function () {
-          var i = +x.getAttribute('data-cmpflip'); st.flip[i] = !st.flip[i]; setFlip(P[i], st.flip[i]); x.setAttribute('aria-pressed', String(st.flip[i]));
-          var img = document.querySelector('#cmp-mol-' + i + ' .heroimg'); if (img) img.classList.toggle('flipped', st.flip[i]);
-          if (CMPV[i]) cmpPaint(CMPV[i], st.flip[i]);
-          var y = window.scrollY; paint(); window.scrollTo(0, y);
+          var i = +x.getAttribute('data-cmpflip'); if (st.busy) return; st.busy = true;
+          var fig = document.getElementById('cmp-mol-' + i).parentNode, body = document.getElementById('cmp-body');
+          /* only this entry's picture and 3D view turn; in the plots, its line and topology tip over */
+          var boxes = body ? body.querySelectorAll('.topo-box svg') : [];
+          if (boxes.length === 2) boxes[i].classList.add('tipping');
+          if (st.metric === 0 && body) Array.prototype.forEach.call(body.querySelectorAll('.cmp-chart .cmp-' + (i ? 'b' : 'a')), function (e) { e.classList.add('tipping'); });
+          flipAnim(fig, function () {
+            st.flip[i] = !st.flip[i]; setFlip(P[i], st.flip[i]); x.setAttribute('aria-pressed', String(st.flip[i])); st.busy = false;
+            if (CMPV[i]) cmpPaint(CMPV[i], st.flip[i]).then(function () { unturn(fig); }); else unturn(fig);
+            var y = window.scrollY; paint(); window.scrollTo(0, y);
+          });
         });
       });
     });
