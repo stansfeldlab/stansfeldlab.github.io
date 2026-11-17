@@ -771,11 +771,11 @@
     function comp(expr, key) { return pl.builders.structure.tryCreateComponent(s.cell, { type: { name: 'script', params: { language: 'pymol', expression: expr } }, nullIfEmpty: true, label: key }, key); }
     function show(c, p) { return c ? pl.builders.structure.representation.addRepresentation(c, p) : null; }
     return pl.managers.structure.component.clear([s]).then(function () {
-      return Promise.all([comp('polymer.protein', 'protein'), comp('name PO4', 'phosphates'), comp('not polymer.protein and not name PO4 and not resn W+ION+NA+CL+PW', 'lipids')]);
+      return Promise.all([comp('polymer.protein', 'protein'), comp('name PO4', 'phosphates'), comp('resn DPPC+DPPE+DPPG+POPC+POPE+POPG+DLPC+DMPC+CHOL+CARD and not name PO4', 'lipids')]);
     }).then(function (c) {
       return Promise.all([show(c[0], { type: 'spacefill', color: 'chain-id', typeParams: { sizeFactor: 1 } }),
         show(c[1], { type: 'spacefill', color: 'uniform', colorParams: { value: 0xe0a526 }, typeParams: { sizeFactor: 1 } }),
-        show(c[2], { type: 'spacefill', color: 'uniform', colorParams: { value: 0xc9ced8 }, typeParams: { sizeFactor: 0.5, alpha: 0.35 } })]);
+        show(c[2], { type: 'spacefill', color: 'uniform', colorParams: { value: 0xc9ced8 }, typeParams: { sizeFactor: 0.6, alpha: 0.5 } })]);
     }).then(function () {
       pl.managers.camera.reset();
       var cam = pl.canvas3d.camera, sn = cam.getSnapshot(), t = sn.target, d = Math.hypot(sn.position[0] - t[0], sn.position[1] - t[1], sn.position[2] - t[2]);
