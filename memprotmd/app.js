@@ -69,9 +69,12 @@
   function ionFix(t) { return String(t || '').replace(/\b(Mg|Ca|Zn|Na|K|Cu|Fe|Mn|Ni|Co|Cl|H|Li|Cd|Ba|Sr|Cs|Rb) (\d[+\-\u2212]|[+\-\u2212](?=[,.;:)\/]| [a-z]|$))/g, '$1$2'); }
   /* four-character PDB codes are shown in capitals, extended ones (pdb_00001abc) as the PDB writes them */
   function PID(p) { p = String(p); return /^pdb_/i.test(p) ? p.toLowerCase() : p.toUpperCase(); }
-  /* The PDB's extended IDs write a four-character code c as pdb_0000c. Either form finds the entry, whichever
-     the database lists it under. */
-  function altId(x) { x = String(x).toLowerCase(); var m = x.match(/^pdb_0000([0-9a-z]{4})$/); return m ? m[1] : /^[0-9][0-9a-z]{3}$/.test(x) ? 'pdb_0000' + x : null; }
+  /* The PDB's extended IDs pad a code with zeros to eight characters after pdb_: 1k4c is pdb_00001k4c, and a
+     longer code such as 1a1a1 is pdb_0001a1a1. Either form finds the entry, whichever the database lists it under. */
+  function altId(x) {
+    x = String(x).toLowerCase(); var m = x.match(/^pdb_0+([1-9][0-9a-z]{3,6})$/);
+    return m ? m[1] : /^[1-9][0-9a-z]{3,6}$/.test(x) ? 'pdb_' + ('0000000' + x).slice(-8) : null;
+  }
   function canonId(x) { x = String(x).toLowerCase(); if (byId[x]) return x; var y = altId(x); return y && byId[y] ? y : x; }
   function pdbTitle(t, acc) { return t ? sentence(t) : 'PDB ' + PID(String(acc)); }
   function members(c) { return c.mem ? c.mem.split(' ') : []; }
@@ -492,11 +495,11 @@
      simulation at MDDB's Oxford node, MemProtMD's own first and newest first. */
   var MDDB_OX = 'https://oxford.mddbr.eu/';
   function mddbHits(base, pdb) {
-    return fetch(base + 'api/rest/v1/projects?search=' + pdb).then(function (r) { if (!r.ok) throw 0; return r.json(); })
+    return fetch(base + 'api/rest/v1/projects?search=' + (/^pdb_/.test(pdb) && altId(pdb) ? altId(pdb) : pdb)).then(function (r) { if (!r.ok) throw 0; return r.json(); })
       .then(function (j) {
         return (j.projects || []).filter(function (x) {
           var m = x.metadata || {}, ids = (m.PDBIDS || []).map(function (id) { return String(id).toLowerCase(); });
-          return ids.length ? ids.indexOf(pdb) >= 0 : new RegExp('\\b' + pdb + '$', 'i').test(m.NAME || '');
+          var alt = altId(pdb); return ids.length ? ids.indexOf(pdb) >= 0 || (alt && ids.indexOf(alt) >= 0) : new RegExp('\\b(' + pdb + (alt ? '|' + alt : '') + ')$', 'i').test(m.NAME || '');
         });
       }).catch(function () { return null; });
   }
@@ -1836,18 +1839,18 @@
     if (DB) ix.forEach(function (i) { if (q2[i]) q2[i] = canonId(q2[i]); });
     if (q2.join('/') !== p) { p = q2.join('/'); history.replaceState(null, '', href(p) + (route.query ? '?' + route.query : '')); }
     route.current = p;
-    var mp = p.match(/^ref\/PDB\/((?:pdb_[0-9a-z]{8}|[0-9a-z]{4}))/i);
+    var mp = p.match(/^ref\/PDB\/((?:pdb_[0-9a-z]{8}|[0-9a-z]{4,7}))/i);
     if (MOL.pdb && (!mp || mp[1].toLowerCase() !== MOL.pdb)) molReset();
     cmpDispose();
     if (DYN && (!mp || mp[1].toLowerCase() !== DYN.pdb)) dynDispose();
     if (p === 'home') pageHome();
     else if (p === 'search/text') pageSearch();
     else if (p === 'stats') pageStats();
-    else if ((m = p.match(/^compare\/((?:pdb_[0-9a-z]{8}|[0-9a-z]{4}))(?:\/((?:pdb_[0-9a-z]{8}|[0-9a-z]{4})))?$/i))) pageCompare(m[1], m[2]);
+    else if ((m = p.match(/^compare\/((?:pdb_[0-9a-z]{8}|[0-9a-z]{4,7}))(?:\/((?:pdb_[0-9a-z]{8}|[0-9a-z]{4,7})))?$/i))) pageCompare(m[1], m[2]);
     else if ((m = p.match(/^authors(?:\/(.+))?$/))) pageAuthors(m[1] ? (function (x) { try { return decodeURIComponent(x); } catch (e) { return x; } })(m[1]) : null);
     else if (p === 'about' || p === 'api' || p === 'data') pageStatic(p, p, { about: 'About', api: 'API', data: 'Data files' }[p]);
     else if (p === 'status') pageStatus();
-    else if ((m = p.match(/^ref\/PDB\/((?:pdb_[0-9a-z]{8}|[0-9a-z]{4}))(?:\/chain\/(\w+))?$/i))) pageEntry(m[1].toLowerCase(), m[2] || null);
+    else if ((m = p.match(/^ref\/PDB\/((?:pdb_[0-9a-z]{8}|[0-9a-z]{4,7}))(?:\/chain\/(\w+))?$/i))) pageEntry(m[1].toLowerCase(), m[2] || null);
     else if ((m = p.match(/^ref\/([A-Za-z]+)\/(.+)$/))) pageCollection(m[1], m[2]);
     else notFound(p);
     var key = p.replace(/\/chain\/.*/, '');
