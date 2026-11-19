@@ -578,6 +578,16 @@ def mpstruc_build(cols, details, ref_by, ms):
     return n
 
 
+def pdb_alias(x):
+    """The other form of a PDB ID: extended IDs pad a code with zeros to eight characters after pdb_, so 1k4c is
+    pdb_00001k4c and 1a1a1 is pdb_0001a1a1."""
+    x = str(x).lower()
+    m = re.match(r'pdb_0+([1-9][0-9a-z]{3,6})$', x)
+    if m:
+        return m.group(1)
+    return 'pdb_' + x.rjust(8, '0') if re.match(r'[1-9][0-9a-z]{3,6}$', x) else x
+
+
 def mddb_lookup(ref_by):
     """How many MDDB simulations list each entry's PDB code, as {pdb: count} for MemProtMD entries, read from
     MDDB's Oxford node. A simulation is matched by its PDBIDS field or, without one, by a name
@@ -604,9 +614,9 @@ def mddb_lookup(ref_by):
             m = x.get('metadata') or {}
             ids = {str(i).lower() for i in m.get('PDBIDS') or []}
             if not ids:
-                t = re.search(r'\b([0-9][a-z0-9]{3})$', str(m.get('NAME') or '').lower())
+                t = re.search(r'(pdb_[0-9a-z]{8}|\b[1-9][a-z0-9]{3,6})$', str(m.get('NAME') or '').lower())
                 ids = {t.group(1)} if t else set()
-            for pid in ids:
+            for pid in {pdb_alias(i) if i not in ref_by else i for i in ids}:
                 if pid in ref_by:
                     out[pid] += 1
         print('MDDB: %d projects at %s, %d of them list MemProtMD entries' % (len(projects), api, sum(out.values()) - n0))
