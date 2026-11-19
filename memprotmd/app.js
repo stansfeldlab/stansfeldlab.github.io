@@ -69,6 +69,10 @@
   function ionFix(t) { return String(t || '').replace(/\b(Mg|Ca|Zn|Na|K|Cu|Fe|Mn|Ni|Co|Cl|H|Li|Cd|Ba|Sr|Cs|Rb) (\d[+\-\u2212]|[+\-\u2212](?=[,.;:)\/]| [a-z]|$))/g, '$1$2'); }
   /* four-character PDB codes are shown in capitals, extended ones (pdb_00001abc) as the PDB writes them */
   function PID(p) { p = String(p); return /^pdb_/i.test(p) ? p.toLowerCase() : p.toUpperCase(); }
+  /* The PDB's extended IDs write a four-character code c as pdb_0000c. Either form finds the entry, whichever
+     the database lists it under. */
+  function altId(x) { x = String(x).toLowerCase(); var m = x.match(/^pdb_0000([0-9a-z]{4})$/); return m ? m[1] : /^[0-9][0-9a-z]{3}$/.test(x) ? 'pdb_0000' + x : null; }
+  function canonId(x) { x = String(x).toLowerCase(); if (byId[x]) return x; var y = altId(x); return y && byId[y] ? y : x; }
   function pdbTitle(t, acc) { return t ? sentence(t) : 'PDB ' + PID(String(acc)); }
   function members(c) { return c.mem ? c.mem.split(' ') : []; }
   function lineage(id) { var out = [], g = 0; while (id && colById[id] && g++ < 20) { out.unshift(id); id = colById[id].parent; } return out; }
@@ -82,7 +86,7 @@
     if (searchRecs) return searchRecs;
     searchRecs = [];
     Object.keys(colById).forEach(function (id) { var c = colById[id]; searchRecs.push({ db: c.db, acc: c.acc, title: c.title, size: c.n, text: (c.acc + ' ' + plain(c.title) + ' ' + c.sub).toLowerCase() }); });
-    DB.pdb.forEach(function (r) { searchRecs.push({ db: 'PDB', acc: r[0], title: r[1], size: 1, date: r[5], text: (r[0] + ' ' + plain(r[1]) + ' ' + (r[2] || '') + ' ' + orgNames(r).join(' ')).toLowerCase() }); });
+    DB.pdb.forEach(function (r) { searchRecs.push({ db: 'PDB', acc: r[0], title: r[1], size: 1, date: r[5], text: (r[0] + ' ' + (altId(r[0]) || '') + ' ' + plain(r[1]) + ' ' + (r[2] || '') + ' ' + orgNames(r).join(' ')).toLowerCase() }); });
     return searchRecs;
   }
   function orgsOf(r) { return ((r && r[6]) || []).map(function (i) { return ORGS[i]; }).filter(Boolean); }
@@ -1714,7 +1718,7 @@
         pop.innerHTML = hits.map(function (r) { return '<a href="' + href('compare/' + a + '/' + r[0]) + '">' + PID(r[0]) + ' <span class="muted">' + esc(plain(r[1]).slice(0, 48)) + '</span></a>'; }).join('');
         pop.hidden = !hits.length;
       });
-      inp.addEventListener('keydown', function (e) { var q = inp.value.trim().toLowerCase(); if (e.key === 'Enter' && byId[q]) location.hash = href('compare/' + a + '/' + q); });
+      inp.addEventListener('keydown', function (e) { var q = canonId(inp.value.trim()); if (e.key === 'Enter' && byId[q]) location.hash = href('compare/' + a + '/' + q); });
       inp.addEventListener('blur', function () { setTimeout(function () { pop.hidden = true; }, 200); });
     }
     if (!b || !byId[b]) { show(null, '<div class="stack-lg">' + head() + picker() + '</div>', 'Compare ' + PID(a)); wirePicker(); return; }
@@ -1827,6 +1831,10 @@
     route.query = qi >= 0 ? p.slice(qi + 1) : '';
     p = (qi >= 0 ? p.slice(0, qi) : p).replace(/\/+$/, '');
     if (!p) p = window.MPM_ROUTE || 'home';
+    /* an entry asked for by its other ID form is shown at the address of the form the database uses */
+    var q2 = p.split('/'), ix = q2[0] === 'ref' && q2[1] === 'PDB' ? [2] : q2[0] === 'compare' ? [1, 2] : [];
+    if (DB) ix.forEach(function (i) { if (q2[i]) q2[i] = canonId(q2[i]); });
+    if (q2.join('/') !== p) { p = q2.join('/'); history.replaceState(null, '', href(p) + (route.query ? '?' + route.query : '')); }
     route.current = p;
     var mp = p.match(/^ref\/PDB\/((?:pdb_[0-9a-z]{8}|[0-9a-z]{4}))/i);
     if (MOL.pdb && (!mp || mp[1].toLowerCase() !== MOL.pdb)) molReset();
