@@ -67,7 +67,9 @@
   function groupInfo(db) { if (!GROUPS[db]) GROUPS[db] = getJSON('data/groups/' + db + '.json').catch(function () { return {}; }); return GROUPS[db]; }
   /* PDB citation titles lose their superscripts: "Mg 2+ transport" should read "Mg2+ transport" */
   function ionFix(t) { return String(t || '').replace(/\b(Mg|Ca|Zn|Na|K|Cu|Fe|Mn|Ni|Co|Cl|H|Li|Cd|Ba|Sr|Cs|Rb) (\d[+\-\u2212]|[+\-\u2212](?=[,.;:)\/]| [a-z]|$))/g, '$1$2'); }
-  function pdbTitle(t, acc) { return t ? sentence(t) : 'PDB ' + String(acc).toUpperCase(); }
+  /* four-character PDB codes are shown in capitals, extended ones (pdb_00001abc) as the PDB writes them */
+  function PID(p) { p = String(p); return /^pdb_/i.test(p) ? p.toLowerCase() : p.toUpperCase(); }
+  function pdbTitle(t, acc) { return t ? sentence(t) : 'PDB ' + PID(String(acc)); }
   function members(c) { return c.mem ? c.mem.split(' ') : []; }
   function lineage(id) { var out = [], g = 0; while (id && colById[id] && g++ < 20) { out.unshift(id); id = colById[id].parent; } return out; }
   function collectionsOf(pdb) {
@@ -516,13 +518,13 @@
   var CITE_BIB = '@article{newport2019memprotmd,\n  author = {Newport, Thomas D. and Sansom, Mark S. P. and Stansfeld, Phillip J.},\n  title = {The {MemProtMD} database: a resource for membrane-embedded protein structures and their lipid interactions},\n  journal = {Nucleic Acids Research},\n  volume = {47},\n  number = {D1},\n  pages = {D390--D397},\n  year = {2019},\n  doi = {10.1093/nar/gky1047}\n}';
   function today() { return new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }); }
   function citeBox(pdb, cit) {
-    var u = SITE + 'pdb/' + pdb + '/', P = pdb.toUpperCase();
+    var u = SITE + 'pdb/' + pdb + '/', P = PID(pdb);
     return '<section class="panel stack"><h2>Cite this entry</h2><p class="cite">' + esc(CITE).replace('doi:10.1093/nar/gky1047', extA('https://doi.org/10.1093/nar/gky1047', 'doi:10.1093/nar/gky1047')) + '</p>' +
       '<p class="small muted">Entry: MemProtMD PDB ' + P + ', <a href="' + esc(u) + '">' + esc(u) + '</a> (accessed ' + today() + '). Please also cite the original structure' + (cit && cit.DOI ? ', ' + extA('https://doi.org/' + cit.DOI, 'doi:' + esc(cit.DOI)) : '') + '.</p>' +
       '<div class="btns"><button class="btn ghost" type="button" data-copy="txt">Copy citation</button><button class="btn ghost" type="button" data-copy="bib">Copy BibTeX</button><span class="small muted" id="cite-msg" role="status"></span></div></section>';
   }
   function wireCite(pdb, cit) {
-    var u = SITE + 'pdb/' + pdb + '/', P = pdb.toUpperCase();
+    var u = SITE + 'pdb/' + pdb + '/', P = PID(pdb);
     var txt = CITE + '\nMemProtMD entry PDB ' + P + ', ' + u + ' (accessed ' + today() + ').' + (cit && cit.DOI ? '\nOriginal structure: doi:' + cit.DOI : '');
     var bib = CITE_BIB + '\n@misc{memprotmd_' + pdb + ',\n  title = {{MemProtMD} entry {PDB} ' + P + '},\n  howpublished = {\\url{' + u + '}},\n  note = {Accessed ' + today() + '}\n}';
     each('[data-copy]', function (b) {
@@ -745,7 +747,7 @@
     var v = DYN = { pdb: pdb, dead: false, viewer: null, blob: null, playing: false };
     var well = box.querySelector('.dyn-well'), stat = box.querySelector('.dyn-status'), api = MDDB_OX + 'api/rest/v1/projects/' + encodeURIComponent(acc) + '.1/', keep = stat.innerHTML;
     v.el = document.createElement('div'); v.el.className = 'molview';
-    v.el.innerHTML = '<div class="mol-canvas" role="img" aria-label="Coarse-grained simulation of ' + esc(pdb.toUpperCase()) + ', played as a movie"></div><div class="mol-status">Asking MDDB for the trajectory…</div>';
+    v.el.innerHTML = '<div class="mol-canvas" role="img" aria-label="Coarse-grained simulation of ' + esc(PID(pdb)) + ', played as a movie"></div><div class="mol-status">Asking MDDB for the trajectory…</div>';
     well.classList.add('is-3d'); well.innerHTML = ''; well.appendChild(v.el);
     var ms = v.el.querySelector('.mol-status');
     Promise.all([loadMolstar(), dynFetch(api + 'trajectory?frames=1:' + n + ':' + step + '&format=xtc', function (b) { if (!v.dead) ms.textContent = 'Loading the trajectory from MDDB… ' + (b / 1e6).toFixed(1) + ' MB'; })]).then(function (r) {
@@ -793,7 +795,7 @@
     if (MOL.pdb !== pdb) molReset();
     var m = MOL, chains = molMount.chains; m.pdb = pdb; m.open = true;
     m.el = document.createElement('div'); m.el.className = 'molview';
-    m.el.innerHTML = '<div class="mol-canvas" role="img" aria-label="Interactive 3D view of ' + esc(pdb.toUpperCase()) + ' in its simulated bilayer"></div><div class="mol-status">Loading the 3D viewer…</div>';
+    m.el.innerHTML = '<div class="mol-canvas" role="img" aria-label="Interactive 3D view of ' + esc(PID(pdb)) + ' in its simulated bilayer"></div><div class="mol-status">Loading the 3D viewer…</div>';
     molMount(pdb, base);
     Promise.all([loadMolstar(), molSource(pdb, base)]).then(function (r) {
       if (m !== MOL) { if (r[1].blob) URL.revokeObjectURL(r[1].url); return; }
@@ -850,9 +852,9 @@
       var ch = s.chains || [], selc = ch.filter(function (c) { return c.chainID === chainSel; })[0];
       var contactImgs = []; CONTACTS.forEach(function (cn) { REPS.forEach(function (rp) { contactImgs.push([cn[0] + ', ' + rp[0].toLowerCase(), 'front-contacts-' + cn[1] + '-' + rp[1]]); }); });
       var fl = isFlip(pdb), th = fl ? flipTh(s.thinning) : s.thinning, prof = st.rec && st.rec.prof ? (fl ? flipProf(st.rec.prof) : st.rec.prof) : null;
-      var h = '<div class="stack-lg"><div class="cols entry"><div class="herocol"><div class="well herowell" id="mol-host"><img class="heroimg' + (fl ? ' flipped' : '') + '" src="' + (imgUrl('pdbhero', pdb) || PH) + '"' + fbAttr('pdbhero', pdb) + ' alt="' + esc(pdb.toUpperCase()) + ' in its simulated bilayer" onerror="mpmFb(this)">' +
+      var h = '<div class="stack-lg"><div class="cols entry"><div class="herocol"><div class="well herowell" id="mol-host"><img class="heroimg' + (fl ? ' flipped' : '') + '" src="' + (imgUrl('pdbhero', pdb) || PH) + '"' + fbAttr('pdbhero', pdb) + ' alt="' + esc(PID(pdb)) + ' in its simulated bilayer" onerror="mpmFb(this)">' +
           '<button type="button" class="btn mol-open" id="mol-open"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2 17 6v8l-7 4-7-4V6z M10 2v8m0 0 7-4m-7 4-7-4m7 4v8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>3D view</button></div><div id="mol-ctrl"></div></div>' +
-        '<div class="stack"><div class="pagehead">' + crumbs([['Home', href('home')], ['Structures', refHref('mpm', 'membrane_proteins')], [pdb.toUpperCase(), null]]) +
+        '<div class="stack"><div class="pagehead">' + crumbs([['Home', href('home')], ['Structures', refHref('mpm', 'membrane_proteins')], [PID(pdb), null]]) +
         '<h1>' + ttl(pdbTitle(r.title || e[1], pdb)) + '</h1><div class="idline"><span class="tag">PDB ' + pdb + '</span>' + ((r.subtitle || e[2]) ? '<span>' + esc(sentence(r.subtitle || e[2])) + '</span>' : '') + '</div></div>' +
         '<dl class="facts">' + [['Released', fmtDate(e[5])], ['Method', esc(sentence(e[3] || ''))], ['Resolution', e[4] ? Number(e[4]).toFixed(2).replace(/0$/, '') + ' Å' : ''], ['Organism', orgNames(e).map(function (n) { return '<a href="' + href('search/text') + '?o=' + encodeURIComponent(n) + '"><i>' + esc(n) + '</i></a>'; }).join(', ')],
           ['Ligands', esc((r.ligands || []).map(function (l) { return sentence(l.description); }).join(', '))], ['Keywords', esc((r.keywords || []).join(', '))]].filter(function (p) { return p[1]; }).map(function (p) { return '<dt>' + p[0] + '</dt><dd>' + p[1] + '</dd>'; }).join('') + '</dl>' +
@@ -880,7 +882,7 @@
         '<section class="panel stack"><h2>Downloads</h2><p class="small muted">Files are served from file storage. Licensed under Creative Commons Attribution 4.0.</p><div class="files">' + FILES.map(function (g) {
           return '<div><h3>' + g[0] + '</h3><ul>' + g[1].map(function (f) { return '<li>' + extA(base + f[1], sim + '-' + f[0]) + '<span>' + f[2] + '</span></li>'; }).join('') + '</ul></div>';
         }).join('') + '</div></section>' + citeBox(pdb, cit) + '</div>';
-      show(null, h, plain(pdbTitle(r.title || e[1], pdb)) + ' (' + pdb.toUpperCase() + ')');
+      show(null, h, plain(pdbTitle(r.title || e[1], pdb)) + ' (' + PID(pdb) + ')');
       if (molMount.pdb !== pdb) { molMount.pdb = pdb; molMount.lipids = molMount.chains = null; }
       molMount(pdb, base, Object.keys(s.composition || {}), ch.map(function (c) { return c.chainID; }));
       mddbCount(pdb); wireCite(pdb, cit);
@@ -1678,7 +1680,7 @@
   function cmpOpen(i, p, el, flip, link) {
     var v = CMPV[i] = { viewer: null, src: null, dead: false };
     el.classList.add('is-3d');
-    el.innerHTML = '<div class="molview"><div class="mol-canvas" role="img" aria-label="Interactive 3D view of ' + esc(p.toUpperCase()) + ' in its simulated bilayer"></div><div class="mol-status">Loading the 3D viewer…</div></div>';
+    el.innerHTML = '<div class="molview"><div class="mol-canvas" role="img" aria-label="Interactive 3D view of ' + esc(PID(p)) + ' in its simulated bilayer"></div><div class="mol-status">Loading the 3D viewer…</div></div>';
     var stat = el.querySelector('.mol-status');
     Promise.all([loadMolstar(), molSource(p, STORE + 'simulations/' + p + '_default_dppc/')]).then(function (r) {
       if (v.dead) { if (r[1].blob) URL.revokeObjectURL(r[1].url); return; }
@@ -1699,30 +1701,30 @@
     a = (a || '').toLowerCase(); b = (b || '').toLowerCase();
     if (!byId[a]) return notFound('PDB ' + a);
     var same = sameProtein(a);
-    function head() { return '<div class="pagehead">' + crumbs([['Home', href('home')], ['PDB ' + a.toUpperCase(), refHref('PDB', a)], ['Compare', null]]) + '<h1>Compare ' + a.toUpperCase() + (b && byId[b] ? ' and ' + b.toUpperCase() : ' with another entry') + '</h1></div>'; }
+    function head() { return '<div class="pagehead">' + crumbs([['Home', href('home')], ['PDB ' + PID(a), refHref('PDB', a)], ['Compare', null]]) + '<h1>Compare ' + PID(a) + (b && byId[b] ? ' and ' + PID(b) : ' with another entry') + '</h1></div>'; }
     function picker() {
-      return '<section class="panel stack"><label class="eyebrow" for="cmp-q">' + (b ? 'Compare ' + a.toUpperCase() + ' with a different entry' : 'Choose an entry to compare with ' + a.toUpperCase()) + '</label>' +
+      return '<section class="panel stack"><label class="eyebrow" for="cmp-q">' + (b ? 'Compare ' + PID(a) + ' with a different entry' : 'Choose an entry to compare with ' + PID(a)) + '</label>' +
         '<div class="au-search"><input class="field" id="cmp-q" type="search" placeholder="PDB code, e.g. 5t1a" autocomplete="off" maxlength="4"><div class="pop" id="cmp-pop" hidden></div></div>' +
-        (same.length ? '<p class="small muted">Other structures of the same protein</p><div class="chips">' + same.slice(0, 30).map(function (p) { return '<a class="chip" href="' + href('compare/' + a + '/' + p) + '" title="' + esc(plain(byId[p][1])) + '">' + p.toUpperCase() + ' · ' + esc((byId[p][3] || '').replace(' DIFFRACTION', '').replace('ELECTRON MICROSCOPY', 'EM').toLowerCase()) + (byId[p][4] ? ' ' + byId[p][4] + ' Å' : '') + '</a>'; }).join('') + '</div>' : '') + '</section>';
+        (same.length ? '<p class="small muted">Other structures of the same protein</p><div class="chips">' + same.slice(0, 30).map(function (p) { return '<a class="chip" href="' + href('compare/' + a + '/' + p) + '" title="' + esc(plain(byId[p][1])) + '">' + PID(p) + ' · ' + esc((byId[p][3] || '').replace(' DIFFRACTION', '').replace('ELECTRON MICROSCOPY', 'EM').toLowerCase()) + (byId[p][4] ? ' ' + byId[p][4] + ' Å' : '') + '</a>'; }).join('') + '</div>' : '') + '</section>';
     }
     function wirePicker() {
       var inp = document.getElementById('cmp-q'), pop = document.getElementById('cmp-pop'); if (!inp) return;
       inp.addEventListener('input', function () {
         var q = inp.value.trim().toLowerCase(), hits = q ? DB.pdb.filter(function (r) { return r[0].indexOf(q) === 0 && r[0] !== a; }).slice(0, 8) : [];
-        pop.innerHTML = hits.map(function (r) { return '<a href="' + href('compare/' + a + '/' + r[0]) + '">' + r[0].toUpperCase() + ' <span class="muted">' + esc(plain(r[1]).slice(0, 48)) + '</span></a>'; }).join('');
+        pop.innerHTML = hits.map(function (r) { return '<a href="' + href('compare/' + a + '/' + r[0]) + '">' + PID(r[0]) + ' <span class="muted">' + esc(plain(r[1]).slice(0, 48)) + '</span></a>'; }).join('');
         pop.hidden = !hits.length;
       });
       inp.addEventListener('keydown', function (e) { var q = inp.value.trim().toLowerCase(); if (e.key === 'Enter' && byId[q]) location.hash = href('compare/' + a + '/' + q); });
       inp.addEventListener('blur', function () { setTimeout(function () { pop.hidden = true; }, 200); });
     }
-    if (!b || !byId[b]) { show(null, '<div class="stack-lg">' + head() + picker() + '</div>', 'Compare ' + a.toUpperCase()); wirePicker(); return; }
+    if (!b || !byId[b]) { show(null, '<div class="stack-lg">' + head() + picker() + '</div>', 'Compare ' + PID(a)); wirePicker(); return; }
     var P = [a, b], baseOf = function (p) { return STORE + 'simulations/' + p + '_default_dppc/'; };
     var structs = '<section class="panel stack"><h2>Structures</h2><div class="cmp-structs">' + P.map(function (p, i) {
-      return '<figure class="cmp-struct"><div class="well herowell" id="cmp-mol-' + i + '"><img class="heroimg' + (isFlip(p) ? ' flipped' : '') + '" src="' + (imgUrl('pdbhero', p) || PH) + '"' + fbAttr('pdbhero', p) + ' alt="' + esc(p.toUpperCase()) + ' in its simulated bilayer" onerror="mpmFb(this)"></div>' +
-        '<figcaption><a href="' + refHref('PDB', p) + '"><b>' + p.toUpperCase() + '</b></a><div class="btns"><button type="button" class="btn ghost" data-cmp3d="' + i + '">3D view</button><button type="button" class="btn ghost" data-cmpflip="' + i + '" aria-pressed="' + isFlip(p) + '">' + FLIP_ICO + 'Flip</button></div></figcaption></figure>';
+      return '<figure class="cmp-struct"><div class="well herowell" id="cmp-mol-' + i + '"><img class="heroimg' + (isFlip(p) ? ' flipped' : '') + '" src="' + (imgUrl('pdbhero', p) || PH) + '"' + fbAttr('pdbhero', p) + ' alt="' + esc(PID(p)) + ' in its simulated bilayer" onerror="mpmFb(this)"></div>' +
+        '<figcaption><a href="' + refHref('PDB', p) + '"><b>' + PID(p) + '</b></a><div class="btns"><button type="button" class="btn ghost" data-cmp3d="' + i + '">3D view</button><button type="button" class="btn ghost" data-cmpflip="' + i + '" aria-pressed="' + isFlip(p) + '">' + FLIP_ICO + 'Flip</button></div></figcaption></figure>';
     }).join('') + '</div><div class="cmp-tools"><label class="small"><input type="checkbox" id="cmp-link" checked> Turn the 3D views together</label></div>' +
       '<p class="small muted">If one structure sits upside down in its membrane, Flip turns it over everywhere: the picture, the 3D view, the plots and the topology, here and on its entry page. Your choice is remembered in this browser.</p></section>';
-    show(null, '<div class="stack-lg">' + head() + structs + '<div id="cmp-body"><p class="muted">Loading both entries…</p></div>' + picker() + '</div>', 'Compare ' + a.toUpperCase() + ' and ' + b.toUpperCase());
+    show(null, '<div class="stack-lg">' + head() + structs + '<div id="cmp-body"><p class="muted">Loading both entries…</p></div>' + picker() + '</div>', 'Compare ' + PID(a) + ' and ' + PID(b));
     wirePicker();
     var st = { metric: 0, ch: [null, null], ov: 1, flip: [isFlip(a), isFlip(b)], link: true, d3: [false, false] };
     Promise.all(P.map(function (p) { return getJSON('data/entries/' + p + '.json').catch(function () { return null; }); }).concat(P.map(function (p) { return chainData(baseOf(p)); }))).then(function (res) {
@@ -1746,7 +1748,7 @@
           ['Bilayer thickness next to the protein (Å)', function (i) { return f1(th[i].annular_thickness); }], ['Bilayer thickness away from it (Å)', function (i) { return f1(th[i].bulk_thickness); }],
           ['Thickness change (Å)', function (i) { return f1(th[i].thickness_diff); }], ['Membrane-spanning helices', function (i) { return tm(i, 'tm_alpha'); }], ['Membrane-spanning strands', function (i) { return tm(i, 'tm_beta'); }],
           ['Protein residues simulated', function (i) { return val[i].n_protein_residues != null ? num(val[i].n_protein_residues) : '–'; }], ['Lipids', function (i) { return val[i].n_lipid_molecules != null ? num(val[i].n_lipid_molecules) : '–'; }]];
-        return '<div class="scroll"><table class="tbl cmp-tbl"><thead><tr><th></th>' + P.map(function (p) { return '<th><a href="' + refHref('PDB', p) + '">' + p.toUpperCase() + '</a><div class="small muted">' + ttl(pdbTitle(byId[p][1], p)) + '</div></th>'; }).join('') + '</tr></thead><tbody>' +
+        return '<div class="scroll"><table class="tbl cmp-tbl"><thead><tr><th></th>' + P.map(function (p) { return '<th><a href="' + refHref('PDB', p) + '">' + PID(p) + '</a><div class="small muted">' + ttl(pdbTitle(byId[p][1], p)) + '</div></th>'; }).join('') + '</tr></thead><tbody>' +
           R.map(function (r) { return '<tr><th scope="row">' + r[0] + '</th><td>' + r[1](0) + '</td><td>' + r[1](1) + '</td></tr>'; }).join('') + '</tbody></table></div>';
       }
       function lineChart() {
@@ -1767,15 +1769,15 @@
           yt.map(function (v) { return '<line class="grid" x1="' + L + '" x2="' + (W - Rr) + '" y1="' + Y(v).toFixed(1) + '" y2="' + Y(v).toFixed(1) + '"/><text class="ytick" x="' + (L - 6) + '" y="' + (Y(v) + 4).toFixed(1) + '" text-anchor="end">' + (isZ ? (v < 0 ? '−' + (-v) : v) : Math.round(v * 100) + '%') + '</text>'; }).join('') +
           ticks.map(function (t) { return '<text class="xtick" x="' + X(t).toFixed(1) + '" y="' + (H - 10) + '" text-anchor="middle">' + t + '</text>'; }).join('') +
           '<path class="cmp-a" d="' + line(A) + '"/><path class="cmp-b" d="' + line(Bv) + '"/></svg></div>' +
-          '<div class="legend"><span><i class="cmp-ka"></i>' + a.toUpperCase() + ' chain ' + esc(st.ch[0]) + (st.flip[0] ? ' (flipped)' : '') + '</span><span><i class="cmp-kb"></i>' + b.toUpperCase() + ' chain ' + esc(st.ch[1]) + (st.flip[1] ? ' (flipped)' : '') + '</span></div>' +
+          '<div class="legend"><span><i class="cmp-ka"></i>' + PID(a) + ' chain ' + esc(st.ch[0]) + (st.flip[0] ? ' (flipped)' : '') + '</span><span><i class="cmp-kb"></i>' + PID(b) + ' chain ' + esc(st.ch[1]) + (st.flip[1] ? ' (flipped)' : '') + '</span></div>' +
           '<p class="small muted">' + m[1] + ': ' + m[2] + ', by residue number. Residues are matched by number, which lines up for structures of the same protein; ' + num(both.length) + ' numbers appear in both chains' + (both.length ? ', and ' + Math.round(same / both.length * 100) + '% of them are the same amino acid' : '') + '.</p>';
       }
       function topo(i) {
         var rows = rowsOf(i), thi = thOf(i), ct = null;
         try { ct = rows.length ? topoBuild(rows, thi && thi.bulk_mid != null ? +thi.bulk_mid : 0) : null; } catch (e) { ct = null; }
-        return ct && ct.segments && ct.segments.length ? '<h3>' + P[i].toUpperCase() + ' chain ' + esc(st.ch[i]) + (st.flip[i] ? ' <span class="small muted">(flipped)</span>' : '') + '</h3><div class="topo-box scroll">' + topoSvg(ct, rows, thi, OVERLAYS[st.ov][1], null) + '</div>' : '';
+        return ct && ct.segments && ct.segments.length ? '<h3>' + PID(P[i]) + ' chain ' + esc(st.ch[i]) + (st.flip[i] ? ' <span class="small muted">(flipped)</span>' : '') + '</h3><div class="topo-box scroll">' + topoSvg(ct, rows, thi, OVERLAYS[st.ov][1], null) + '</div>' : '';
       }
-      function chainSel(i) { return ids[i].length > 1 ? '<label class="small">' + P[i].toUpperCase() + ' chain <select class="field" data-cmpch="' + i + '">' + ids[i].map(function (c) { return '<option' + (c === st.ch[i] ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select></label>' : ''; }
+      function chainSel(i) { return ids[i].length > 1 ? '<label class="small">' + PID(P[i]) + ' chain <select class="field" data-cmpch="' + i + '">' + ids[i].map(function (c) { return '<option' + (c === st.ch[i] ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select></label>' : ''; }
       function paint() {
         host = document.getElementById('cmp-body'); if (!host) return;
         host.innerHTML = '<div class="stack-lg"><section class="panel stack"><h2>At a glance</h2>' + metricsTable() + '</section>' +
@@ -1826,18 +1828,18 @@
     p = (qi >= 0 ? p.slice(0, qi) : p).replace(/\/+$/, '');
     if (!p) p = window.MPM_ROUTE || 'home';
     route.current = p;
-    var mp = p.match(/^ref\/PDB\/([0-9a-z]{4})/i);
+    var mp = p.match(/^ref\/PDB\/((?:pdb_[0-9a-z]{8}|[0-9a-z]{4}))/i);
     if (MOL.pdb && (!mp || mp[1].toLowerCase() !== MOL.pdb)) molReset();
     cmpDispose();
     if (DYN && (!mp || mp[1].toLowerCase() !== DYN.pdb)) dynDispose();
     if (p === 'home') pageHome();
     else if (p === 'search/text') pageSearch();
     else if (p === 'stats') pageStats();
-    else if ((m = p.match(/^compare\/([0-9a-z]{4})(?:\/([0-9a-z]{4}))?$/i))) pageCompare(m[1], m[2]);
+    else if ((m = p.match(/^compare\/((?:pdb_[0-9a-z]{8}|[0-9a-z]{4}))(?:\/((?:pdb_[0-9a-z]{8}|[0-9a-z]{4})))?$/i))) pageCompare(m[1], m[2]);
     else if ((m = p.match(/^authors(?:\/(.+))?$/))) pageAuthors(m[1] ? (function (x) { try { return decodeURIComponent(x); } catch (e) { return x; } })(m[1]) : null);
     else if (p === 'about' || p === 'api' || p === 'data') pageStatic(p, p, { about: 'About', api: 'API', data: 'Data files' }[p]);
     else if (p === 'status') pageStatus();
-    else if ((m = p.match(/^ref\/PDB\/([0-9a-z]{4})(?:\/chain\/(\w+))?$/i))) pageEntry(m[1].toLowerCase(), m[2] || null);
+    else if ((m = p.match(/^ref\/PDB\/((?:pdb_[0-9a-z]{8}|[0-9a-z]{4}))(?:\/chain\/(\w+))?$/i))) pageEntry(m[1].toLowerCase(), m[2] || null);
     else if ((m = p.match(/^ref\/([A-Za-z]+)\/(.+)$/))) pageCollection(m[1], m[2]);
     else notFound(p);
     var key = p.replace(/\/chain\/.*/, '');
