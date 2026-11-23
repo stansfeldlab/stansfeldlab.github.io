@@ -1,0 +1,1985 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Antibiotic Architects</title>
+<meta name="description" content="Design antibiotics, test them with molecular dynamics simulations, and stay ahead of evolving superbugs.">
+<meta name="theme-color" content="#0B2233">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 34'%3E%3Cpath d='M4 14a13 13 0 0 0 26 0' fill='none' stroke='%232A6283' stroke-width='7' stroke-linecap='round'/%3E%3Cpath d='M10 18l7 5 7-5' fill='none' stroke='%23EAF6F4' stroke-width='2.6' stroke-linejoin='round'/%3E%3Ccircle cx='10' cy='18' r='4.4' fill='%237AA2FF'/%3E%3Ccircle cx='17' cy='23' r='4.4' fill='%23F5B041'/%3E%3Ccircle cx='24' cy='18' r='4.4' fill='%23F5B041'/%3E%3C/svg%3E">
+<link rel="canonical" href="https://stansfeldlab.github.io/Antibiotic-Architects.html">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Antibiotic Architects">
+<meta property="og:description" content="Design antibiotics, test them with molecular dynamics simulations, and stay ahead of evolving superbugs. A game from the Stansfeld Research Group, University of Warwick.">
+<meta property="og:url" content="https://stansfeldlab.github.io/Antibiotic-Architects.html">
+<style>
+:root{
+  --abyss:#0B2233; --deep:#10314A; --deep-2:#143A55; --tide:#1D4B66; --tide-2:#2A6283;
+  --foam:#EAF6F4; --mist:#A8C5CC; --dim:#7FA2AD;
+  --saffron:#F5B041; --saffron-hi:#FFD98A; --saffron-lo:#B9750F; --saffron-ink:#2A1A03;
+  --lagoon:#5CC8D6; --pos:#7AA2FF; --pos-d:#2F4C8C; --neg:#FF6B8B; --neg-d:#8C2F45;
+  --coral:#FF7A6B; --good:#9BE7B0;
+  --display: ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", "Nunito", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --text: "Avenir Next", "Segoe UI", "Nunito", system-ui, -apple-system, Roboto, sans-serif;
+  --bar: 60px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:linear-gradient(180deg,#0F2D42 0%,var(--abyss) 55%);color:var(--foam);font:400 1.0625rem/1.55 var(--text);
+  -webkit-font-smoothing:antialiased;overflow:hidden;display:flex;flex-direction:column;height:100dvh}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--saffron-hi);outline-offset:3px;border-radius:8px}
+h1,h2,h3{font-family:var(--display);line-height:1.1;margin:0 0 .4em;letter-spacing:-.01em}
+h2{font-size:clamp(1.6rem,3vw,2.1rem);font-weight:800}
+h3{font-size:1.3rem;font-weight:750}
+p{margin:0 0 .9em}
+a{color:var(--lagoon)}
+.small{font-size:.875rem;color:var(--mist)}
+.nw{white-space:nowrap}
+[hidden]{display:none!important}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* top bar */
+.topbar{height:var(--bar);flex:none;display:flex;align-items:center;gap:12px;padding:0 14px;background:rgba(11,34,51,.82);
+  backdrop-filter:blur(8px);border-bottom:1px solid rgba(234,246,244,.07);z-index:5}
+.brand{display:flex;align-items:center;gap:10px;background:none;border:0;cursor:pointer;padding:6px;font:800 1.15rem/1 var(--display);white-space:nowrap}
+.brand svg{flex:none}
+.mainnav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;flex:1;min-width:0}
+.mainnav::-webkit-scrollbar{display:none}
+.mainnav button{background:none;border:0;padding:10px 12px;border-radius:10px;cursor:pointer;color:var(--mist);font-weight:600;white-space:nowrap;position:relative}
+.mainnav button:hover{color:var(--foam);background:rgba(234,246,244,.05)}
+.mainnav button[aria-current="page"]{color:var(--foam)}
+.mainnav button[aria-current="page"]::after{content:"";position:absolute;left:12px;right:12px;bottom:3px;height:3px;border-radius:3px;background:var(--saffron)}
+.mainnav .short{display:none}
+.tools{display:flex;gap:4px;flex:none}
+.icon-btn{width:44px;height:44px;display:grid;place-items:center;border-radius:50%;border:0;background:none;cursor:pointer;color:var(--mist)}
+.icon-btn:hover{background:rgba(234,246,244,.07);color:var(--foam)}
+@media (max-width:980px){ .brand span{display:none} }
+@media (max-width:760px){ .mainnav button{padding:10px 8px;font-size:.95rem} .mainnav .full{display:none} .mainnav .short{display:inline} }
+@media (max-width:440px){ .topbar{padding:0 8px;gap:4px} #soundBtn{display:none} .mainnav button{padding:10px 7px} }
+
+/* screens */
+main{flex:1;position:relative;min-height:0}
+.screen{position:absolute;inset:0;overflow:auto;display:none}
+.screen.active{display:block}
+.wrap{max-width:1100px;margin:0 auto;padding:28px 20px 60px}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.5em;min-height:46px;padding:.65em 1.25em;border-radius:999px;
+  border:2px solid var(--tide-2);background:rgba(234,246,244,.02);color:var(--foam);font-weight:650;cursor:pointer;line-height:1.15;text-align:center}
+.btn:hover{border-color:var(--mist)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.primary{background:var(--saffron);border-color:var(--saffron);color:var(--saffron-ink)}
+.btn.primary:hover:not(:disabled){background:#FFC25E;border-color:#FFC25E}
+.btn.big{min-height:58px;font-size:1.15rem;padding:.7em 1.6em}
+.btn.quiet{border-color:transparent;background:none;color:var(--mist)}
+.btn.quiet:hover{color:var(--foam);background:rgba(234,246,244,.06)}
+.btn.sm{min-height:38px;padding:.4em .9em;font-size:.9rem}
+.btn.wide{width:100%}
+.btnrow{display:flex;flex-wrap:wrap;gap:8px}
+.link-btn{background:none;border:0;padding:4px 0;color:var(--lagoon);cursor:pointer;font-weight:600}
+.link-btn:hover{text-decoration:underline}
+
+/* home */
+#screen-home{overflow:hidden}
+#heroCanvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.hero-copy{position:relative;z-index:1;max-width:600px;padding:clamp(28px,7vh,90px) clamp(20px,6vw,80px) 30px}
+.hero-copy h1{font-size:clamp(2.7rem,6vw,4.8rem);font-weight:850;line-height:.9;letter-spacing:-.035em;margin-bottom:.32em}
+.hero-copy h1 .l2{display:block;color:var(--saffron)}
+.lede{font-size:clamp(1.1rem,1.8vw,1.35rem);line-height:1.45;max-width:29em}
+.hero-actions{display:flex;flex-wrap:wrap;gap:12px;margin:26px 0 22px}
+.hero-status{display:flex;align-items:center;gap:10px;color:var(--mist);font-size:.95rem;max-width:30em;min-height:3em}
+.hero-status .dot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--lagoon);box-shadow:0 0 0 4px rgba(92,200,214,.18)}
+.hero-group{position:absolute;z-index:1;left:clamp(20px,6vw,80px);bottom:18px;right:20px;margin:0;color:var(--dim);font-size:.9rem}
+.hero-group strong{color:var(--mist);font-weight:650}
+.hero-group a{color:var(--lagoon);font-weight:600}
+@media (max-width:980px){
+  #screen-home{overflow:auto}
+  #screen-home.active{display:flex;flex-direction:column}
+  .hero-copy{padding-top:24px;padding-bottom:0;order:1}
+  .hero-actions{margin-bottom:8px}
+  #heroCanvas{position:relative;inset:auto;height:300px;flex:none;order:2}
+  .hero-group{position:static;order:3;padding:0 20px 24px}
+}
+
+/* missions */
+.lgroup{margin-top:30px}
+.lgroup > p{color:var(--mist);max-width:44em}
+.strand{position:relative;margin-top:8px}
+.strand svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.lvl{position:absolute;width:160px;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:0;cursor:pointer;padding:0;text-align:center}
+.lvl-bead{width:72px;height:72px;border-radius:50%;display:grid;place-items:center;font:800 1.6rem/1 var(--display);background:var(--deep);border:5px solid var(--lagoon);transition:transform .15s}
+.lvl:hover .lvl-bead,.lvl:focus-visible .lvl-bead{transform:scale(1.08)}
+.lvl:focus-visible{outline:none}
+.lvl:focus-visible .lvl-bead{outline:3px solid var(--saffron-hi);outline-offset:4px}
+.lvl-bead.part{border-color:var(--saffron)}
+.lvl-bead.done{background:radial-gradient(circle at 35% 30%,#FFE3A3,var(--saffron) 55%,var(--saffron-lo));border-color:var(--saffron-lo);color:var(--saffron-ink)}
+.lvl-name{font-weight:700;margin-top:4px;line-height:1.2}
+.lvl-sub{font-size:.85rem;color:var(--mist);line-height:1.25}
+.stars-txt{letter-spacing:2px;color:var(--saffron);font-size:1rem;line-height:1}
+.stars-txt .off{color:var(--tide-2)}
+.race-card{margin-top:44px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:center;padding:24px;border-radius:22px;
+  background:linear-gradient(120deg,rgba(255,122,107,.16),rgba(245,176,65,.08) 60%,transparent);border:2px solid rgba(255,122,107,.45)}
+.race-card h3{font-size:clamp(1.4rem,2.6vw,1.8rem)}
+.race-card p{margin:0 0 .5em;max-width:40em}
+.race-card .best{color:var(--saffron-hi);font-weight:650;margin:0}
+@media (max-width:640px){ .race-card{grid-template-columns:1fr} }
+
+/* lab */
+.lab-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(330px,400px);height:100%}
+.stage{position:relative;min-height:0}
+#labCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.prog{position:absolute;left:16px;right:16px;top:12px;height:6px;border-radius:3px;background:rgba(234,246,244,.08);overflow:hidden;pointer-events:none}
+.prog i{display:block;height:100%;width:0;background:var(--saffron);border-radius:3px}
+.stage-note{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);background:rgba(16,49,74,.94);border:1px solid var(--tide-2);
+  padding:9px 18px;border-radius:999px;pointer-events:none;font-weight:600;white-space:nowrap;font-size:.95rem;max-width:calc(100% - 24px);overflow:hidden;text-overflow:ellipsis}
+.side{background:var(--deep);border-left:1px solid rgba(234,246,244,.06);padding:20px 22px 40px;overflow:auto;min-height:0}
+.side h2{margin-bottom:.25em}
+.meta{color:var(--mist);font-size:.9rem;margin:8px 0 4px}
+.goals{list-style:none;padding:12px 14px;margin:12px 0 16px;border-radius:14px;background:var(--abyss);display:grid;gap:6px;font-size:.95rem}
+.goals li{display:flex;gap:10px;align-items:flex-start;line-height:1.35}
+.goals .mk{width:22px;height:22px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:.8rem;font-weight:800;border:2px solid var(--tide-2);color:var(--abyss);margin-top:-1px}
+.goals li.ok .mk{background:var(--good);border-color:var(--good)}
+.goals li.bad .mk{background:var(--coral);border-color:var(--coral)}
+.goals .tests{color:var(--mist);font-size:.88rem;border-top:1px solid rgba(234,246,244,.08);padding-top:6px;margin-top:2px}
+.hud{display:flex;flex-wrap:wrap;gap:6px 18px;margin:10px 0 0;padding:12px 14px;border-radius:14px;background:var(--abyss);font-variant-numeric:tabular-nums}
+.hud .gens{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.hud .g{width:16px;height:16px;border-radius:50%;border:2px solid var(--tide-2)}
+.hud .g.done{background:var(--saffron);border-color:var(--saffron)}
+.hud .g.now{border-color:var(--saffron);box-shadow:0 0 0 3px rgba(245,176,65,.25)}
+.hud .lbl{color:var(--mist);font-size:.88rem;display:block;width:100%}
+.hud .stat{font-weight:700}
+.hud .mut{color:#FFB3AA;font-weight:650;margin-top:2px}
+.flasks{display:inline-flex;gap:3px;vertical-align:middle}
+.flasks svg{width:18px;height:20px}
+
+.bench{margin:6px 0 4px}
+.pmap{display:grid;grid-template-columns:auto repeat(3,1fr);gap:6px 6px;align-items:center}
+.pmap .hd{font-size:.8rem;color:var(--mist);text-align:center;font-weight:650}
+.pmap .rl{font-size:.85rem;color:var(--mist);font-weight:650;padding-right:4px;line-height:1.2}
+.chip{display:flex;align-items:center;justify-content:center;gap:6px;min-height:40px;border-radius:12px;background:var(--abyss);font-weight:700;font-size:.92rem;padding:4px 6px;text-align:center;line-height:1.1}
+.chip.diff{box-shadow:inset 0 0 0 2px rgba(255,217,138,.65)}
+.chip.flash{animation:flash 1s ease-in-out 3}
+.pmap.x{gap:6px 4px}
+.pmap.x .hd{font-size:.74rem}
+.pmap.x .chip{flex-direction:column;gap:2px;min-height:54px;font-size:.84rem;padding:4px 2px}
+.pmap.x .chip .cn small{display:block;font-size:.68rem;color:#D9C2FF;font-weight:650;margin-top:1px}
+.chip.deep{outline:2px dashed rgba(201,162,255,.6);outline-offset:-2px}
+.pmap.x .slot{width:54px;height:54px}
+.pmap.x .slot .ico{width:48px;height:48px;font-size:1.35rem}
+.pmap.x.n5 .slot{width:46px;height:46px}
+.pmap.x.n5 .slot .ico{width:40px;height:40px;font-size:1.15rem}
+.pmap.x.n5 .slot .ico.t-P{border-width:7px}
+.pmap.x .slot .ico.t-pos,.pmap.x .slot .ico.t-neg{border-width:5px}
+.bend{justify-self:center;display:flex;flex-direction:column;align-items:center;gap:1px;width:100%;max-width:66px;border:2px solid var(--tide-2);background:none;border-radius:10px;padding:3px 2px 4px;cursor:pointer;color:var(--foam)}
+.bend svg{width:32px;height:19px}
+.bend small{font-size:.66rem;color:var(--mist);line-height:1.1;white-space:nowrap}
+.bend:hover:not(:disabled){border-color:var(--mist)}
+.bend:disabled{opacity:.6;cursor:default}
+.shape{margin:12px 0 0}
+#shapeCv{width:100%;height:112px;display:block;border-radius:12px;background:var(--abyss)}
+.shape p{margin:6px 0 0}
+#expertList{margin-top:8px}
+.lgroup.expert .lvl-bead{border-color:#C9A2FF}
+.lgroup.expert .lvl-bead.part{border-color:var(--saffron)}
+.lgroup.expert .lvl-bead.done{border-color:var(--saffron-lo)}
+.nb-bends{color:var(--mist);margin-left:6px;font-size:.85rem;letter-spacing:1px}
+@keyframes flash{50%{background:rgba(255,122,107,.45)}}
+.ico{width:20px;height:20px;border-radius:50%;flex:none;display:inline-grid;place-items:center;font:800 .8rem/1 var(--text);font-style:normal}
+.ico.t-O{background:radial-gradient(circle at 35% 30%,#FFE3A3,var(--saffron) 55%,var(--saffron-lo))}
+.ico.t-P{border:4px solid var(--lagoon);background:rgba(92,200,214,.15)}
+.ico.t-pos{background:var(--pos-d);border:3px solid var(--pos);color:#DDE6FF}
+.ico.t-neg{background:var(--neg-d);border:3px solid var(--neg);color:#FFDCE4}
+.ico.t-R,.ico.t-A{border-radius:0;background:none}
+.ico svg{width:100%;height:100%;display:block}
+.slots{display:contents}
+.slot{justify-self:center;width:64px;height:64px;border-radius:50%;border:none;padding:0;cursor:pointer;display:grid;place-items:center;font:850 1.8rem/1 var(--display);position:relative;background:none}
+.slot .ico{width:58px;height:58px;font-size:1.6rem}
+.slot .ico.t-P{border-width:9px}
+.slot .ico.t-pos,.slot .ico.t-neg{border-width:6px}
+.slot[aria-pressed="true"]::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:3px solid var(--foam)}
+.slot:disabled{cursor:default;opacity:.7}
+.slot:hover:not(:disabled) .ico{transform:scale(1.05)}
+.palette{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin:14px 0 12px}
+.pbtn{display:flex;align-items:center;gap:10px;border:2px solid var(--tide-2);background:none;border-radius:14px;padding:8px 10px;cursor:pointer;text-align:left;line-height:1.15}
+.pbtn .ico{width:28px;height:28px;font-size:1rem}
+.pbtn b{display:block;font-weight:700}
+.pbtn small{display:block;color:var(--mist);font-size:.78rem}
+.pbtn:hover:not(:disabled){border-color:var(--mist)}
+.pbtn:disabled{opacity:.45;cursor:default}
+.howto{font-size:.88rem;color:var(--mist);margin:8px 0 0}
+
+.results{margin:16px 0 0}
+.res{margin:0 0 12px}
+.res-h{display:flex;justify-content:space-between;gap:10px;font-weight:650;font-size:.95rem}
+.res-h b{font-variant-numeric:tabular-nums}
+.bar{position:relative;height:12px;border-radius:6px;background:var(--tide);overflow:visible;margin-top:4px}
+.bar i{display:block;height:100%;border-radius:6px;transition:width .2s}
+.bar .tick{position:absolute;top:-4px;bottom:-4px;width:3px;border-radius:2px;background:var(--foam)}
+.barcode{width:100%;height:42px;display:block;margin-top:6px;border-radius:6px}
+.verdict{margin:6px 0 0;font-weight:650;font-size:.95rem}
+.verdict.ok{color:var(--good)}
+.verdict.bad{color:var(--coral)}
+.hints{margin:6px 0 0;padding-left:1.2em;color:var(--foam);font-size:.95rem}
+.hints li{margin-bottom:4px}
+.box{border:2px solid var(--saffron);border-radius:16px;padding:16px 18px;margin:16px 0;background:rgba(245,176,65,.08)}
+.box.warn{border-color:var(--coral);background:rgba(255,122,107,.08)}
+.box-title{font:800 1.4rem/1.15 var(--display);color:var(--saffron-hi);margin-bottom:.35em}
+.box.warn .box-title{color:#FFB3AA}
+.stars{display:flex;gap:6px;margin:4px 0 10px}
+.stars svg{width:30px;height:30px}
+.box form{margin:12px 0 10px}
+.box label{display:block;font-weight:650;margin-bottom:6px}
+.row{display:flex;gap:8px}
+.row input{flex:1;min-width:0}
+input[type=text]{min-height:46px;border-radius:12px;border:2px solid var(--tide-2);background:var(--abyss);padding:0 14px}
+input[type=text]:focus{border-color:var(--saffron);outline:none}
+.notebook{list-style:none;padding:0;margin:8px 0 0;display:grid;gap:4px}
+.notebook button{width:100%;display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;border:0;background:var(--abyss);border-radius:10px;padding:6px 10px;cursor:pointer;font-size:.88rem;text-align:left;font-variant-numeric:tabular-nums}
+.notebook button:hover{background:var(--deep-2)}
+.notebook .dots{display:flex;gap:2px}
+.notebook .dots .ico{width:16px;height:16px;font-size:.62rem;border-width:2px}
+.notebook .ok{color:var(--good);font-weight:700}
+.notebook .bad{color:var(--coral);font-weight:700}
+details{border-top:1px solid rgba(234,246,244,.08);padding:12px 0}
+details summary{cursor:pointer;font-weight:700}
+details[open] summary{margin-bottom:8px}
+details ul{padding-left:1.2em;margin:0}
+details li{margin-bottom:6px}
+.cheat{width:100%;border-collapse:collapse;font-size:.9rem}
+.cheat td{padding:5px 4px;border-bottom:1px solid rgba(234,246,244,.06);vertical-align:middle}
+.cheat td:first-child{white-space:nowrap}
+.fact{margin-top:14px;padding-left:14px;border-left:4px solid var(--lagoon);color:var(--mist)}
+.fact strong{color:var(--foam)}
+@media (max-width:860px){
+  .lab-layout{display:block;height:auto}
+  .stage{height:62dvh;min-height:360px}
+  .stage.two{height:84dvh;min-height:560px}
+  .side{border-left:0;border-top:1px solid rgba(234,246,244,.06);overflow:visible}
+}
+
+/* science */
+.article{max-width:720px;margin:0 auto;padding:34px 22px 80px}
+.article h2{font-size:clamp(1.9rem,4vw,2.6rem);margin-top:1.4em}
+.article h2:first-child{margin-top:0}
+.article .intro{font-size:1.2rem}
+.article details{margin:4px 0 8px;border-top:0;border-left:4px solid var(--tide-2);padding:4px 0 4px 16px}
+.article details summary{color:var(--lagoon)}
+.article details p{color:var(--mist);font-size:.98rem}
+.article ul.plain{padding-left:1.2em}
+.article ul.plain li{margin-bottom:6px}
+.widget{margin:20px 0 26px;padding:20px;border-radius:18px;background:var(--deep)}
+.widget .big{font:800 clamp(1.5rem,3.5vw,2.2rem)/1.15 var(--display);margin:6px 0 10px}
+.widget .big sup{font-size:.55em}
+.seg{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 14px}
+.seg button{border:2px solid var(--tide-2);background:none;border-radius:999px;padding:8px 14px;cursor:pointer;font-weight:650}
+.seg button[aria-pressed="true"]{background:var(--foam);color:var(--abyss);border-color:var(--foam)}
+.loop{width:100%;height:auto;display:block;margin:10px 0 20px}
+.chem{width:100%;border-collapse:collapse;margin:14px 0 22px}
+.chem th,.chem td{text-align:left;padding:9px 8px;border-bottom:1px solid rgba(234,246,244,.08);vertical-align:top}
+.chem th{font-size:.85rem;color:var(--mist);font-weight:650}
+.chem td:first-child{white-space:nowrap}
+
+/* fame */
+.fame-list{list-style:none;padding:0;margin:14px 0 0;max-width:620px}
+.fame-list li{display:grid;grid-template-columns:2.2em minmax(0,1fr) 7em 4em 4em;gap:12px;align-items:center;padding:10px 4px;border-bottom:1px solid rgba(234,246,244,.07);font-variant-numeric:tabular-nums}
+.fame-list .rank{font:800 1.2rem var(--display);color:var(--saffron)}
+.fame-list .nm{font-weight:700;overflow-wrap:anywhere}
+.fame-list .mv{color:var(--mist);font-size:.9rem}
+.fame-head{color:var(--mist);font-size:.85rem;font-weight:650;border-bottom:1px solid rgba(234,246,244,.15)!important}
+.empty{margin-top:30px;padding:30px;border:2px dashed var(--tide-2);border-radius:18px;max-width:560px}
+.fame-list li > span:nth-child(n+3){text-align:right}
+@media (max-width:520px){ .fame-list li{grid-template-columns:2em minmax(0,1fr) 6.5em 3.5em;gap:8px} .fame-list .tm{display:none} }
+
+/* dialogs */
+dialog{background:var(--deep);color:var(--foam);border:1px solid var(--tide-2);border-radius:20px;padding:0;max-width:min(560px,calc(100vw - 24px));width:100%;max-height:calc(100dvh - 40px)}
+dialog::backdrop{background:rgba(5,18,28,.7)}
+.dlg{padding:24px}
+.dlg section{padding:14px 0;border-top:1px solid rgba(234,246,244,.08)}
+.dlg section:first-of-type{border-top:0}
+.switch{display:flex;align-items:center;justify-content:space-between;gap:16px;font-weight:600;cursor:pointer;padding:4px 0}
+.switch input{width:24px;height:24px;accent-color:var(--saffron)}
+select{min-height:44px;border-radius:12px;border:2px solid var(--tide-2);background:var(--abyss);padding:0 10px;width:100%}
+.fame-admin{list-style:none;padding:0;margin:10px 0;max-height:220px;overflow:auto}
+.fame-admin li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid rgba(234,246,244,.06);font-size:.95rem}
+.idle{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:rgba(5,18,28,.82);cursor:pointer}
+.idle div{text-align:center;padding:30px;max-width:460px}
+.idle h2{font-size:2.4rem}
+@media (prefers-reduced-motion:reduce){ *{transition:none!important;animation:none!important} }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <button class="brand" data-go="home" aria-label="Start screen">
+    <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true">
+      <path d="M4 14a13 13 0 0 0 26 0" fill="none" stroke="#2A6283" stroke-width="7" stroke-linecap="round"/>
+      <path d="M10 18l7 5 7-5" fill="none" stroke="#EAF6F4" stroke-width="2.6" stroke-linejoin="round"/>
+      <circle cx="10" cy="18" r="4.4" fill="#7AA2FF"/><circle cx="17" cy="23" r="4.4" fill="#F5B041"/><circle cx="24" cy="18" r="4.4" fill="#F5B041"/>
+    </svg>
+    <span id="brandTitle">Antibiotic Architects</span>
+  </button>
+  <nav class="mainnav" aria-label="Main">
+    <button data-go="missions">Missions</button>
+    <button data-go="race"><span class="full">Arms race</span><span class="short">Race</span></button>
+    <button data-go="learn"><span class="full">The science</span><span class="short">Science</span></button>
+    <button data-go="fame"><span class="full">Hall of fame</span><span class="short">Scores</span></button>
+  </nav>
+  <div class="tools">
+    <button class="icon-btn" id="soundBtn" aria-pressed="true" title="Sound">
+      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" stroke="none"/><path class="on" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/><path class="off" d="M16 9l5 6M21 9l-5 6"/>
+      </svg><span class="sr" id="soundLabel">Sound on</span>
+    </button>
+    <button class="icon-btn" id="settingsBtn" title="Settings for event organisers">
+      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
+      </svg><span class="sr">Settings</span>
+    </button>
+  </div>
+</header>
+
+<main>
+<!-- ============ HOME ============ -->
+<section id="screen-home" class="screen" aria-label="Start">
+  <canvas id="heroCanvas" aria-hidden="true"></canvas>
+  <div class="hero-copy">
+    <h1><span id="heroT1">Antibiotic</span><span class="l2" id="heroT2">Architects</span></h1>
+    <p class="lede">Bacteria are evolving to beat our medicines. Design new antibiotics, test them in a computer simulation of moving molecules, and stay one step ahead of the superbugs.</p>
+    <div class="hero-actions">
+      <button class="btn primary big" data-go="missions">Start the missions</button>
+      <button class="btn big" data-go="race">Superbug arms race</button>
+      <button class="btn quiet big" data-go="learn">How it works</button>
+    </div>
+    <p class="hero-status"><span class="dot" id="heroDot"></span><span id="heroStatus"></span></p>
+  </div>
+  <p class="hero-group" id="heroGroup"></p>
+</section>
+
+<!-- ============ MISSIONS ============ -->
+<section id="screen-missions" class="screen" aria-label="Missions">
+  <div class="wrap">
+    <h2>Missions</h2>
+    <p style="max-width:44em">Each mission is a real kind of target that antibiotics attack. Build a molecule that jams the bacteria's enzyme, then test it with a molecular dynamics simulation to see whether it stays put.</p>
+    <div id="missionList"></div>
+    <div class="race-card">
+      <div>
+        <h3>Superbug arms race</h3>
+        <p>Every time you block the bacteria, they evolve. Can you keep up for <span id="raceGensTxt">8</span> generations? Fewest tests wins.</p>
+        <p class="best" id="raceBest"></p>
+      </div>
+      <button class="btn primary big" data-go="race">Play</button>
+    </div>
+    <div id="expertList"></div>
+  </div>
+</section>
+
+<!-- ============ LAB ============ -->
+<section id="screen-lab" class="screen" aria-label="Lab">
+  <div class="lab-layout">
+    <div class="stage" id="stage">
+      <canvas id="labCanvas"></canvas>
+      <div class="prog" id="prog" hidden><i></i></div>
+      <p class="stage-note" id="stageNote" hidden></p>
+    </div>
+    <aside class="side" aria-label="Design and test">
+      <button class="link-btn" id="labBack" type="button">All missions</button>
+      <p class="meta" id="labMeta"></p>
+      <h2 id="labTitle"></h2>
+      <p id="labBrief"></p>
+      <div class="hud" id="raceHud" hidden></div>
+      <ul class="goals" id="goals"></ul>
+
+      <div id="benchWrap">
+        <div class="bench">
+          <div class="pmap" id="pmap" role="group" aria-label="Pocket map and your molecule"></div>
+          <div class="shape" id="shapeWrap" hidden><canvas id="shapeCv" aria-hidden="true"></canvas><p class="small" id="shapeMsg" aria-live="polite"></p></div>
+          <div class="palette" id="palette" role="group" aria-label="Parts"></div>
+          <button class="btn primary big wide" id="testBtn" type="button">Test in a simulation</button>
+          <p class="howto" id="howto">Tap a spot on your molecule, then pick a part for it. Each spot sits next to the amino acid above it.</p>
+        </div>
+        <div class="results" id="results" aria-live="polite"></div>
+      </div>
+      <div id="stageBox"></div>
+
+      <div id="notebookWrap" hidden>
+        <h3 style="font-size:1.05rem;margin:18px 0 0">Lab notebook</h3>
+        <ol class="notebook" id="notebook"></ol>
+      </div>
+      <details style="margin-top:14px">
+        <summary>What sticks to what</summary>
+        <table class="cheat"><tbody id="cheat"></tbody></table>
+      </details>
+      <details>
+        <summary>How the test works</summary>
+        <ul>
+          <li>The test is a molecular dynamics simulation. The computer works out the forces between your molecule and the enzyme, then moves everything a tiny step in time, again and again.</li>
+          <li>Your molecule starts in the pocket, where a docking program would put it. The simulation shows whether it stays there while everything jiggles.</li>
+          <li>The jiggling is random, so each test runs 12 copies of the simulation at once and averages them. Scientists call these copies replicas. Each stripe in the results is one replica: bright where the molecule sat in the pocket.</li>
+          <li>You can drag the molecule to feel how tightly it's held.</li>
+          <li>In the expert missions, longer molecules hold their bends with springs, and ring parts hang below the molecule. A ring only fits where the pocket has a deep spot for it.</li>
+          <li>For the scientists: 2D Langevin dynamics in reduced units. The enzyme keeps its shape with an elastic network; three pocket residues carry chemistry. Ligand–residue interactions are Lennard-Jones wells whose depth depends on the pair of types, with WCA repulsion otherwise. Occupancy is the fraction of frames where the ligand RMSD from the docked pose is below 0.75σ, pooled over 12 replicas of 500τ. Expert pockets are built around the target pose, with a cavity under each deep spot; each ring is a separate, larger bead on a stalk; bends are signed angle potentials; and each ligand bead feels a short-ranged cosine-squared well only from the residue at its own spot, so every spot counts.</li>
+        </ul>
+      </details>
+      <p class="fact" id="labFact"></p>
+    </aside>
+  </div>
+</section>
+
+<!-- ============ SCIENCE ============ -->
+<section id="screen-learn" class="screen" aria-label="The science">
+  <article class="article">
+    <h2>Tiny machines with pockets</h2>
+    <p class="intro">Every living thing is full of proteins: tiny machines that do almost every job, from carrying oxygen in your blood to copying your DNA. Bacteria are full of them too.</p>
+    <p>Many proteins are <strong>enzymes</strong>, which speed up chemical reactions. Each enzyme has a pocket where the molecule it works on fits snugly, like a key in a lock. Block that pocket with the wrong key and the enzyme stops working.</p>
+    <details><summary>For the scientists</summary>
+      <p>Emil Fischer suggested the lock-and-key picture in 1894. In 1958 Daniel Koshland proposed induced fit: the pocket changes shape as the molecule binds. Proteins are always flexing, which is one reason simulations of their motion are so useful in drug design.</p>
+    </details>
+
+    <h2>How antibiotics work</h2>
+    <p>An antibiotic is a molecule that jams a protein that bacteria need, but that our own cells don't have or can do without. The missions in this game are based on real targets:</p>
+    <ul class="plain">
+      <li><strong>Cell-wall builders.</strong> Penicillin jams the enzymes bacteria use to build their tough outer wall, so the bacteria burst.</li>
+      <li><strong>The DNA untangler.</strong> Ciprofloxacin jams DNA gyrase, which bacteria need to untangle their DNA when they copy it.</li>
+      <li><strong>The vitamin maker.</strong> Trimethoprim jams the enzyme bacteria use to make a vitamin called folate.</li>
+      <li><strong>The fatty-acid builder.</strong> Some new antibiotics jam FabI, an enzyme bacteria use to build their cell membranes.</li>
+    </ul>
+    <p>Alexander Fleming discovered penicillin in 1928, when mould killed bacteria on a dish he'd left out. Howard Florey, Ernst Chain and their team turned it into a medicine in the 1940s, and the three shared the 1945 Nobel Prize.</p>
+    <details><summary>For the scientists</summary>
+      <p>Humans have their own dihydrofolate reductase, the vitamin maker, but trimethoprim binds the bacterial enzyme tens of thousands of times more strongly. Small differences in the pocket make that selectivity possible, which is the idea behind the “No side effects” mission.</p>
+    </details>
+
+    <h2>What makes a molecule stick</h2>
+    <p>Drug designers build molecules from small chemical groups and choose each one to suit the spot it will touch in the pocket:</p>
+    <table class="chem">
+      <thead><tr><th>Group</th><th>Example</th><th>Sticks to</th></tr></thead>
+      <tbody id="chemTable"></tbody>
+    </table>
+    <p>Some combinations push apart. Two positive groups, or two negative groups, repel each other. A charged or water-loving group next to an oily patch is unhappy too: it has to give up the water it was surrounded by.</p>
+
+    <h2>Rings, shapes and π interactions</h2>
+    <p>Many medicines contain flat rings of six carbon atoms, called <strong>aromatic rings</strong>. Their electrons spread out in clouds above and below the ring. Three amino acids have rings like this too: phenylalanine (Phe), tyrosine (Tyr) and tryptophan (Trp). The expert missions use them.</p>
+    <ul class="plain">
+      <li><strong><span class="nw">π–π</span> stacking.</strong> Two flat rings stack like coins, held together by their electron clouds. (π is the Greek letter pi, which chemists use for these electrons.)</li>
+      <li><strong><span class="nw">Cation–π</span>.</strong> Anything positive (a cation) is attracted to the electron cloud on the face of a ring. Tryptophan is especially good at this: more than a quarter of all tryptophans in known protein structures are doing it.</li>
+      <li><strong>Shape complementarity.</strong> A molecule can have perfect chemistry and still not fit if it's the wrong shape. Bulky rings need room, and long molecules have to bend the same way as the pocket.</li>
+    </ul>
+    <p>Shape can make a drug selective, too. In the AcrB pump of <i>E. coli</i>, an experimental pump blocker slots into a narrow pit lined with phenylalanines and stacks its ring against one of them. In a related pump, MexY, a bulkier tryptophan sits in the same place, and the blocker can't bind.</p>
+    <details><summary>For the scientists</summary>
+      <p>Aromatic rings in proteins usually stack offset (parallel-displaced) or edge-to-face (T-shaped) rather than exactly face-to-face. Among the aromatic amino acids, tryptophan takes part in <span class="nw">cation–π</span> interactions most often (Gallivan and Dougherty, PNAS 1999), and nicotine binds its receptor in the brain through a <span class="nw">cation–π</span> interaction with a tryptophan (Xiu et al., Nature 2009). The AcrB and MexY example is from Nakashima et al. (Nature 2013), with the inhibitor D13-9001. In the game, <span class="nw">π–π</span> stacking and <span class="nw">cation–π</span> are simply the strongest pair types, and rings are larger beads that only fit cavities in the pocket.</p>
+    </details>
+
+    <h2>Testing with molecular dynamics</h2>
+    <p>Before spending weeks making a molecule in the lab, scientists can test it on a computer. A <strong>docking</strong> program quickly guesses how the molecule might sit in the pocket, like a photo. <strong>Molecular dynamics</strong>, or MD, then makes a movie: it shows whether the molecule stays put while everything wobbles and jiggles.</p>
+    <svg class="loop" viewBox="0 0 680 230" role="img" aria-label="The molecular dynamics loop: know where every atom is, calculate the forces, move every atom a tiny step, then repeat.">
+      <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#A8C5CC"/></marker></defs>
+      <g font-family="Avenir Next, Segoe UI, system-ui, sans-serif" fill="#EAF6F4" text-anchor="middle">
+        <rect x="10" y="20" width="190" height="96" rx="16" fill="#10314A" stroke="#2A6283" stroke-width="2"/>
+        <text x="105" y="56" font-size="30" font-weight="800" fill="#F5B041">1</text>
+        <text x="105" y="84" font-size="16" font-weight="600">Know where every</text><text x="105" y="104" font-size="16" font-weight="600">atom is</text>
+        <rect x="245" y="20" width="190" height="96" rx="16" fill="#10314A" stroke="#2A6283" stroke-width="2"/>
+        <text x="340" y="56" font-size="30" font-weight="800" fill="#F5B041">2</text>
+        <text x="340" y="84" font-size="16" font-weight="600">Calculate the force</text><text x="340" y="104" font-size="16" font-weight="600">on each atom</text>
+        <rect x="480" y="20" width="190" height="96" rx="16" fill="#10314A" stroke="#2A6283" stroke-width="2"/>
+        <text x="575" y="56" font-size="30" font-weight="800" fill="#F5B041">3</text>
+        <text x="575" y="84" font-size="16" font-weight="600">Move every atom a</text><text x="575" y="104" font-size="16" font-weight="600">tiny step (F = ma)</text>
+        <path d="M200 68H243" stroke="#A8C5CC" stroke-width="2.5" fill="none" marker-end="url(#ah)"/><path d="M435 68H478" stroke="#A8C5CC" stroke-width="2.5" fill="none" marker-end="url(#ah)"/>
+        <path d="M575 116V180H105V118" stroke="#A8C5CC" stroke-width="2.5" fill="none" marker-end="url(#ah)" stroke-dasharray="7 6"/>
+        <text x="340" y="208" font-size="16" fill="#A8C5CC">Repeat millions or billions of times</text>
+      </g>
+    </svg>
+    <p>Each step moves time forward by only about 2 <strong>femtoseconds</strong>. A femtosecond is a millionth of a billionth of a second: there are about as many femtoseconds in one second as there are seconds in 32 million years.</p>
+    <div class="widget">
+      <p style="margin-bottom:4px;font-weight:650">How much simulated time do you want?</p>
+      <div class="seg" id="mdTimeSeg" role="group" aria-label="Simulated time">
+        <button type="button" data-t="1e-9" aria-pressed="false">1 nanosecond</button>
+        <button type="button" data-t="1e-6" aria-pressed="true">1 microsecond</button>
+        <button type="button" data-t="1e-3" aria-pressed="false">1 millisecond</button>
+        <button type="button" data-t="1" aria-pressed="false">1 second</button>
+      </div>
+      <p class="big" id="mdSteps"></p>
+      <p id="mdCost" style="margin:0"></p>
+    </div>
+    <p>Because the jiggling is random, one simulation can be lucky or unlucky. So scientists run several copies, called <strong>replicas</strong>, and average them. The game does the same: every test runs 12 replicas at once.</p>
+    <details><summary>For the scientists</summary>
+      <p>The forces come from a force field such as AMBER, CHARMM or GROMOS: terms for bonds, angles and torsions, plus electrostatics and van der Waals interactions between every pair of nearby atoms, usually with thousands of explicit water molecules. In drug design, MD is used to check docked poses (often by tracking ligand RMSD, as this game does), to estimate binding free energies with methods such as free energy perturbation, to measure how long a drug stays bound (its residence time), and to find “cryptic” pockets that only open as the protein moves.</p>
+      <p>The first MD simulation of a protein (McCammon, Gelin and Karplus, 1977) covered less than 10 picoseconds. In 2013 Martin Karplus, Michael Levitt and Arieh Warshel shared the Nobel Prize in Chemistry for multiscale models of complex chemical systems.</p>
+      <p>This game is a 2D toy: a few pocket amino acids, molecules of three to five parts and simple oily, charged, polar and ring interactions. Real binding depends on 3D shape, hydrogen-bond geometry, water in the pocket and much more.</p>
+    </details>
+
+    <h2>Superbugs</h2>
+    <p>Bacteria can divide every 20 minutes or so, and each time there's a small chance of a mutation. If a mutation changes the drug's pocket so the drug no longer fits, that bacterium survives the antibiotic and passes the change on. This is evolution by natural selection, happening fast enough to watch. A <strong>superbug</strong> is a bacterium that has become resistant to several antibiotics.</p>
+    <p>Bacteria have four main tricks:</p>
+    <ul class="plain">
+      <li><strong>Change the pocket.</strong> In E. coli, swapping a single amino acid in DNA gyrase (serine 83 for leucine) is one of the most common ways to resist ciprofloxacin. The “Superbug!” mission is based on this.</li>
+      <li><strong>Shred the drug.</strong> Enzymes called β-lactamases cut penicillin-type antibiotics apart. Co-amoxiclav pairs amoxicillin with clavulanic acid, which blocks the shredder.</li>
+      <li><strong>Keep it out.</strong> Bacteria such as E. coli have an extra outer wall that most molecules can't get through. In 2019, chemists found that adding a positively charged amine group helped a drug get in. The drug, Debio-1452-NH3, then worked against these tougher bacteria. The Stansfeld group, who made this game, simulate the proteins that build and maintain this outer wall.</li>
+      <li><strong>Pump it out.</strong> Pumps in the bacterial wall push the drug back out before it can work.</li>
+    </ul>
+    <p>Drug-resistant infections directly caused about 1.14 million deaths worldwide in 2021, and researchers forecast nearly 39 million more between 2025 and 2050 unless we act. New antibiotics are urgently needed, and computer methods like docking, molecular dynamics and AI help find them faster.</p>
+    <details><summary>For the scientists</summary>
+      <p>Mutations that help bacteria escape a drug often make the enzyme work less well, a fitness cost. In the arms race, the bacteria can only make changes that keep their pocket working. Resistance usually builds up step by step: in E. coli, high-level fluoroquinolone resistance often combines GyrA S83L with D87N. The amine design rules for Gram-negative entry are known as the eNTRy rules (Hergenrother lab). Polymyxins, last-line antibiotics, attack the outer membrane itself, and the Stansfeld group studies how bacteria remodel their membranes to resist them. AI models have also found new antibiotic candidates, such as halicin (2020) and abaucin (2023).</p>
+    </details>
+
+    <h2>A photo and a movie</h2>
+    <p>In 2020, the AI program AlphaFold showed it could predict many protein structures from their sequence with remarkable accuracy, and its creators shared the 2024 Nobel Prize in Chemistry. A predicted structure is like a photo. But proteins are never still: they wobble, flex, open and close. Molecular dynamics gives us the movie, showing how a protein moves, how a medicine binds to it, and what changes when a mutation swaps one amino acid for another.</p>
+
+    <h2>Help keep antibiotics working</h2>
+    <ul class="plain">
+      <li>Antibiotics don't work for viral infections such as colds and flu, and most coughs.</li>
+      <li>Only take antibiotics prescribed for you, and take them as your doctor or pharmacist tells you.</li>
+      <li>Never share them with anyone else.</li>
+    </ul>
+    <p class="small">Advice from the NHS. Every unnecessary use of antibiotics gives bacteria another chance to evolve resistance.</p>
+
+    <h2>Who made this</h2>
+    <div id="aboutBody"></div>
+  </article>
+</section>
+
+<!-- ============ FAME ============ -->
+<section id="screen-fame" class="screen" aria-label="Hall of fame">
+  <div class="wrap">
+    <h2>Hall of fame</h2>
+    <p style="color:var(--mist);max-width:40em">The best superbug fighters at this event. Most generations survived wins, then fewest tests, then fastest time.</p>
+    <div id="fameBody"></div>
+  </div>
+</section>
+</main>
+
+<dialog id="settingsDlg" aria-labelledby="setTitle">
+  <div class="dlg">
+    <h2 id="setTitle">Settings</h2>
+    <section><label class="switch">Sound effects <input type="checkbox" id="setSound"></label></section>
+    <section>
+      <label for="setIdle" style="font-weight:600">Go back to the start screen when nobody's playing</label>
+      <select id="setIdle" style="margin-top:8px">
+        <option value="0">Never</option><option value="2">After 2 minutes</option><option value="5">After 5 minutes</option><option value="10">After 10 minutes</option>
+      </select>
+      <p class="small" style="margin-top:8px">Useful at a stand: the game resets for the next visitor, clearing their stars but keeping the hall of fame.</p>
+    </section>
+    <section><div class="btnrow"><button class="btn sm" id="newPlayerBtn">New player (clear stars)</button><button class="btn sm" id="fullBtn">Full screen</button></div></section>
+    <section>
+      <h3 style="font-size:1.1rem">Hall of fame entries</h3>
+      <ul class="fame-admin" id="fameAdmin"></ul>
+      <button class="btn sm" id="clearFameBtn">Clear the hall of fame</button>
+      <p class="small" style="margin-top:10px">Stars and the hall of fame are saved in this browser on this device only.</p>
+    </section>
+    <div class="btnrow" style="justify-content:flex-end;margin-top:6px"><button class="btn primary" id="closeSet">Done</button></div>
+  </div>
+</dialog>
+<div class="idle" id="idleOverlay" hidden><div><h2>Still there?</h2><p>Tap anywhere to keep playing. Going back to the start in <span id="idleCount">15</span> seconds.</p></div></div>
+<script>
+'use strict';
+/* =====================================================================
+   CONFIG: edit these to personalise the game for your group / event
+   ===================================================================== */
+const CONFIG = {
+  titleLine1: 'Antibiotic',
+  titleLine2: 'Architects',
+  groupName: 'Stansfeld Research Group',
+  groupPlace: 'University of Warwick',
+  groupTagline: 'Bringing Membrane Proteins to Life',
+  groupWebsite: 'https://stansfeldlab.github.io/',
+  aboutParagraphs: [
+    'This game was made by the Stansfeld Research Group, a computational group at the University of Warwick in the School of Life Sciences and the Department of Chemistry, led by Phill Stansfeld.',
+    'We use computer simulations, including molecular dynamics, together with AI structure prediction, to study membrane proteins: the proteins that sit in the oily membranes around every cell. That includes the proteins bacteria use to build their tough outer layers, and how bacteria resist last-line antibiotics such as polymyxins.',
+    'We also help design new antimicrobials, so the challenges in this game are close to our real work. Come and ask us about it!'
+  ],
+  raceGenerations: 8,             // generations to survive in the arms race
+  raceSpareTests: 3,              // failed tests allowed before the superbug wins
+  soundOnByDefault: true,
+  idleMinutesDefault: 0,          // 0 = never reset automatically
+  timestepFs: 2,                  // MD timestep used in the "how long" calculator
+  gpuNsPerDay: 400                // rough throughput of one modern GPU for a small solvated protein
+};
+
+/* ---------- utilities ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const TAU = Math.PI * 2;
+const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+const STORE_PREFIX = 'antibiotic-architects:';   // unique, so other games on the same website can't clash with saved stars and scores
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(STORE_PREFIX + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(STORE_PREFIX + k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } }
+};
+function fitCanvas(cv) {
+  const r = cv.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w: r.width, h: r.height };
+}
+function fmtTime(s) { s = Math.floor(s); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function bigWords(x) {
+  if (x < 1e6) return Math.round(x).toLocaleString('en-GB');
+  const units = [[1e18, 'quintillion'], [1e15, 'quadrillion'], [1e12, 'trillion'], [1e9, 'billion'], [1e6, 'million']];
+  for (const [u, w] of units) if (x >= u) { const v = x / u; return (v >= 100 ? Math.round(v) : v.toFixed(1).replace(/\.0$/, '')) + ' ' + w; }
+}
+const pick = a => a[Math.floor(Math.random() * a.length)];
+
+/* =====================================================================
+   Molecular dynamics model: a small drug molecule in an enzyme pocket.
+   2D Langevin dynamics (BAOAB) in reduced units. Shared by the game and
+   by the offline script that pre-computes the results table.
+   ===================================================================== */
+let gaussSpare = null;
+function gauss() {
+  if (gaussSpare !== null) { const g = gaussSpare; gaussSpare = null; return g; }
+  let u, v, s; do { u = Math.random() * 2 - 1; v = Math.random() * 2 - 1; s = u * u + v * v; } while (s >= 1 || s === 0);
+  const m = Math.sqrt(-2 * Math.log(s) / s); gaussSpare = v * m; return u * m;
+}
+// part/residue types: O oily, P water-loving, + positive, - negative, N inert protein surface
+const TYPE_ORDER = ['O', 'P', '+', '-'];
+// how strongly a molecule part and a pocket residue stick (units of epsilon; negative = push apart)
+function pairEps(a, b) {
+  if (a === 'N' || b === 'N') return 0;
+  if (a === 'O' && b === 'O') return 1.4;                                  // oily with oily
+  if ((a === '+' && b === '-') || (a === '-' && b === '+')) return 1.4;    // salt bridge
+  if (a === b && (a === '+' || a === '-')) return -0.9;                    // like charges repel
+  if (a === 'O' || b === 'O') return -0.3;                                 // a charge or polar group buried in grease
+  return 0.45;                                                             // hydrogen bonds: polar with polar or charged
+}
+const LINING = [22, 19, 16];                      // protein beads lining the pocket: left, middle, right
+const DOCK = [[-0.935, -0.54], [0, -1.08], [0.935, -0.54]], DOCK_COM = [0, -0.72];
+const SIM = {kT: 0.3, dt: 0.008, T: 500, replicas: 12, passBact: 70, passHuman: 35, rmsdCut: 0.75};
+
+class PocketSim {
+  constructor() {
+    const P = [], T = [];
+    for (let k = 0; k < 13; k++) { const a = (150 + 20 * k) * Math.PI / 180; P.push([3.2 * Math.cos(a), 3.2 * Math.sin(a)]); T.push('N'); }
+    for (let k = 0; k < 13; k++) { const a = (390 - 20 * k) * Math.PI / 180; P.push([2.2 * Math.cos(a), 2.2 * Math.sin(a)]); T.push('N'); }
+    this.np = 26; this.n = 29; this.native = P.concat(DOCK); this.type = T.concat(['P', 'P', 'P']);
+    ['x', 'y', 'vx', 'vy', 'fx', 'fy'].forEach(k => this[k] = new Float64Array(this.n));
+    const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]), bonds = [];
+    for (let i = 0; i < 25; i++) bonds.push([i, i + 1, dist(P[i], P[i + 1]), 150]);
+    for (let i = 0; i < 26; i++) for (let j = i + 2; j < 26; j++) { const d = dist(P[i], P[j]); if (d < 2.3) bonds.push([i, j, d, 12]); }  // elastic network keeps the fold
+    bonds.push([26, 27, 1.08, 150], [27, 28, 1.08, 150]);
+    this.nb = bonds.length; this.bI = Int32Array.from(bonds, b => b[0]); this.bJ = Int32Array.from(bonds, b => b[1]);
+    this.bR = Float64Array.from(bonds, b => b[2]); this.bK = Float64Array.from(bonds, b => b[3]);
+    this.eps = new Float64Array(3 * 26);
+    this.p = { kT: SIM.kT, dt: SIM.dt, gamma: 1, kr: 1.5, ka: 40, wallR: 3.4, wallY: 1.0 };
+    this.grab = null; this.guide = 0; this.reset();
+  }
+  setPocket(pk) { for (let k = 0; k < 3; k++) this.type[LINING[k]] = pk[k]; this.tab(); }
+  setDrug(d) { for (let k = 0; k < 3; k++) this.type[26 + k] = d[k]; this.tab(); }
+  tab() { for (let a = 0; a < 3; a++) for (let b = 0; b < 26; b++) this.eps[a * 26 + b] = pairEps(this.type[26 + a], this.type[b]); }
+  thermalise() { const s = Math.sqrt(this.p.kT); for (let i = 0; i < this.n; i++) { this.vx[i] = gauss() * s; this.vy[i] = gauss() * s; } }
+  reset() { for (let i = 0; i < this.n; i++) { this.x[i] = this.native[i][0]; this.y[i] = this.native[i][1]; } this.thermalise(); this.forces(); }
+  dock() { for (let k = 0; k < 3; k++) { this.x[26 + k] = DOCK[k][0]; this.y[26 + k] = DOCK[k][1]; this.vx[26 + k] = this.vy[26 + k] = 0; } this.forces(); }
+  forces() {
+    const { x, y, fx, fy, p } = this; fx.fill(0); fy.fill(0);
+    const bI = this.bI, bJ = this.bJ, bR = this.bR, bK = this.bK, E = this.eps;
+    for (let q = 0; q < this.nb; q++) {
+      const i = bI[q], j = bJ[q], dx = x[j] - x[i], dy = y[j] - y[i], r = Math.sqrt(dx * dx + dy * dy) || 1e-9, f = -bK[q] * (r - bR[q]) / r;
+      fx[j] += f * dx; fy[j] += f * dy; fx[i] -= f * dx; fy[i] -= f * dy;
+    }
+    for (let i = 0; i < 26; i++) { fx[i] -= p.kr * (x[i] - this.native[i][0]); fy[i] -= p.kr * (y[i] - this.native[i][1]); }
+    { // keep the molecule bent at about 120 degrees: U = ka (cos t - cos t0)^2
+      const ax = x[26] - x[27], ay = y[26] - y[27], bx = x[28] - x[27], by = y[28] - y[27];
+      const la = Math.hypot(ax, ay) || 1e-9, lb = Math.hypot(bx, by) || 1e-9, c = (ax * bx + ay * by) / (la * lb), g = 2 * p.ka * (c + 0.5), iab = 1 / (la * lb);
+      const fax = -g * (bx * iab - c * ax / (la * la)), fay = -g * (by * iab - c * ay / (la * la));
+      const fbx = -g * (ax * iab - c * bx / (lb * lb)), fby = -g * (ay * iab - c * by / (lb * lb));
+      fx[26] += fax; fy[26] += fay; fx[28] += fbx; fy[28] += fby; fx[27] -= fax + fbx; fy[27] -= fay + fby;
+    }
+    const rc2 = 6.25, rmin2 = 1.2599210498948732;
+    for (let a = 26; a < 29; a++) for (let b = 0; b < 26; b++) {
+      const dx = x[b] - x[a], dy = y[b] - y[a], r2 = dx * dx + dy * dy; if (r2 > rc2) continue;
+      const eps = E[(a - 26) * 26 + b]; if (!eps && r2 > rmin2) continue;
+      const inv2 = 1 / Math.max(r2, 0.36), s6 = inv2 * inv2 * inv2;
+      const f = (r2 < rmin2 ? 24 : eps * 24) * (2 * s6 * s6 - s6) * inv2;
+      fx[b] += f * dx; fy[b] += f * dy; fx[a] -= f * dx; fy[a] -= f * dy;
+    }
+    for (let a = 26; a < 29; a++) {
+      const dx = x[a], dy = y[a] - p.wallY, r = Math.hypot(dx, dy);
+      if (r > p.wallR) { const f = -4 * (r - p.wallR) / r; fx[a] += f * dx; fy[a] += f * dy; }
+    }
+    if (this.guide > 0) for (let k = 0; k < 3; k++) { fx[26 + k] += this.guide * (DOCK[k][0] - x[26 + k]); fy[26 + k] += this.guide * (DOCK[k][1] - y[26 + k]); }
+    if (this.grab) {
+      const g = this.grab; let gx = 20 * (g.x - x[g.i]), gy = 20 * (g.y - y[g.i]); const m = Math.hypot(gx, gy);
+      if (m > 50) { gx *= 50 / m; gy *= 50 / m; } fx[g.i] += gx; fy[g.i] += gy;
+    }
+  }
+  step(ns) {
+    const { x, y, vx, vy, fx, fy, n, p } = this, dt = p.dt, h = 0.5 * dt, c1 = Math.exp(-p.gamma * dt), c2 = Math.sqrt((1 - c1 * c1) * p.kT);
+    for (let s = 0; s < ns; s++) {
+      for (let i = 0; i < n; i++) { vx[i] += h * fx[i]; vy[i] += h * fy[i]; x[i] += h * vx[i]; y[i] += h * vy[i]; }
+      for (let i = 0; i < n; i++) { vx[i] = c1 * vx[i] + c2 * gauss(); vy[i] = c1 * vy[i] + c2 * gauss(); x[i] += h * vx[i]; y[i] += h * vy[i]; }
+      this.forces();
+      for (let i = 0; i < n; i++) {
+        vx[i] += h * fx[i]; vy[i] += h * fy[i];
+        const v2 = vx[i] * vx[i] + vy[i] * vy[i]; if (v2 > 400) { const k = 20 / Math.sqrt(v2); vx[i] *= k; vy[i] *= k; }
+      }
+    }
+    if (!Number.isFinite(x[n - 1])) { this.reset(); this.dock(); }
+  }
+  rmsd() {   // how far the molecule is from its docked pose (no fitting: the protein stays in place)
+    let s = 0; for (let k = 0; k < 3; k++) s += (this.x[26 + k] - DOCK[k][0]) ** 2 + (this.y[26 + k] - DOCK[k][1]) ** 2;
+    return Math.sqrt(s / 3);
+  }
+  bound() { return this.rmsd() < SIM.rmsdCut; }
+}
+
+/* =====================================================================
+   Expert engine: longer molecules (4-5 parts) that can bend, ring parts
+   that stick out from the molecule and need a deep spot to slot into,
+   aromatic pocket residues (pi-pi stacking, pi-cation), and pockets
+   generated in different shapes. Same 2D Langevin dynamics as the
+   classic pocket (uses gauss, pairEps, SIM and PocketSim.step).
+   ===================================================================== */
+const RING_SIGMA = 1.4;                   // the hexagon that hangs below a ring part
+const RES_SIGMA = { A: 1.25 };            // aromatic side chains (Phe, Trp, Tyr) are bulky
+const LP = 1.1;                           // ring sits this far below its part
+const LJ_MIN = 1.122462;
+const XSCALE = 0.7;                       // all attractions in expert pockets are multiplied by this
+const XRANGE = 0.45;                      // width of the attractive well, in bead diameters (each part feels its own spot)
+const XRIM = 140;                         // where the pocket's rim starts (degrees): an open, flared mouth
+const XBAD = 2.0;                         // extra push from bad pairs (water-loving next to oily, like charges)
+const XMAXDEV = 99;                       // a part further than this from its spot counts as unbound
+const XWALL = 1.0;                        // room above the pocket for the molecule to drift away
+const TURN = { S: 0, L: Math.PI / 3, R: -Math.PI / 3 };
+function pairEpsX(a, b) {
+  if (a === 'N' || b === 'N') return 0;
+  const ring = a === 'R', aro = b === 'A';
+  if (ring && aro) return 2.0;                                   // pi-pi stacking
+  if ((ring && b === '+') || (a === '+' && aro)) return 1.8;     // pi-cation
+  if (ring && b === 'O') return 1.2;                             // ring with an oily spot
+  if (a === 'O' && aro) return 1.0;                              // oily part with an aromatic spot
+  if (ring || aro) return -0.3;                                  // rings dislike water-loving and negative partners
+  return pairEps(a, b);
+}
+const vnorm = v => { const m = Math.hypot(v[0], v[1]) || 1; return [v[0] / m, v[1] / m]; };
+function rightNormals(P) {                // the side of the molecule that faces the protein
+  const n = P.length;
+  return P.map((p, k) => { const t = vnorm(k === 0 ? [P[1][0] - P[0][0], P[1][1] - P[0][1]] : k === n - 1 ? [P[k][0] - P[k - 1][0], P[k][1] - P[k - 1][1]] : [P[k + 1][0] - P[k - 1][0], P[k + 1][1] - P[k - 1][1]]); return [t[1], -t[0]]; });
+}
+function buildShape(bends, n) {           // backbone heading +x, turning 60 degrees at each bend
+  const pts = [[0, 0]]; let ang = 0;
+  for (let i = 1; i < n; i++) { if (i >= 2) ang += TURN[bends[i - 2]]; pts.push([pts[i - 1][0] + 1.08 * Math.cos(ang), pts[i - 1][1] + 1.08 * Math.sin(ang)]); }
+  return pts;
+}
+function withRings(P, parts) {           // backbone + a ring bead below each ring part
+  const r = rightNormals(P), out = P.map(p => p.slice());
+  parts.forEach((t, k) => { if (t === 'R') out.push([P[k][0] + r[k][0] * LP, P[k][1] + r[k][1] * LP]); });
+  return out;
+}
+function alignTo(src, dst) {              // best rotation + shift of src onto dst (no mirror images: a 2D molecule can't flip over)
+  const n = src.length; let sx = 0, sy = 0, dx = 0, dy = 0;
+  for (let i = 0; i < n; i++) { sx += src[i][0]; sy += src[i][1]; dx += dst[i][0]; dy += dst[i][1]; }
+  sx /= n; sy /= n; dx /= n; dy /= n; let c = 0, d = 0;
+  for (let i = 0; i < n; i++) { const ax = src[i][0] - sx, ay = src[i][1] - sy, bx = dst[i][0] - dx, by = dst[i][1] - dy; d += ax * bx + ay * by; c += ax * by - ay * bx; }
+  const th = Math.atan2(c, d), co = Math.cos(th), si = Math.sin(th);
+  return src.map(p => [dx + (p[0] - sx) * co - (p[1] - sy) * si, dy + (p[0] - sx) * si + (p[1] - sy) * co]);
+}
+function dockPose(bends, n) {             // the pocket's ideal backbone, rotated so the opening faces up
+  const P = buildShape(bends, n), r = rightNormals(P); let mx = 0, my = 0;
+  r.forEach(v => { mx -= v[0]; my -= v[1]; });
+  const th = Math.PI / 2 - Math.atan2(my, mx), co = Math.cos(th), si = Math.sin(th);
+  const R = P.map(p => [p[0] * co - p[1] * si, p[0] * si + p[1] * co]);
+  let cx = 0, cy = 0; R.forEach(p => { cx += p[0]; cy += p[1]; }); cx /= n; cy /= n;
+  return R.map(p => [p[0] - cx, p[1] - cy - 0.5]);
+}
+function genProtein(D, sites) {
+  const N = D.length, deg = Math.PI / 180, right = rightNormals(D), dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  const tan = right.map(r => [-r[1], r[0]]);
+  const pend = sites.map((s, k) => s.deep ? [D[k][0] + right[k][0] * LP, D[k][1] + right[k][1] * LP] : null);
+  const sr = sites.map(s => RES_SIGMA[s.t] || 1);
+  const holes = []; D.forEach(p => holes.push({ p, c: LJ_MIN * 0.98 })); pend.forEach(p => p && holes.push({ p, c: LJ_MIN * (1 + RING_SIGMA) / 2 * 0.98 }));
+  const lining = [];
+  sites.forEach((s, k) => {
+    const a = pend[k] || D[k], d = LJ_MIN * (sr[k] + (pend[k] ? RING_SIGMA : 1)) / 2;
+    let best = null;   // lean the residue away from a neighbour's ring hole, and from residues already placed
+    for (let t = 0; t <= 60 && !best; t += 3) for (const sgn of [1, -1]) {
+      const th = sgn * t * deg, v = [right[k][0] * Math.cos(th) - right[k][1] * Math.sin(th), right[k][0] * Math.sin(th) + right[k][1] * Math.cos(th)], q = [a[0] + v[0] * d, a[1] + v[1] * d];
+      if (!best && pend.every((pp, j) => !pp || j === k || dist(q, pp) >= LJ_MIN * (sr[k] + RING_SIGMA) / 2 + 0.03) && lining.every(o => dist(q, o) >= 0.98)) best = q;
+    }
+    lining.push(best || [a[0] + right[k][0] * d, a[1] + right[k][1] * d]);
+  });
+  // dense points 1.15 from the molecule (and round each ring hole), in order from the left rim to the right rim
+  const ds = 1.15, dense = [], push = p => dense.push(p);
+  const arc = (c, rad, from, to) => { for (let t = from; t <= to + 1e-9; t += 3 * deg) push([c[0] + rad * Math.cos(t), c[1] + rad * Math.sin(t)]); };
+  const holeArc = k => { if (!pend[k]) return; const a = Math.atan2(right[k][1], right[k][0]); arc(pend[k], LJ_MIN * (1 + RING_SIGMA) / 2 + 0.04, a - 110 * deg, a + 110 * deg); };
+  const a0 = Math.atan2(tan[0][1], tan[0][0]), a1 = Math.atan2(tan[N - 1][1], tan[N - 1][0]);
+  let sFrom = XRIM * deg, sTo = a0 - Math.PI / 2; while (sTo < sFrom) sTo += 2 * Math.PI;
+  const rimS = [D[0][0] + ds * Math.cos(sFrom), D[0][1] + ds * Math.sin(sFrom)];
+  for (let f = 1.0; f > 0; f -= 0.05) push([rimS[0] + f * Math.cos(sFrom), rimS[1] + f * Math.sin(sFrom)]);   // rims flare outwards
+  arc(D[0], ds, sFrom, sTo); holeArc(0);
+  for (let k = 0; k < N - 1; k++) {
+    const u = vnorm([D[k + 1][0] - D[k][0], D[k + 1][1] - D[k][1]]), rs = [u[1], -u[0]];
+    if (k > 0) {
+      const up = vnorm([D[k][0] - D[k - 1][0], D[k][1] - D[k - 1][1]]), rp = [up[1], -up[0]];
+      const a = Math.atan2(rp[1], rp[0]), da = Math.atan2(rs[1] * rp[0] - rs[0] * rp[1], rs[0] * rp[0] + rs[1] * rp[1]);
+      for (let i = 1; i < 12; i++) { const t = a + da * i / 12; push([D[k][0] + ds * Math.cos(t), D[k][1] + ds * Math.sin(t)]); }
+      holeArc(k);
+    }
+    for (let f = 0; f <= 1.0001; f += 0.04) push([D[k][0] + f * (D[k + 1][0] - D[k][0]) + ds * rs[0], D[k][1] + f * (D[k + 1][1] - D[k][1]) + ds * rs[1]]);
+  }
+  holeArc(N - 1);
+  let eFrom = a1 - Math.PI / 2, eTo = (180 - XRIM) * deg; while (eTo < eFrom) eTo += 2 * Math.PI;
+  arc(D[N - 1], ds, eFrom, eTo);
+  const rimE = [D[N - 1][0] + ds * Math.cos(eTo), D[N - 1][1] + ds * Math.sin(eTo)];
+  for (let f = 0.05; f <= 1.0; f += 0.05) push([rimE[0] + f * Math.cos(eTo), rimE[1] + f * Math.sin(eTo)]);
+  // surface beads: lining residues first, then evenly spaced points that leave room for the molecule
+  const pos = [], par = [];
+  const nearestDense = p => { let bi = 0, bd = 1e9; dense.forEach((q, i) => { const d = dist(p, q); if (d < bd) { bd = d; bi = i; } }); return bi; };
+  lining.forEach(p => { pos.push(p); par.push(nearestDense(p)); });
+  dense.forEach((p, i) => {
+    if (holes.some(h => dist(p, h.p) < h.c) || pos.some(q => dist(p, q) < 0.85)) return;
+    pos.push(p); par.push(i);
+  });
+  const nSurf = pos.length;
+  for (let i = 0; i < nSurf; i++) {        // a second layer behind the surface gives the protein a body
+    const p = pos[i]; let bh = holes[0], bd = 1e9; holes.forEach(h => { const d = dist(p, h.p); if (d < bd) { bd = d; bh = h; } });
+    const u = vnorm([p[0] - bh.p[0], p[1] - bh.p[1]]), b = [p[0] + 0.95 * u[0], p[1] + 0.95 * u[1]];
+    if (holes.some(h => dist(b, h.p) < h.c + 0.8) || pos.some(q => dist(b, q) < 0.8)) continue;
+    pos.push(b); par.push(par[i]);
+  }
+  const surf = [...Array(nSurf).keys()].sort((a, b) => par[a] - par[b]);
+  const body = [...Array(pos.length - nSurf).keys()].map(i => i + nSurf).sort((a, b) => par[a] - par[b]);
+  const type = pos.map(() => 'N'), sigma = pos.map(() => 1);
+  sites.forEach((s, k) => { type[k] = s.t; sigma[k] = sr[k]; });
+  return { pos, type, sigma, surf, body, normals: right, pend };
+}
+
+class GenPocketSim {
+  constructor(def) {
+    const N = def.sites.length, D = dockPose(def.bends, N), prot = genProtein(D, def.sites);
+    this.gen = true; this.def = def; this.slots = N; this.np = prot.pos.length; this.dockPos = D; this.pendPos = prot.pend;
+    this.native = prot.pos; this.surf = prot.surf; this.body = prot.body;
+    this.lining = def.sites.map((s, k) => k); this.labelDir = prot.normals; this.siteW = def.sites.map(s => s.w == null ? 1 : s.w);
+    const M = this.np + 2 * N; this.max = M;
+    ['x', 'y', 'vx', 'vy', 'fx', 'fy', 'sigma'].forEach(k => this[k] = new Float64Array(M));
+    this.type = Array(M).fill('N'); for (let i = 0; i < this.np; i++) { this.type[i] = prot.type[i]; this.sigma[i] = prot.sigma[i]; }
+    const P = prot.pos, bonds = [];
+    for (let i = 0; i < this.np; i++) for (let j = i + 1; j < this.np; j++) { const d = Math.hypot(P[i][0] - P[j][0], P[i][1] - P[j][1]); if (d < 2.3) bonds.push([i, j, d, d < 1.3 ? 40 : 12]); }
+    this.protBonds = bonds;
+    this.eps = new Float64Array(2 * N * this.np); this.sg2 = new Float64Array(2 * N * this.np);
+    let cx = 0, top = -1e9; D.forEach(p => { cx += p[0] / N; top = Math.max(top, p[1]); });
+    const wy = top + 1.7; let far = 0; D.forEach(p => { far = Math.max(far, Math.hypot(p[0] - cx, p[1] - wy)); });
+    this.p = { kT: SIM.kT, dt: SIM.dt, gamma: 1, kr: 1.5, ka: 60, wallX: cx, wallY: wy, wallR: far + (def.wallPad || XWALL) };
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; prot.pos.forEach(q => { x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); y0 = Math.min(y0, q[1]); y1 = Math.max(y1, q[1]); });
+    const xh = Math.max(5.2, Math.abs(x0) + 0.9, Math.abs(x1) + 0.9), bTop = Math.max(4.4, wy + this.p.wallR - 0.3, y1 + 1.2), bBot = Math.min(-5, y0 - 0.9);
+    this.box = { w: 2 * xh, top: bTop, h: bTop - bBot };   // what a panel needs to show
+    this.grab = null; this.guide = 0;
+    this.setDrug(Array(N).fill('P'), Array(Math.max(0, N - 2)).fill('S')); this.reset();
+  }
+  setPocket() { /* expert pockets are fixed: make a new sim for a different pocket */ }
+  setDrug(parts, bends) {
+    const N = this.slots, np = this.np; this.parts = parts.slice(); this.molBends = bends.slice();
+    this.ringOf = []; let nr = 0;
+    parts.forEach((t, k) => { this.type[np + k] = t === 'R' ? 'N' : t; this.sigma[np + k] = 1; if (t === 'R') { this.ringOf.push([k, np + N + nr]); nr++; } });
+    this.ringOf.forEach(([k, i]) => { this.type[i] = 'R'; this.sigma[i] = RING_SIGMA; });
+    this.nd = N + nr; this.n = np + this.nd;
+    // where every drug bead should sit when docked
+    const pr = rightNormals(this.dockPos);
+    this.target = this.dockPos.map(p => p.slice());
+    this.ringOf.forEach(([k]) => this.target.push([this.dockPos[k][0] + pr[k][0] * LP, this.dockPos[k][1] + pr[k][1] * LP]));
+    // bonds: protein network + molecule backbone + ring stalks
+    const b = this.protBonds.slice();
+    for (let k = 0; k < N - 1; k++) b.push([np + k, np + k + 1, 1.08, 150]);
+    this.ringOf.forEach(([k, i]) => b.push([np + k, i, LP, 150]));
+    this.nb = b.length; this.bI = Int32Array.from(b, q => q[0]); this.bJ = Int32Array.from(b, q => q[1]);
+    this.bR = Float64Array.from(b, q => q[2]); this.bK = Float64Array.from(b, q => q[3]);
+    // angles: backbone bends, and each ring held at right angles below its part
+    const ideal = withRings(buildShape(bends, N), parts), ang = [];
+    const phiOf = (i0, i1, i2) => { const ax = ideal[i0][0] - ideal[i1][0], ay = ideal[i0][1] - ideal[i1][1], bx = ideal[i2][0] - ideal[i1][0], by = ideal[i2][1] - ideal[i1][1]; return Math.atan2(ax * by - ay * bx, ax * bx + ay * by); };
+    for (let k = 1; k < N - 1; k++) ang.push([np + k - 1, np + k, np + k + 1, phiOf(k - 1, k, k + 1)]);
+    this.ringOf.forEach(([k, i], j) => { const nb = k < N - 1 ? k + 1 : k - 1; ang.push([i, np + k, np + nb, phiOf(N + j, k, nb)]); });
+    this.ang = ang; this.ideal = ideal;
+    this.tab();
+  }
+  tab() {   // each part (or its ring) is attracted only by the spot it sits over; everything else just bumps
+    const np = this.np, N = this.slots, sc = this.def.scale || XSCALE, own = this.def.own === false ? null : true;
+    for (let a = 0; a < this.nd; a++) {
+      const slot = a < N ? a : this.ringOf[a - N][0];
+      for (let b = 0; b < np; b++) {
+        const w = b < N ? this.siteW[b] : 1, sg = (this.sigma[np + a] + this.sigma[b]) / 2;
+        let e = (own && b < N && b !== slot) ? 0 : pairEpsX(this.type[np + a], this.type[b]) * w * sc;
+        this.eps[a * np + b] = e < 0 ? e * (this.def.bad || XBAD) : e; this.sg2[a * np + b] = sg * sg;
+      }
+    }
+  }
+  thermalise() { const s = Math.sqrt(this.p.kT); for (let i = 0; i < this.n; i++) { this.vx[i] = gauss() * s; this.vy[i] = gauss() * s; } }
+  reset() {
+    for (let i = 0; i < this.np; i++) { this.x[i] = this.native[i][0]; this.y[i] = this.native[i][1]; }
+    for (let a = 0; a < this.nd; a++) { this.x[this.np + a] = this.target[a][0]; this.y[this.np + a] = this.target[a][1]; }
+    this.thermalise(); this.forces();
+  }
+  dock() {   // place the designed shape where it fits best, then let it settle (a quick energy minimisation)
+    const pose = alignTo(this.ideal, this.target), np = this.np;
+    for (let a = 0; a < this.nd; a++) { this.x[np + a] = pose[a][0]; this.y[np + a] = pose[a][1]; this.vx[np + a] = this.vy[np + a] = 0; }
+    for (let it = 0; it < 300; it++) {
+      this.forces();
+      for (let k = np; k < this.n; k++) { this.x[k] += Math.max(-0.03, Math.min(0.03, this.fx[k] * 0.002)); this.y[k] += Math.max(-0.03, Math.min(0.03, this.fy[k] * 0.002)); }
+    }
+    this.forces();
+  }
+  forces() {
+    const { x, y, fx, fy, p, np, nd } = this; fx.fill(0); fy.fill(0);
+    const bI = this.bI, bJ = this.bJ, bR = this.bR, bK = this.bK, E = this.eps, S2 = this.sg2;
+    for (let q = 0; q < this.nb; q++) {
+      const i = bI[q], j = bJ[q], dx = x[j] - x[i], dy = y[j] - y[i], r = Math.sqrt(dx * dx + dy * dy) || 1e-9, f = -bK[q] * (r - bR[q]) / r;
+      fx[j] += f * dx; fy[j] += f * dy; fx[i] -= f * dx; fy[i] -= f * dy;
+    }
+    for (let i = 0; i < np; i++) { fx[i] -= p.kr * (x[i] - this.native[i][0]); fy[i] -= p.kr * (y[i] - this.native[i][1]); }
+    for (const [i0, i1, i2, phi0] of this.ang) {   // signed angles keep the designed shape
+      const ax = x[i0] - x[i1], ay = y[i0] - y[i1], bx = x[i2] - x[i1], by = y[i2] - y[i1];
+      const c = ax * by - ay * bx, d = ax * bx + ay * by, q2 = c * c + d * d || 1e-9, phi = Math.atan2(c, d);
+      const g = p.ka * Math.sin(phi - phi0);
+      const pax = (d * by - c * bx) / q2, pay = (d * -bx - c * by) / q2, pbx = (d * -ay - c * ax) / q2, pby = (d * ax - c * ay) / q2;
+      fx[i0] -= g * pax; fy[i0] -= g * pay; fx[i2] -= g * pbx; fy[i2] -= g * pby; fx[i1] += g * (pax + pbx); fy[i1] += g * (pay + pby);
+    }
+    const W = this.def.range || XRANGE;
+    for (let a = 0; a < nd; a++) {   // short-ranged attraction: each part feels the spot right under it, not its neighbours'
+      const ia = np + a, xa = x[ia], ya = y[ia];
+      for (let b = 0; b < np; b++) {
+        const k = a * np + b, s2 = S2[k], dx = x[b] - xa, dy = y[b] - ya, r2 = dx * dx + dy * dy, rmin2 = 1.2599210498948732 * s2;
+        let f;
+        if (r2 < rmin2) { const rc = Math.max(r2, 0.36 * s2), q = s2 / rc, s6 = q * q * q; f = 24 * (2 * s6 * s6 - s6) / rc; }
+        else {
+          const eps = E[k]; if (!eps) continue;
+          const sg = Math.sqrt(s2), r = Math.sqrt(r2), u = (r - 1.122462 * sg) / (W * sg); if (u >= 1) continue;
+          f = -eps * Math.sin(Math.PI * u) * Math.PI / (2 * W * sg) / r;
+        }
+        fx[b] += f * dx; fy[b] += f * dy; fx[ia] -= f * dx; fy[ia] -= f * dy;
+      }
+    }
+    for (let a = np; a < this.n; a++) {
+      const dx = x[a] - p.wallX, dy = y[a] - p.wallY, r = Math.hypot(dx, dy);
+      if (r > p.wallR) { const f = -4 * (r - p.wallR) / r; fx[a] += f * dx; fy[a] += f * dy; }
+    }
+    if (this.guide) for (let a = 0; a < nd; a++) { const i = np + a; fx[i] += this.guide * (this.target[a][0] - x[i]); fy[i] += this.guide * (this.target[a][1] - y[i]); }
+    if (this.grab) {
+      const g = this.grab; let gx = 20 * (g.x - x[g.i]), gy = 20 * (g.y - y[g.i]); const m = Math.hypot(gx, gy);
+      if (m > 50) { gx *= 50 / m; gy *= 50 / m; } fx[g.i] += gx; fy[g.i] += gy;
+    }
+  }
+  step(ns) { PocketSim.prototype.step.call(this, ns); }
+  rmsd() { let s = 0; for (let a = 0; a < this.nd; a++) s += (this.x[this.np + a] - this.target[a][0]) ** 2 + (this.y[this.np + a] - this.target[a][1]) ** 2; return Math.sqrt(s / this.nd); }
+  worst() { let m = 0; for (let a = 0; a < this.nd; a++) m = Math.max(m, (this.x[this.np + a] - this.target[a][0]) ** 2 + (this.y[this.np + a] - this.target[a][1]) ** 2); return Math.sqrt(m); }
+  bound() { return this.rmsd() < SIM.rmsdCut && this.worst() < (this.def.maxDev || XMAXDEV); }   // every part has to stay in its spot
+}
+
+
+/* ---------- pre-computed results table (same simulation, run offline) ---------- */
+const TABLE = '84535151460906085305070851070605530905050900010005000001070101015105050906010001070001010601010051050908080001000801010105010001368291881028192011292520122320250508111500010101010102010101010204162410010101010102010201010101051012220101010201010201010101014390469610150847101508521213074303130246010100060001010701010005041403550101000901010009010200060210034300010007000100050101000544919937112559051025430707176706041757030001060001010801010104000313560201010400010105000101050004105403010209000001080100010400170906066609101284172222741212160901010109010101170101011201010106010101100102012201010212010201060101011201010122010201160101010418141715323552203741372035373901020102010203040103050201040503010102020104030501040504010304030102020201040504010302030204040507150543092411921220089117331381010101050105011602020012010401230001010701040118020201180104011900020107000301130103011501040114051351040739791012367207093985120003060101031400010516010102180000020601010125010103100101041501000206010104140102082301010415011705040851171117080402089959594905010001170101010401000159050403040000011101010102000001590404040801010217010102080101014903040605081319133028370208051255897391000201030102050200010101052812180002020401030303000101010617162001020102000504080101010205281820051903511146058303090141598346970101001201020124000100070619036500020112020401160001000503130360010100080004011400010105031003400318491015388414020819035590993900010601010214010102050003103203000103010002070100010200030830010001160102052701010207000621500320070904861522168267634910050804070101011501030267040404050000010901020122030401630406060800010104010100160201014904060104010101061517091729482354838871031011090001030201030503031515190001020101020401010407030521261701020201000102010102030202171708000101010617064310442270547831960409042101010107000501210109034700010004000200080408012405180160010201070001010601020107011303440000000206155004103976115191983202064403000209000104170106265302000104000002100001032301021042020001040001021000010323010324650200010500360504051000010111010101120101018208161028010101290102012301010191112412190101012502010220010101881510222001010220010201250201010524241002020203010302030103020224303451020202020304050303030403243443420202040102050403020402021051422403020103030303020203020207130360010301140101001502030110114506820302001203010107040201103533048903020110010401120302011318360583020300110203011402040009062258010202100001021101010108011324911002021601030209010302100121328404010107010201100002021001264977060302160102040901030307010401010115010101200101012001010218020102320204043703040335040304140102023503030541050502370504041702020252040504370204033903030500010101020405050103020302020502010303030408080903121012020709130103050305081312021008100509101101030303050912070312100602131116010100060105012001030115010301140104021803130249021002470210014301040113041003390207024603100342010201190304012803060234010401230101070001040701010522010102140101041602040955030509390202073102010315010110360104062601040934020204210005083405031134030406360205000001130101000200000155050605080202023002030508010101892817281301020128050304050101017312161819030402370203081201010291182020000101020103020500010101061413250103040403110612010102041451525601040104020607100102010213524545020404090512101101040206255645490002000601030117000100070421037503050119030901410002011011340586010201130504015301020011144503880103002803090145010201151230077100010401010309010001030003107003020515020310340301030801286095090101070202033102000103011519600901041601081145020104090214509512060001001701010154030502030001001501020129030402831521171001020117030402480507038815261711020201090201012303030271191708090101010001020201030302041813180002020101030401031314091846493202020402020405030314200913495542020405010201030302090907183242370102010101010104010401090512036100010105010402120310034512441083010101100105011405190442183308920103011301020105040402230628105200010104000108000203300105155703010107000103210105135501193884070101130101042301030944021126710501011701010319010207440314589006010211004303040210010100100001001201010190131410150101011501010113010201460203030800000008010000070000009646554347060907520709054305060507113518010303020103010202040302134533360302020301010403030202040306040501000100000101010101010060828983141210111507121410101309051402710102011401010009020301101448076802020108010201100303010902070131010101040001000301010005716831981408041609100335100905110414520201021501010309010202090023217804030105010201090103021301020322010101030000010300010103005988993214115004101441031010360407010000090101001202020117010101150101022405040320020203330404040501010111010101080001011301010143050707921618139112181581231914010101010103040301020203010203010104040205131004031007060310100400020101010203010102020201010301061813192049392815474634144342230101000701040119020201080204011101020113040503370209023404110432000100050103000801020009010401120713052119370880083409911132125401010600010323010203140101031201010219000309350204083901020941010100060001010901010210010101070007156505204388101947711020377810050100011101020003000000590603031901020146020404090101018319131003000100050101010100000146030303511212088324161441070505976560400003010101030503000001010411141202050203030904090102020221344530000101000101010100010001030503070619132817415345071011157586887100020005010300180001000311170452020401190313013801030110174808790001000500010007000100020408023205190535183807660310023852793295010105010104150101000300021752030203080103134101000206001436690500010400010105000000030001113401062358092546801506103706638192280601000010000401540105010400010017010201440508027809181309010200060100012201010131030103040001004307080670212407964760442104070201010101010305040512180600010100010405020410190412443328010103010102010101030402031008100101010104121405094542236183925205101304000200030103020803150142000101030203011003110337153405880102020600010009020301120105013201020105031009230837127042883278030605100001070001033400051862020001060001011401020739012226870501021400010109000102140003062801000104000515580415438810377699340506340244040304110001011001010007010100911713102501010225010101170101019957565459060409430805086704050437030203050000000701000106000000061321260202010301030202010302032224324902020102020201040102020358918477101607161109100908101007011004060001010101010001010101010423025901030114010200100203011014210388020101110301011402020110527822991505035009090341091303360204013201010004010100030001000407195703010207010102090101010701193470090202100102020601010213015770992507101905090610030713360303092501010105000101030101010300050000000701010112010102090101011303020239030104360503083902040451060606791425147216102385181515040101011000010107010101120001010101010201040105010504030102040401040304040910080509061102070906071615210755363422392634143134360002010001030105010201030102020201010107010301200204011901020120010200150309014303080247030901370619066523350988143910711241077800000005010201100101011001010010000111000004170101041302010309010103080104092602041228040308380211083704172658071328451109387610000104000102070002041101010210010300000015010002020100015503030618010101380202050802010290100821490603168414072719050207993230501001010114010101030000003903010300020101010302080001000103281514010501040310031101030104106019500415071609343145030803097095609501020201010302020001010203090912010200060103012501000006021401630103012304130146000200101736118105080458154105800306033752693492010100090101001500000006030501280002040101020501000103010516400102032001020730040101050116308905042016060530821203050404408985360101060001041201010104000105360106000001100101015106020302000000150202023904030391261024060101015009101076172323985342654404040504000000110101013202020203000000000101010205030205191114010101010103040303130907153826580101010208212319305544445784719007131711000101010101020303070506000101000001010501020115052203370001000501010115030702431826067601020106071409583439148862872899061404340001000400010010020501340000000201010901010218010714520300010500010313010212300214527308010109010913710418307611527394310509470201010400010211000308310200010200';
+const tIdx = s => TYPE_ORDER.indexOf(s[0]) * 16 + TYPE_ORDER.indexOf(s[1]) * 4 + TYPE_ORDER.indexOf(s[2]);
+function predicted(mol, pocket) { const i = (tIdx(mol) * 64 + tIdx(pocket)) * 2; return +TABLE.substr(i, 2); }
+
+/* ---------- chemistry ---------- */
+const TYPES = {
+  O: { name: 'Oily', group: 'methyl group', res: 'Leu', resFull: 'leucine', cls: 'O', sym: '', col: '#F5B041', dark: '#8A5A10', kind: 'oily' },
+  P: { name: 'Water-loving', group: 'hydroxyl group (OH)', res: 'Ser', resFull: 'serine', cls: 'P', sym: '', col: '#5CC8D6', dark: '#1F5F69', kind: 'water-loving' },
+  '+': { name: 'Positive', group: 'amine group (NH₃⁺)', res: 'Lys', resFull: 'lysine', cls: 'pos', sym: '+', col: '#7AA2FF', dark: '#2F4C8C', kind: 'positive' },
+  '-': { name: 'Negative', group: 'carboxylate group (COO⁻)', res: 'Asp', resFull: 'aspartate', cls: 'neg', sym: '−', col: '#FF6B8B', dark: '#8C2F45', kind: 'negative' },
+  R: { name: 'Ring', group: 'flat benzene ring, hangs below', res: 'Phe', resFull: 'phenylalanine', cls: 'R', sym: '', col: '#C9A2FF', dark: '#4A2C7D', kind: 'ring' },
+  A: { name: 'Aromatic', group: 'flat ring', res: 'Phe', resFull: 'phenylalanine', cls: 'A', sym: '', col: '#C9A2FF', dark: '#4A2C7D', kind: 'flat-ring (aromatic)' }
+};
+const RESFULL = { Phe: 'phenylalanine', Trp: 'tryptophan', Tyr: 'tyrosine', Leu: 'leucine', Val: 'valine', Ile: 'isoleucine', Ala: 'alanine', Ser: 'serine', Thr: 'threonine', Lys: 'lysine', Arg: 'arginine', Asp: 'aspartate', Glu: 'glutamate' };
+const HEX = '<svg viewBox="0 0 24 24"><path d="M12 1.8l8.8 5.1v10.2L12 22.2l-8.8-5.1V6.9z" fill="#4A2C7D" stroke="#C9A2FF" stroke-width="2.6" stroke-linejoin="round"/><circle cx="12" cy="12" r="4.6" fill="none" stroke="#C9A2FF" stroke-width="1.8"/></svg>';
+const SPOTS = ['Left', 'Bottom', 'Right'];
+const ico = t => `<i class="ico t-${TYPES[t].cls}" aria-hidden="true">${t === 'R' || t === 'A' ? HEX : TYPES[t].sym}</i>`;
+const STICKS = {
+  O: 'Oily spots, like leucine',
+  P: 'Water-loving and charged spots, weakly (hydrogen bonds)',
+  '+': 'Negative spots, like aspartate (a salt bridge)',
+  '-': 'Positive spots, like lysine (a salt bridge)'
+};
+const BEND_TXT = {
+  S: { label: 'straight', short: '–', svg: '<svg viewBox="0 0 40 24" aria-hidden="true"><path d="M4 12H36" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><circle cx="20" cy="12" r="3.6" fill="currentColor"/></svg>' },
+  L: { label: 'bend up', short: '↗', svg: '<svg viewBox="0 0 40 24" aria-hidden="true"><path d="M4 18H20L32 4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="18" r="3.6" fill="currentColor"/></svg>' },
+  R: { label: 'bend down', short: '↘', svg: '<svg viewBox="0 0 40 24" aria-hidden="true"><path d="M4 6H20L32 20" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="6" r="3.6" fill="currentColor"/></svg>' }
+};
+const XSTICKS = {   // the expert missions add rings
+  O: 'Oily spots like leucine, and flat rings like phenylalanine',
+  P: 'Water-loving and charged spots, weakly. Flat rings push it away',
+  '+': 'Negative spots (a salt bridge), and flat rings like tryptophan (cation–\u2060π)',
+  '-': 'Positive spots (a salt bridge). Flat rings push it away',
+  R: 'Flat rings (π–\u2060π stacking), positive spots (cation–\u2060π) and oily spots. Only fits a deep spot'
+};
+const RULES = {
+  amine: { label: 'Gets inside E. coli: has a positive amine group', test: d => d.includes('+'),
+    hint: 'Add a positive part somewhere it won\'t spoil the fit. E. coli lets in molecules that carry a positive amine group.' },
+  notTooOily: { label: 'Dissolves in blood: no more than two oily parts', test: d => d.filter(t => t === 'O').length <= 2,
+    hint: 'Use no more than two oily parts, or the medicine won\'t dissolve in blood.' },
+  greasy: { label: 'Dissolves in blood: no more than two greasy parts (oily parts and rings)', test: d => d.filter(t => t === 'O' || t === 'R').length <= 2,
+    hint: 'Use no more than two greasy parts (oily parts and rings together), or the medicine won\'t dissolve in blood.' }
+};
+
+/* ---------- missions (pockets chosen and checked against the results table) ---------- */
+const MISSIONS = [
+  { key: 'm1', name: 'Jam the pocket', target: 'Cell-wall builder', parts: ['O', 'P'], bact: 'OOO', human: null, rules: [],
+    brief: 'Bacteria use this enzyme to build the tough wall around them. Jam its pocket and the wall falls apart. The pocket is lined with oily amino acids. Oily parts stick to oily spots, but water-loving parts don\'t.',
+    fact: '<strong>Real world:</strong> penicillin, the first antibiotic, jams the enzymes that build the bacterial cell wall.',
+    done: 'Penicillin works like this: it jams the enzymes that build the bacterial wall, and without a strong wall the bacteria burst.' },
+  { key: 'm2', name: 'Opposites attract', target: 'DNA untangler', parts: TYPE_ORDER, bact: '+O-', human: null, rules: [],
+    brief: 'Bacteria need this enzyme to untangle their DNA when they copy it. Its pocket has a positive spot and a negative spot. Opposite charges attract, but matching charges push each other away.',
+    fact: '<strong>Real world:</strong> ciprofloxacin is an antibiotic that jams DNA gyrase, the enzyme bacteria use to untangle their DNA.',
+    done: 'A positive group and a negative group holding on to each other like this is called a salt bridge.' },
+  { key: 'm3', name: 'No side effects', target: 'Vitamin maker', parts: TYPE_ORDER, bact: '-OO', human: '-PP', rules: [],
+    brief: 'Bacteria use this enzyme to make a vitamin. Your body has a very similar enzyme, and a good medicine must leave ours alone or it causes side effects. Compare the two pockets: the outlined spots are different.',
+    fact: '<strong>Real world:</strong> trimethoprim jams the bacterial vitamin maker, but binds tens of thousands of times more weakly to the human one.',
+    done: 'Your molecule uses the spots where the two pockets differ. Drug designers hunt for exactly these differences.' },
+  { key: 'm4', name: 'Superbug!', target: 'DNA untangler in E. coli', parts: TYPE_ORDER, bact: 'P-O', human: null, rules: [],
+    mutation: { spot: 0, to: 'O',
+      event: 'A mutation swapped serine (water-loving) for leucine (oily) at the left spot, and your molecule fell out. This exact swap is one of the most common ways E. coli resists ciprofloxacin.',
+      brief: 'The bacteria have evolved resistance. Redesign your molecule to fit their new pocket.' },
+    brief: 'Antibiotics like ciprofloxacin jam this DNA untangler. Design a molecule that blocks it, then find out what happens when the bacteria evolve.',
+    fact: '<strong>Real world:</strong> in E. coli, swapping serine 83 for leucine in DNA gyrase is one of the most common ways to resist ciprofloxacin.',
+    done: 'Chemists really do redesign drugs to beat resistance, and simulations help them check new designs before they make them.' },
+  { key: 'm5', name: 'Get inside', target: 'Fatty-acid builder in E. coli', parts: TYPE_ORDER, bact: 'POO', human: null, rules: ['amine', 'notTooOily'],
+    brief: 'E. coli has an extra outer wall that keeps most molecules out. To get inside, a molecule needs a positive amine group. It also mustn\'t be too oily, or it won\'t dissolve in blood.',
+    fact: '<strong>Real world:</strong> in 2019, chemists added a positive amine group to a drug that blocks this enzyme. It could then get inside E. coli and other tough bacteria.',
+    done: 'That\'s the trick the chemists used: put the amine group where it doesn\'t spoil the fit.' },
+  { key: 'm6', name: 'The shredder', target: 'β-lactamase in E. coli', parts: TYPE_ORDER, bact: '+-+', human: null, rules: ['amine'],
+    brief: 'Some bacteria make an enzyme that shreds penicillin-type antibiotics. Block the shredder and the penicillin works again. Humans don\'t make this enzyme, so there\'s no human pocket to avoid. But it works inside E. coli, so your molecule must get through E. coli\'s outer wall too.',
+    fact: '<strong>Real world:</strong> co-amoxiclav pairs the antibiotic amoxicillin with clavulanic acid, which blocks the β-lactamase shredder.',
+    done: 'Blocking the shredder protects the antibiotic. Real shredder-blockers also carry negative groups that grab the lysines in this pocket.' }
+];
+
+const RACE_HUMANS = ["O-+", "+-O"];
+const RACE_SOLVE = {bact: 86, human: 20};
+/* Expert missions: longer molecules, ring parts, bends and pi interactions.
+   Pockets were designed and checked with the same simulation (see xverify.js). */
+const XMISSIONS = [
+  { key: 'x1', name: 'Stack the rings', target: 'Drug pump in E. coli', parts: ['O', 'P', '+', '-', 'R'], bendable: false, scale: 0.7,
+    bact: { bends: 'SS', sites: [{ t: 'O', res: 'Val' }, { t: 'A', res: 'Phe', deep: true }, { t: 'O', res: 'Leu' }, { t: '-', res: 'Asp' }] },
+    human: null, rules: [],
+    brief: 'Molecules are getting longer: this pocket has four spots. Spot 2 is a deep hole with a phenylalanine (Phe) at the bottom, an amino acid with a flat ring. Ordinary parts can\'t reach it. Ring parts hang below your molecule, so put one over the hole and let the two flat rings stack.',
+    fact: '<strong>Real world:</strong> the AcrB pump in <i>E. coli</i> throws antibiotics back out of the cell. An experimental pump blocker jams it by lodging in a narrow pit lined with phenylalanines, where its flat ring stacks against phenylalanine 178.',
+    done: 'Flat rings stack like coins: chemists call it π–\u2060π stacking (say "pie-pie"). The rings\' clouds of electrons attract each other. Lots of medicines contain at least one ring for exactly this reason.' },
+  { key: 'x2', name: 'Positive meets ring', target: 'Bacterial enzyme with a tryptophan', parts: ['O', 'P', '+', '-', 'R'], bendable: false, scale: 0.75,
+    bact: { bends: 'SS', sites: [{ t: 'P', res: 'Ser' }, { t: 'A', res: 'Trp' }, { t: 'O', res: 'Leu' }, { t: '-', res: 'Glu' }] },
+    human: { bends: 'SS', sites: [{ t: 'P', res: 'Ser' }, { t: 'O', res: 'Leu' }, { t: 'O', res: 'Leu' }, { t: '-', res: 'Glu' }] },
+    rules: [],
+    brief: 'Tryptophan (Trp) has a big flat ring with a cloud of electrons on each face. A positive part sitting on that cloud is held tightly: a cation–\u2060π interaction (a cation is anything positive). The human enzyme has an oily leucine (Leu) at spot 2 instead. Can you use the difference?',
+    fact: '<strong>Real world:</strong> the nicotine receptor in your brain grabs nicotine\'s positive charge with a tryptophan ring in exactly this way. Drug designers use the same trick to make molecules stick where they should.',
+    done: 'Your positive part sat on the tryptophan ring in the bacterial enzyme, but next to the oily leucine in the human one, where it\'s unwelcome. One amino acid difference was enough to make your drug selective.' },
+  { key: 'x3', name: 'Bend to fit', target: 'Membrane enzyme with a zigzag tunnel', parts: ['O', 'P', '+', '-', 'R'], bendable: true, scale: 0.7,
+    bact: { bends: 'LRL', sites: [{ t: '-', res: 'Asp' }, { t: 'O', res: 'Leu' }, { t: 'O', res: 'Ile' }, { t: 'O', res: 'Val' }, { t: '+', res: 'Arg' }] },
+    human: null, rules: [],
+    brief: 'Five spots, and the pocket zigzags. A straight molecule bumps into the walls, however good its chemistry. Use the bend buttons under your molecule to match the shape of the pocket (the dotted outline on the map), then choose parts.',
+    fact: '<strong>Real world:</strong> shape complementarity, how well a drug\'s shape matches its pocket, is one of the first things that computer docking programs check. Many membrane proteins bind fatty molecules in long, curved tunnels.',
+    done: 'A good drug is the right shape as well as the right chemistry. Real molecules can only bend in certain places, so chemists choose rings, chains and joints that hold the shape they need.' },
+  { key: 'x4', name: 'Same chemistry, new shape', target: 'Bacterial enzyme and its human cousin', parts: ['O', 'P', '+', '-', 'R'], bendable: true, scale: 0.7,
+    bact: { bends: 'SL', sites: [{ t: 'O', res: 'Leu' }, { t: 'A', res: 'Phe', deep: true }, { t: 'O', res: 'Val' }, { t: '+', res: 'Lys' }] },
+    human: { bends: 'SL', sites: [{ t: 'O', res: 'Leu' }, { t: 'A', res: 'Trp' }, { t: 'O', res: 'Val' }, { t: '+', res: 'Lys' }] },
+    rules: [],
+    brief: 'These two enzymes are close cousins with almost the same pocket chemistry. The difference is shape: in the human enzyme, a bulky tryptophan (Trp) fills the deep hole at spot 2. Design a molecule that only fits the bacterial pocket.',
+    fact: '<strong>Real world:</strong> the pump blocker that stacks against phenylalanine 178 in AcrB can\'t bind a related pump, MexY, because a bulkier tryptophan sits in the same place. Small differences in pocket shape like this are often what let a drug tell two proteins apart.',
+    done: 'Your ring slotted into the bacterial hole but had no room in the human pocket. Selectivity from shape alone: the bulky tryptophan acts like a plug.' },
+  { key: 'x5', name: 'Grand challenge', target: 'Superbug enzyme', parts: ['O', 'P', '+', '-', 'R'], bendable: true, scale: 0.45,
+    bact: { bends: 'SLS', sites: [{ t: 'P', res: 'Thr' }, { t: 'A', res: 'Trp' }, { t: 'A', res: 'Phe', deep: true }, { t: 'O', res: 'Leu' }, { t: '-', res: 'Asp' }] },
+    human: { bends: 'SLS', sites: [{ t: 'P', res: 'Thr' }, { t: 'O', res: 'Leu' }, { t: 'A', res: 'Trp' }, { t: 'O', res: 'Leu' }, { t: '-', res: 'Asp' }] },
+    rules: ['greasy'],
+    brief: 'Everything at once. Bend your molecule to fit, stack a ring in the deep hole, sit a positive part on the tryptophan, and leave the human enzyme alone. This enzyme grips less tightly than the others, so every spot counts.',
+    fact: '<strong>Real world:</strong> a medicine also has to dissolve in blood and get to where it\'s needed. Chemists track how greasy a molecule is, because too many oily groups and rings make it hard to dissolve.',
+    done: 'You used shape, π–\u2060π stacking, a cation–\u2060π interaction and a salt bridge in one molecule, and kept it soluble. That\'s what real drug design feels like: juggling lots of rules at once.' }
+];
+XMISSIONS.forEach(M => { M.expert = true; });
+
+
+/* ---------- sound ---------- */
+const Sound = {
+  ctx: null, on: store.get('sound', CONFIG.soundOnByDefault),
+  c() { if (!this.ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; this.ctx = new AC(); } if (this.ctx.state === 'suspended') this.ctx.resume(); return this.ctx; },
+  tone(f, d = 0.15, type = 'sine', v = 0.07, when = 0) {
+    if (!this.on) return; const c = this.c(); if (!c) return;
+    const t = c.currentTime + when, o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + d + 0.03);
+  },
+  tick() { this.tone(720, 0.035, 'sine', 0.018); },
+  place() { this.tone(523, 0.08, 'triangle', 0.05); },
+  start() { [0, 7].forEach((s, i) => this.tone(392 * Math.pow(2, s / 12), 0.12, 'triangle', 0.05, i * 0.07)); },
+  lose() { [0, -3].forEach((s, i) => this.tone(220 * Math.pow(2, s / 12), 0.22, 'sine', 0.06, i * 0.12)); },
+  mutate() { [0, 1, 0, 1].forEach((s, i) => this.tone(180 + s * 40, 0.09, 'square', 0.025, i * 0.09)); },
+  win() { [0, 4, 7, 12, 16].forEach((s, i) => this.tone(523.25 * Math.pow(2, s / 12), 0.42, 'triangle', 0.075, i * 0.085)); }
+};
+const Settings = { idle: store.get('idle', CONFIG.idleMinutesDefault) };
+
+/* =====================================================================
+   Drawing an enzyme pocket and the molecule inside it
+   ===================================================================== */
+let FONT = 'system-ui, sans-serif';
+function hexPath(ctx, x, y, r) { ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = Math.PI / 6 + i * Math.PI / 3; ctx[i ? 'lineTo' : 'moveTo'](x + r * Math.cos(a), y + r * Math.sin(a)); } ctx.closePath(); }
+function drawPart(ctx, x, y, r, t, outline) {
+  const T = TYPES[t];
+  if (t === 'N') {   // the joint a ring hangs from
+    ctx.fillStyle = '#EAF6F4'; ctx.beginPath(); ctx.arc(x, y, r * 0.42, 0, TAU); ctx.fill(); return;
+  }
+  if (t === 'R' || t === 'A') {   // flat aromatic ring
+    const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.35, r * 0.1, x, y, r);
+    g.addColorStop(0, t === 'R' ? '#8E67D0' : '#6A4AA3'); g.addColorStop(1, '#3A2264');
+    hexPath(ctx, x, y, r); ctx.fillStyle = g; ctx.fill();
+    ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(2, r * 0.16); ctx.strokeStyle = T.col; ctx.stroke();
+    ctx.lineWidth = Math.max(1.5, r * 0.1); ctx.beginPath(); ctx.arc(x, y, r * 0.42, 0, TAU); ctx.stroke();
+    if (outline) { ctx.lineWidth = Math.max(2, r * 0.12); ctx.strokeStyle = '#EAF6F4'; hexPath(ctx, x, y, r + ctx.lineWidth * 0.8); ctx.stroke(); }
+    return;
+  }
+  if (t === 'O') {
+    const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.08, x, y, r);
+    g.addColorStop(0, '#FFE6AD'); g.addColorStop(0.55, '#F5B041'); g.addColorStop(1, '#B9750F');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+  } else if (t === 'P') {
+    const lw = Math.max(2, r * 0.32);
+    ctx.fillStyle = '#16465A'; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+    ctx.lineWidth = lw; ctx.strokeStyle = T.col; ctx.beginPath(); ctx.arc(x, y, r - lw / 2, 0, TAU); ctx.stroke();
+  } else {
+    ctx.fillStyle = T.dark; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+    const lw = Math.max(2, r * 0.22); ctx.lineWidth = lw; ctx.strokeStyle = T.col; ctx.beginPath(); ctx.arc(x, y, r - lw / 2, 0, TAU); ctx.stroke();
+    ctx.fillStyle = '#F2F5FF'; ctx.font = `800 ${Math.round(r * 1.25)}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(T.sym, x, y + r * 0.06);
+  }
+  if (outline) { ctx.lineWidth = Math.max(2, r * 0.14); ctx.strokeStyle = '#EAF6F4'; ctx.beginPath(); ctx.arc(x, y, r + ctx.lineWidth * 0.6, 0, TAU); ctx.stroke(); }
+}
+// world box shown in a panel: x -5.2..5.2, y -5.0..4.4 (expert pockets bring their own box)
+const CLASSIC_BOX = { w: 10.4, top: 4.4, h: 9.4 };
+function panelGeom(px0, py0, pw, ph, top = 44, bottom = 36, box = CLASSIC_BOX) {
+  const avail = ph - top - bottom, s = Math.max(6, Math.min((pw - 24) / box.w, avail / box.h, 64)), off = Math.max(0, (avail - box.h * s) / 2);
+  return { px0, py0, pw, ph, s, X0: px0 + pw / 2, Y0: py0 + top + off + box.top * s, box };
+}
+function smoothClosed(ctx, xs, ys) {
+  const n = xs.length, mx = i => (xs[i] + xs[(i + 1) % n]) / 2, my = i => (ys[i] + ys[(i + 1) % n]) / 2;
+  ctx.beginPath(); ctx.moveTo(mx(n - 1), my(n - 1));
+  for (let i = 0; i < n; i++) ctx.quadraticCurveTo(xs[i], ys[i], mx(i), my(i));
+  ctx.closePath();
+}
+function drawGenEnzyme(ctx, sim, P, o) {
+  const s = P.s, SX = i => P.X0 + sim.x[i] * s, SY = i => P.Y0 - sim.y[i] * s, now = performance.now(), np = sim.np, N = sim.slots;
+  if (o.title) {
+    ctx.fillStyle = '#EAF6F4'; ctx.font = `700 ${Math.round(clamp(s * 0.42, 14, 19))}px ${FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText(o.title, P.px0 + 16, P.py0 + 16);
+  }
+  { // protein: every bead as an overlapping disc, so the surface follows the pocket's real shape
+    const all = sim.surf.concat(sim.body);
+    ctx.fillStyle = '#2A6283'; ctx.beginPath(); all.forEach(i => { ctx.moveTo(SX(i) + 0.9 * s, SY(i)); ctx.arc(SX(i), SY(i), 0.9 * s, 0, TAU); }); ctx.fill();
+    ctx.fillStyle = '#1D4B66'; ctx.beginPath(); all.forEach(i => { ctx.moveTo(SX(i) + 0.76 * s, SY(i)); ctx.arc(SX(i), SY(i), 0.76 * s, 0, TAU); }); ctx.fill();
+  }
+  // deep spots waiting for a ring
+  sim.pendPos.forEach((pp, k) => {
+    if (!pp || sim.parts[k] === 'R') return;
+    ctx.save(); ctx.setLineDash([4, 4]); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(201,162,255,0.55)';
+    hexPath(ctx, P.X0 + pp[0] * s, P.Y0 - pp[1] * s, 0.6 * s); ctx.stroke(); ctx.restore();
+  });
+  // pocket spots, then their labels (pushed apart so they never overlap)
+  const labs = [];
+  for (let k = 0; k < N; k++) {
+    const t = sim.type[k], site = sim.def.sites[k], from = sim.pendPos[k] || sim.dockPos[k];
+    const flash = o.flashSpot === k && now - o.flashT < 4000;
+    drawPart(ctx, SX(k), SY(k), 0.46 * s * sim.sigma[k], t, false);
+    let dx = sim.native[k][0] - from[0], dy = sim.native[k][1] - from[1]; const m = Math.hypot(dx, dy) || 1; dx /= m; dy /= m;
+    const L = 0.62 * sim.sigma[k] + 0.7;
+    labs.push({ k, flash, x: P.X0 + (sim.native[k][0] + dx * L) * s, y: P.Y0 - (sim.native[k][1] + dy * L) * s, txt: (site.res || TYPES[t].res) + (TYPES[t].sym || '') });
+  }
+  if (o.labels !== false && s >= 16) {
+    const fs = Math.round(clamp(s * 0.34, 11, 15)), hh = fs * 2.25;
+    ctx.font = `700 ${fs}px ${FONT}`; labs.forEach(l => { l.w = ctx.measureText(l.txt).width + 10; });
+    for (let it = 0; it < 30; it++) for (let a = 0; a < labs.length; a++) for (let b = a + 1; b < labs.length; b++) {
+      const A = labs[a], B = labs[b], ox = (A.w + B.w) / 2 + 8 - Math.abs(A.x - B.x), oy = hh + 4 - Math.abs(A.y - B.y);
+      if (ox > 0 && oy > 0) { const sg = A.x <= B.x ? 1 : -1; A.x -= sg * ox / 2; B.x += sg * ox / 2; }
+    }
+    labs.forEach(l => {
+      ctx.fillStyle = 'rgba(11,34,51,0.72)'; ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(l.x - l.w / 2, l.y - hh / 2, l.w, hh, 6); else ctx.rect(l.x - l.w / 2, l.y - hh / 2, l.w, hh); ctx.fill();
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(168,197,204,0.9)'; ctx.font = `650 ${Math.round(fs * 0.78)}px ${FONT}`; ctx.fillText('spot ' + (l.k + 1), l.x, l.y - fs * 0.5);
+      ctx.fillStyle = l.flash ? '#FF9A8F' : '#EAF6F4'; ctx.font = `700 ${fs}px ${FONT}`; ctx.fillText(l.txt, l.x, l.y + fs * 0.5);
+    });
+  }
+  // who is sticking to whom (each part only pairs with its own spot)
+  for (let a = 0; a < sim.nd; a++) {
+    const i = np + a, ta = sim.type[i]; if (ta === 'N') continue;
+    const k = a < N ? a : sim.ringOf[a - N][0], e = pairEpsX(ta, sim.type[k]), d = Math.hypot(sim.x[i] - sim.x[k], sim.y[i] - sim.y[k]);
+    const dmax = 1.6 * (sim.sigma[i] + sim.sigma[k]) / 2; if (d > dmax || !e) continue; const al = clamp((dmax - d) / 0.5, 0, 1);
+    ctx.save(); ctx.lineCap = 'round'; ctx.setLineDash([s * 0.12, s * 0.1]);
+    ctx.strokeStyle = e >= 1.8 ? `rgba(225,200,255,${al})` : e > 0 ? `rgba(155,231,176,${0.9 * al})` : `rgba(255,122,107,${0.95 * al})`;
+    ctx.lineWidth = Math.max(2, s * (0.06 + 0.05 * Math.abs(e)));
+    ctx.beginPath(); ctx.moveTo(SX(i), SY(i)); ctx.lineTo(SX(k), SY(k)); ctx.stroke(); ctx.restore();
+  }
+  // the molecule: backbone, ring stalks, then the parts
+  ctx.save(); ctx.strokeStyle = '#EAF6F4'; ctx.lineWidth = Math.max(3, s * 0.17); ctx.lineCap = ctx.lineJoin = 'round';
+  ctx.beginPath(); for (let k = 0; k < N; k++) ctx[k ? 'lineTo' : 'moveTo'](SX(np + k), SY(np + k));
+  sim.ringOf.forEach(([k, i]) => { ctx.moveTo(SX(np + k), SY(np + k)); ctx.lineTo(SX(i), SY(i)); });
+  ctx.stroke(); ctx.restore();
+  sim.ringOf.forEach(([, i]) => drawPart(ctx, SX(i), SY(i), 0.6 * s, 'R', true));
+  for (let k = 0; k < N; k++) drawPart(ctx, SX(np + k), SY(np + k), 0.42 * s, sim.type[np + k], true);
+  if (sim.grab) {
+    const g = sim.grab, qx = P.X0 + g.x * s, qy = P.Y0 - g.y * s;
+    ctx.save(); ctx.strokeStyle = 'rgba(234,246,244,0.8)'; ctx.lineWidth = 2; ctx.setLineDash([6, 5]);
+    ctx.beginPath(); ctx.moveTo(SX(g.i), SY(g.i)); ctx.lineTo(qx, qy); ctx.stroke(); ctx.restore();
+  }
+  if (o.status) {
+    const inside = sim.bound(), good = o.goodWhenBound !== false;
+    ctx.fillStyle = inside ? (good ? '#9BE7B0' : '#FF9A8F') : '#A8C5CC';
+    ctx.font = `650 ${Math.round(clamp(s * 0.36, 12, 16))}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(inside ? 'Molecule is in the pocket' : 'Molecule is out of the pocket', P.X0, Math.min(P.py0 + P.ph - 12, P.Y0 + (P.box.h - P.box.top) * s + 24));
+  }
+}
+function drawEnzyme(ctx, sim, P, o = {}) {
+  if (sim.gen) return drawGenEnzyme(ctx, sim, P, o);
+  const s = P.s, SX = i => P.X0 + sim.x[i] * s, SY = i => P.Y0 - sim.y[i] * s, now = performance.now();
+  if (o.title) {
+    ctx.fillStyle = '#EAF6F4'; ctx.font = `700 ${Math.round(clamp(s * 0.42, 14, 19))}px ${FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText(o.title, P.px0 + 16, P.py0 + 16);
+  }
+  // protein surface
+  { // smooth closed outline through the protein beads
+    const n = 26, mx = i => (SX(i) + SX((i + 1) % n)) / 2, my = i => (SY(i) + SY((i + 1) % n)) / 2;
+    ctx.save(); ctx.lineCap = ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(mx(n - 1), my(n - 1));
+    for (let i = 0; i < n; i++) ctx.quadraticCurveTo(SX(i), SY(i), mx(i), my(i));
+    ctx.closePath();
+    ctx.strokeStyle = '#2A6283'; ctx.lineWidth = 1.72 * s; ctx.stroke();
+    ctx.strokeStyle = '#1D4B66'; ctx.lineWidth = 1.42 * s; ctx.stroke();
+    ctx.fillStyle = '#1D4B66'; ctx.fill(); ctx.restore();
+  }
+  // pocket spots and their labels
+  LINING.forEach((i, k) => {
+    const t = sim.type[i], nx = sim.native[i][0], ny = sim.native[i][1], m = Math.hypot(nx, ny);
+    const flash = o.flashSpot === k && now - o.flashT < 4000;
+    if (flash) {
+      ctx.save(); ctx.strokeStyle = '#FF7A6B'; ctx.lineWidth = 3; ctx.globalAlpha = 0.5 + 0.5 * Math.abs(Math.sin(now / 220));
+      ctx.beginPath(); ctx.arc(SX(i), SY(i), 0.75 * s, 0, TAU); ctx.stroke(); ctx.restore();
+    }
+    drawPart(ctx, SX(i), SY(i), 0.46 * s, t, false);
+    if (o.labels !== false && s >= 16) {
+      const f0 = (m + 0.62) / m, f1 = 4.15 / m, f2 = 4.62 / m;
+      ctx.save(); ctx.strokeStyle = 'rgba(168,197,204,0.4)'; ctx.lineWidth = 1; ctx.setLineDash([2, 3]);
+      ctx.beginPath(); ctx.moveTo(P.X0 + nx * f0 * s, P.Y0 - ny * f0 * s); ctx.lineTo(P.X0 + nx * f1 * s, P.Y0 - ny * f1 * s); ctx.stroke(); ctx.restore();
+      ctx.fillStyle = flash ? '#FF9A8F' : '#C9DDE2'; ctx.font = `700 ${Math.round(clamp(s * 0.36, 12, 16))}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(TYPES[t].res + (TYPES[t].sym ? ' ' + TYPES[t].sym : ''), P.X0 + nx * f2 * s, P.Y0 - ny * f2 * s);
+    }
+  });
+  // who is sticking to whom
+  for (let a = 0; a < 3; a++) LINING.forEach(i => {
+    const e = pairEps(sim.type[26 + a], sim.type[i]), d = Math.hypot(sim.x[26 + a] - sim.x[i], sim.y[26 + a] - sim.y[i]);
+    if (d > 1.75) return; const al = clamp((1.75 - d) / 0.55, 0, 1);
+    ctx.save(); ctx.lineCap = 'round'; ctx.setLineDash([s * 0.12, s * 0.1]);
+    ctx.strokeStyle = e > 0 ? `rgba(155,231,176,${0.9 * al})` : `rgba(255,122,107,${0.95 * al})`; ctx.lineWidth = Math.max(2, s * (0.06 + 0.05 * Math.abs(e)));
+    ctx.beginPath(); ctx.moveTo(SX(26 + a), SY(26 + a)); ctx.lineTo(SX(i), SY(i)); ctx.stroke(); ctx.restore();
+  });
+  // the molecule
+  ctx.save(); ctx.strokeStyle = '#EAF6F4'; ctx.lineWidth = Math.max(3, s * 0.17); ctx.lineCap = ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.moveTo(SX(26), SY(26)); ctx.lineTo(SX(27), SY(27)); ctx.lineTo(SX(28), SY(28)); ctx.stroke(); ctx.restore();
+  for (let i = 26; i < 29; i++) drawPart(ctx, SX(i), SY(i), 0.42 * s, sim.type[i], true);
+  if (sim.grab) {
+    const g = sim.grab, qx = P.X0 + g.x * s, qy = P.Y0 - g.y * s;
+    ctx.save(); ctx.strokeStyle = 'rgba(234,246,244,0.8)'; ctx.lineWidth = 2; ctx.setLineDash([6, 5]);
+    ctx.beginPath(); ctx.moveTo(SX(g.i), SY(g.i)); ctx.lineTo(qx, qy); ctx.stroke(); ctx.restore();
+  }
+  if (o.status) {
+    const inside = sim.bound(), good = o.goodWhenBound !== false;
+    ctx.fillStyle = inside ? (good ? '#9BE7B0' : '#FF9A8F') : '#A8C5CC';
+    ctx.font = `650 ${Math.round(clamp(s * 0.36, 12, 16))}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(inside ? 'Molecule is in the pocket' : 'Molecule is out of the pocket', P.X0, Math.min(P.py0 + P.ph - 12, P.Y0 + 5.0 * s + 24));
+  }
+}
+
+/* =====================================================================
+   Router
+   ===================================================================== */
+let current = 'home';
+const enterHooks = {};
+function go(name, push = true) {
+  let screen = name;
+  if (name === 'race') { Lab.openRace(); screen = 'lab'; }
+  if (name === 'lab' && !Lab.mode) { name = screen = 'missions'; }
+  if (!document.getElementById('screen-' + screen)) name = screen = 'home';
+  current = screen;
+  $$('.screen').forEach(s => s.classList.toggle('active', s.id === 'screen-' + screen));
+  const navKey = screen === 'lab' ? (Lab.mode === 'race' ? 'race' : 'missions') : screen;
+  $$('.mainnav button').forEach(b => { if (b.dataset.go === navKey) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
+  const hash = '#' + (screen === 'lab' ? (Lab.mode === 'race' ? 'race' : 'lab') : name);
+  if (push && location.hash !== hash) history.pushState(null, '', hash);
+  if (enterHooks[screen]) enterHooks[screen]();
+  $('#screen-' + screen).scrollTop = 0;
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (!b) return; e.preventDefault(); go(b.dataset.go); });
+window.addEventListener('popstate', () => { const h = (location.hash || '#home').slice(1); if (h !== 'race') go(h, false); });
+
+/* =====================================================================
+   Home: a live simulation tells the story of resistance on a loop
+   ===================================================================== */
+const Hero = {
+  sim: null, phase: 'hold', t: 0, outFor: 0, state: 0, flashT: -1e9,
+  STATES: [{ pocket: '-OO', drug: '+OO' }, { pocket: '+OO', drug: '-OO' }],
+  TEXT: {
+    hold: ['An antibiotic is jammed in the pocket of a bacterial enzyme, so the bacteria can\'t grow.', '#9BE7B0'],
+    mutate: ['The bacteria evolve. A mutation swaps one amino acid in the pocket…', '#FF7A6B'],
+    escaped: ['…and the antibiotic no longer fits. The superbug survives.', '#FF7A6B'],
+    redesign: ['Scientists redesign the antibiotic to fit the new pocket.', '#F5B041']
+  },
+  init() {
+    this.sim = new PocketSim(); this.state = 0; this.apply(); this.sim.dock(); this.setPhase('hold');
+  },
+  apply() { const S = this.STATES[this.state]; this.sim.setPocket(S.pocket.split('')); this.sim.setDrug(S.drug.split('')); },
+  setPhase(p) { this.phase = p; this.t = 0; this.outFor = 0; const [txt, col] = this.TEXT[p]; $('#heroStatus').textContent = txt; $('#heroDot').style.background = col; },
+  tick(dt) {
+    const sim = this.sim;
+    if (!reduceMotion) {
+      sim.step(40); this.t += dt;
+      if (this.phase === 'hold' && this.t > 7) {
+        this.state = 1 - this.state; const S = this.STATES[this.state]; sim.setPocket(S.pocket.split('')); this.flashT = performance.now(); this.setPhase('mutate');
+      } else if (this.phase === 'mutate') {
+        this.outFor = sim.rmsd() > 1.0 ? this.outFor + dt : 0;
+        if (this.outFor > 0.5 || this.t > 8) this.setPhase('escaped');
+      } else if (this.phase === 'escaped' && this.t > 2.5) {
+        sim.setDrug(this.STATES[this.state].drug.split('')); sim.guide = 3; this.setPhase('redesign');
+      } else if (this.phase === 'redesign') {
+        if (sim.rmsd() < 0.4 || this.t > 6) { sim.guide = 0; if (this.t > 2) this.setPhase('hold'); }
+      }
+    }
+    const cv = $('#heroCanvas'), { ctx, w, h } = fitCanvas(cv); ctx.clearRect(0, 0, w, h);
+    const wide = w > 980, pw = wide ? Math.min(w * 0.5, h * 1.05) : w, ph = wide ? h * 0.9 : h;
+    const P = panelGeom(wide ? w * 0.72 - pw / 2 : 0, wide ? (h - ph) / 2 : 0, pw, ph, wide ? 20 : 4);
+    drawEnzyme(ctx, sim, P, { flashSpot: 0, flashT: this.flashT });
+  }
+};
+
+/* =====================================================================
+   Mission list
+   ===================================================================== */
+const progress = {
+  data: store.get('progress', {}),
+  get(k) { return this.data[k] || 0; },
+  set(k, v) { if (v > this.get(k)) { this.data[k] = v; store.set('progress', this.data); } },
+  clear() { this.data = {}; store.set('progress', {}); }
+};
+function starsText(k) { return '<span aria-hidden="true">' + '★'.repeat(k) + '<span class="off">' + '★'.repeat(3 - k) + '</span></span>'; }
+function starsSVG(k) {
+  return [0, 1, 2].map(i => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.4l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z" fill="${i < k ? '#F5B041' : 'none'}" stroke="${i < k ? '#F5B041' : '#2A6283'}" stroke-width="2" stroke-linejoin="round"/></svg>`).join('');
+}
+function renderMissions() {
+  $('#missionList').innerHTML = ''; $('#expertList').innerHTML = '';
+  const groups = [{ name: 'Getting started', text: 'Learn what sticks to what.', list: MISSIONS.slice(0, 3), root: '#missionList' },
+                  { name: 'Fighting superbugs', text: 'Resistance, tough outer walls, and an enzyme that shreds antibiotics.', list: MISSIONS.slice(3), root: '#missionList' },
+                  { name: 'Expert missions', text: 'Longer molecules that bend, ring parts that need a deep spot, and two new ways to stick: π–\u2060π stacking and cation–\u2060π. Best tried after the first six.', list: XMISSIONS, root: '#expertList', x: true }];
+  groups.forEach(g => {
+    const root = $(g.root), el = document.createElement('section'); el.className = 'lgroup' + (g.x ? ' expert' : '');
+    el.innerHTML = `<h3>${esc(g.name)}</h3><p class="small">${esc(g.text)}</p><div class="strand"><svg aria-hidden="true"><path fill="none" stroke="#2A6283" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></svg></div>`;
+    g.list.forEach(M => {
+      const st = progress.get(M.key), num = (g.x ? 'E' : '') + ((g.x ? XMISSIONS : MISSIONS).indexOf(M) + 1), b = document.createElement('button');
+      b.className = 'lvl'; b.setAttribute('aria-label', `${g.x ? 'Expert mission ' + num.slice(1) : 'Mission ' + num}: ${M.name}, ${M.target}, ${st} of 3 stars`);
+      b.innerHTML = `<span class="lvl-bead ${st === 3 ? 'done' : st ? 'part' : ''}">${num}</span><span class="lvl-name">${esc(M.name)}</span><span class="lvl-sub">${esc(M.target)}</span><span class="stars-txt">${starsText(st)}</span>`;
+      b.addEventListener('click', () => { Lab.openMission(M); go('lab'); });
+      $('.strand', el).appendChild(b);
+    });
+    root.appendChild(el);
+  });
+  $('#raceGensTxt').textContent = CONFIG.raceGenerations;
+  const best = Fame.best(); $('#raceBest').textContent = best ? `Best so far: ${best.name}, ${best.gens} generation${best.gens === 1 ? '' : 's'} with ${best.tests} tests.` : '';
+  layoutStrands();
+}
+function layoutStrands() {
+  $$('.strand').forEach(strand => {
+    const nodes = $$('.lvl', strand), W = strand.clientWidth; if (!W) return;
+    const cols = clamp(Math.floor(W / 175), 2, 3), colW = W / cols, rowH = 182, rows = Math.ceil(nodes.length / cols), pts = [];
+    strand.style.height = rows * rowH + 'px';
+    nodes.forEach((nd, k) => {
+      const r = Math.floor(k / cols); let c = k % cols; if (r % 2) c = cols - 1 - c;
+      const x = colW * (c + 0.5), y = r * rowH + 40; nd.style.left = (x - 80) + 'px'; nd.style.top = (y - 36) + 'px'; pts.push([x, y]);
+    });
+    // between rows, run down the outside edge so the line never crosses a mission's name
+    let d = pts.length ? `M${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}` : '';
+    for (let i = 1; i < pts.length; i++) {
+      const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
+      if (Math.abs(y1 - y0) < 1) { d += ` L${x1.toFixed(1)} ${y1.toFixed(1)}`; continue; }
+      const out = x0 > W / 2 ? clamp(x0 + 92, 6, W - 6) : clamp(x0 - 92, 6, W - 6);
+      d += ` L${out.toFixed(1)} ${y0.toFixed(1)} L${out.toFixed(1)} ${y1.toFixed(1)} L${x1.toFixed(1)} ${y1.toFixed(1)}`;
+    }
+    $('path', strand).setAttribute('d', d);
+  });
+}
+enterHooks.missions = () => renderMissions();
+window.addEventListener('resize', () => { if (current === 'missions') layoutStrands(); if (current === 'lab' && Lab.X && Lab.X.bendable) Lab.drawShape(); });
+
+/* =====================================================================
+   The lab: design a molecule, test it with MD, respond to evolution
+   ===================================================================== */
+const Lab = {
+  mode: null, M: null, X: null, stage: 0, bact: 'OOO', human: null, rules: [], parts: TYPE_ORDER,
+  drug: ['P', 'P', 'P'], bends: [], sel: 0, tests: 0, history: [], phase: 'design', last: null, assay: null,
+  reps: null, panels: [], grab: null, flash: { spot: -1, t: -1e9 }, note: '', race: null, after: null, frame: 0,
+
+  init() {
+    this.classicReps = { bact: Array.from({ length: SIM.replicas }, () => new PocketSim()), human: Array.from({ length: SIM.replicas }, () => new PocketSim()) };
+    this.reps = this.classicReps;
+    $('#testBtn').addEventListener('click', () => this.test(true));
+    $('#labBack').addEventListener('click', () => go(this.mode === 'race' ? 'home' : 'missions'));
+    $('#cheat').innerHTML = TYPE_ORDER.map(t => `<tr><td>${ico(t)} ${TYPES[t].name}</td><td>${STICKS[t]}</td></tr>`).join('');
+    this.bindCanvas();
+  },
+  sims(side) { return this.reps[side]; },
+  shown(side) { return this.reps[side][0]; },
+
+  /* ----- set up a mission or a race ----- */
+  openMission(M) {
+    this.cancel(); this.mode = 'mission'; this.M = M; this.stage = 0; this.race = null;
+    if (M.expert) this.setupX(M); else this.setup(M.bact, M.human, M.rules || [], M.parts);
+    this.render();
+  },
+  list() { return this.M && this.M.expert ? XMISSIONS : MISSIONS; },
+  par() { return this.X ? 2 : this.M && this.M.mutation ? 2 : 1; },   // tests allowed for three stars
+  spot(k) { return this.X ? 'Spot ' + (k + 1) : SPOTS[k]; },
+  sides() { return this.human ? ['bact', 'human'] : ['bact']; },
+  // expert missions: a freshly built pocket for each enzyme, longer molecules, bends and rings
+  setupX(M) {
+    const N = M.bact.sites.length, def = pk => ({ scale: M.scale, bends: pk.bends.split(''), sites: pk.sites });
+    this.X = M; this.bact = M.bact; this.human = M.human; this.rules = M.rules || []; this.parts = M.parts;
+    this.reps = { bact: Array.from({ length: SIM.replicas }, () => new GenPocketSim(def(M.bact))), human: M.human ? Array.from({ length: SIM.replicas }, () => new GenPocketSim(def(M.human))) : [] };
+    this.drug = Array(N).fill('P'); this.bends = M.bendable ? Array(N - 2).fill('S') : M.bact.bends.split('');
+    this.sel = 0; this.tests = 0; this.history = []; this.phase = 'design'; this.last = null; this.assay = null; this.after = null;
+    this.flash = { spot: -1, t: -1e9 }; this.mutation = null; this.note = ''; this.evoStep = null;
+    this.applyDrug(); this.redock();
+  },
+  applyDrug() { this.sides().forEach(side => this.reps[side].forEach(s => this.X ? s.setDrug(this.drug, this.bends) : s.setDrug(this.drug))); },
+  setBend(j) {
+    if (this.busy()) return;
+    const order = ['S', 'L', 'R']; this.bends[j] = order[(order.indexOf(this.bends[j]) + 1) % 3];
+    this.applyDrug(); this.redock(); Sound.place();
+    if (this.phase === 'result') this.phase = 'design';
+    this.renderBench(); this.renderGoals();
+  },
+  openRace() {
+    if (this.mode === 'race' && this.race && !this.race.over) { this.render(); return; }
+    this.startRace();
+  },
+  startRace() {
+    this.cancel(); this.mode = 'race'; this.M = null; this.stage = 0;
+    const H = pick(RACE_HUMANS), all = raceStates(H), comp = { O: 'O', P: 'P', '+': '-', '-': '+' };
+    const easy = all.filter(b => { const n = b.split('').map(c => comp[c]).join(''); return predicted(n, b) >= RACE_SOLVE.bact && predicted(n, H) <= RACE_SOLVE.human; });
+    const starts = easy.length ? easy : all;
+    this.race = { gen: 1, spare: CONFIG.raceSpareTests, tests: 0, t0: null, recent: [], over: false, won: false, famed: false };
+    const b = pick(starts); this.race.recent.push(b);
+    this.setup(b, H, [], TYPE_ORDER);
+    this.render();
+  },
+  setup(bact, human, rules, parts) {
+    this.X = null; this.reps = this.classicReps; this.bends = [];
+    this.bact = bact; this.human = human; this.rules = rules; this.parts = parts;
+    this.drug = ['P', 'P', 'P']; this.sel = 0; this.tests = 0; this.history = []; this.phase = 'design'; this.last = null; this.assay = null; this.after = null;
+    this.flash = { spot: -1, t: -1e9 }; this.mutation = null; this.note = ''; this.evoStep = null;
+    ['bact', 'human'].forEach(side => this.reps[side].forEach(s => { s.setPocket((side === 'bact' ? bact : (human || 'PPP')).split('')); s.setDrug(this.drug); }));
+    this.redock();
+  },
+  redock() { ['bact', 'human'].forEach(side => { const s = this.shown(side); if (s) { s.reset(); s.dock(); } }); },
+  cancel() { this.assay = null; clearTimeout(this.timer); this.onUp(); },
+  setDrugPart(k, t) {
+    if (this.busy()) return;
+    this.drug[k] = t; if (this.X) this.applyDrug(); else ['bact', 'human'].forEach(side => this.reps[side].forEach(s => s.setDrug(this.drug)));
+    this.redock(); Sound.place(); this.sel = Math.min(this.drug.length - 1, k + 1);
+    if (this.phase === 'result') this.phase = 'design';
+    this.renderBench(); this.renderGoals();
+  },
+  setPocket(side, pk) { this[side] = pk; this.reps[side].forEach(s => s.setPocket(pk.split(''))); },
+  busy() { return !!this.assay || ['evolving', 'done', 'over'].includes(this.phase); },
+
+  /* ----- the test: 8 replicas of each enzyme, pooled ----- */
+  test(counted, onDone) {
+    if (this.assay) return;
+    if (counted && this.busy()) return;
+    this.onUp();
+    const frames = Math.round(SIM.T / (160 * SIM.dt)), sides = this.human ? ['bact', 'human'] : ['bact'];
+    sides.forEach(side => this.reps[side].forEach(s => { s.reset(); s.dock(); }));
+    const code = {}; sides.forEach(side => code[side] = Array.from({ length: SIM.replicas }, () => new Uint8Array(frames)));
+    this.assay = { f: 0, frames, sides, code, inside: { bact: 0, human: 0 }, counted, onDone, drug: this.drug.join(''), bends: this.bends.join('') };
+    if (counted) { this.note = ''; this.tests++; if (this.race) { this.race.tests++; if (this.race.t0 == null) this.race.t0 = performance.now(); } }
+    Sound.start(); this.buildResults(); this.renderBench(); this.renderGoals();
+    if (window.innerWidth <= 860 && current === 'lab') $('#screen-lab').scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+    $('#prog').hidden = false; this.setNote(`Simulating ${SIM.replicas} copies of each enzyme…`);
+  },
+  stepAssay() {
+    const a = this.assay;
+    a.sides.forEach(side => this.reps[side].forEach((s, r) => { s.step(160); const b = s.bound() ? 1 : 0; a.code[side][r][a.f] = b; a.inside[side] += b; }));
+    a.f++;
+    $('#prog i').style.width = (100 * a.f / a.frames).toFixed(1) + '%';
+    if (a.f % 4 === 0 || a.f >= a.frames) this.updateResults(false);
+    if (a.f >= a.frames) this.finishAssay();
+  },
+  finishAssay() {
+    const a = this.assay, n = a.frames * SIM.replicas;
+    const res = { drug: a.drug, bends: a.bends, bact: Math.round(100 * a.inside.bact / n), human: a.sides.includes('human') ? Math.round(100 * a.inside.human / n) : null, pocket: this.bact, humanPocket: this.human };
+    res.blocked = res.bact >= SIM.passBact;
+    res.safe = res.human == null || res.human <= SIM.passHuman;
+    res.rules = this.rules.map(k => ({ key: k, ok: RULES[k].test(a.drug.split('')) }));
+    res.pass = res.blocked && res.safe && res.rules.every(r => r.ok);
+    res.counted = a.counted;
+    this.last = { res, code: a.code, frames: a.frames }; this.assay = null;
+    $('#prog').hidden = true; this.setNote('');
+    if (a.counted) { this.history.unshift(res); this.history.length = Math.min(this.history.length, 8); }
+    this.updateResults(true);
+    if (a.onDone) a.onDone(res); else this.afterTest(res);
+    this.render();
+    const target = $('#stageBox').children.length ? $('#stageBox') : $('#results');
+    if (target && target.scrollIntoView) target.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'nearest' });
+  },
+  afterTest(res) {
+    if (this.mode === 'mission') {
+      if (!res.pass) { Sound.lose(); this.phase = 'result'; return; }
+      Sound.win();
+      if (this.M.mutation && this.stage === 0) { this.phase = 'stagewin'; return; }
+      this.phase = 'done';
+      const stages = this.par(), stars = this.tests <= stages ? 3 : this.tests <= stages + 2 ? 2 : 1;
+      this.starsWon = stars; progress.set(this.M.key, stars);
+    } else {
+      const R = this.race;
+      if (!res.pass) {
+        Sound.lose();
+        if (R.spare <= 0) { this.raceOver(false); return; }
+        R.spare--; this.phase = 'result'; return;
+      }
+      Sound.win();
+      if (R.gen >= CONFIG.raceGenerations) { this.raceOver(true); return; }
+      this.phase = 'evolving'; this.evoStep = 'waiting'; this.timer = setTimeout(() => this.evolveRace(), 1800);
+    }
+  },
+
+  /* ----- evolution ----- */
+  evolveMission() {
+    const mu = this.M.mutation, pk = this.bact.split(''); pk[mu.spot] = mu.to;
+    this.mutate(mu.spot, pk.join(''));
+    this.timer = setTimeout(() => this.test(false, res => {
+      this.stage = 1; this.phase = 'design';
+      if (res.pass) this.note = 'Your molecule still works against the mutant this time, but the bacteria are catching up. Redesign it to fit the new pocket properly.';
+    }), 1600);
+  },
+  evolveRace(retry) {
+    const R = this.race, H = this.human, cur = this.drug.join(''), b = this.bact, opts = [], fallback = [];
+    for (let k = 0; k < 3; k++) for (const t of TYPE_ORDER) {
+      if (t === b[k]) continue;
+      const nb = b.slice(0, k) + t + b.slice(k + 1);
+      if (!raceOK(nb, H) || R.recent.includes(nb)) continue;
+      fallback.push([predicted(cur, nb), k, nb]);
+      if (predicted(cur, nb) <= 45) opts.push([k, nb]);
+    }
+    let k, nb;
+    if (opts.length) [k, nb] = pick(opts);
+    else if (fallback.length) { fallback.sort((x, y) => x[0] - y[0]); [, k, nb] = fallback[0]; }
+    else if (!retry) { R.recent = []; return this.evolveRace(true); }
+    else { this.phase = 'design'; this.note = 'The bacteria couldn\'t find a way to escape your molecule this time!'; R.gen++; if (R.gen > CONFIG.raceGenerations) this.raceOver(true); this.render(); return; }
+    R.recent.push(nb); if (R.recent.length > 3) R.recent.shift();
+    this.mutate(k, nb); R.gen++;
+    this.timer = setTimeout(() => this.test(false, res => {
+      if (res.pass) {
+        this.note = 'Lucky! Your molecule still works against this mutant. The bacteria will try again.';
+        if (R.gen >= CONFIG.raceGenerations) { this.raceOver(true); return; }
+        this.phase = 'evolving'; this.evoStep = 'waiting'; this.timer = setTimeout(() => this.evolveRace(), 2200);
+      } else this.phase = 'design';
+    }), 1600);
+  },
+  mutate(spot, newPocket) {
+    const from = this.bact[spot], to = newPocket[spot];
+    this.setPocket('bact', newPocket); this.flash = { spot, t: performance.now() };
+    this.mutation = { spot, from, to }; this.phase = 'evolving'; this.evoStep = 'mutated'; this.note = '';
+    Sound.mutate(); this.setNote(`Mutation! ${TYPES[from].res} → ${TYPES[to].res} at the ${SPOTS[spot].toLowerCase()} spot`);
+    this.render();
+    setTimeout(() => { const c = $(`#pmap .chip[data-row="bact"][data-k="${spot}"]`); if (c) c.classList.add('flash'); }, 30);
+  },
+  raceOver(won) {
+    const R = this.race; R.over = true; R.won = won; R.time = R.t0 ? (performance.now() - R.t0) / 1000 : 0;
+    R.survived = won ? CONFIG.raceGenerations : R.gen - 1; this.phase = 'over';
+    if (won) Sound.win();
+  },
+
+  /* ----- rendering the side panel ----- */
+  render() {
+    const race = this.mode === 'race', M = this.M;
+    $('#labBack').textContent = race ? 'Start screen' : 'All missions';
+    if (race) {
+      $('#labMeta').textContent = `Survive ${CONFIG.raceGenerations} generations`;
+      $('#labTitle').textContent = 'Superbug arms race';
+      $('#labBrief').textContent = this.race.over ? (this.race.won ? 'You kept the superbug in check for every generation. Can you do it in fewer tests?' : 'The bacteria evolved faster than you could keep up. Have another go!')
+        : this.race.gen === 1 && !this.tests ? 'Block the bacterial enzyme without touching the human one. Every time you succeed, the bacteria evolve a new pocket. A failed test uses up a spare test: run out, and the superbug wins.'
+        : 'The bacteria have evolved. Look at what changed in their pocket, then redesign your molecule.';
+      $('#labFact').innerHTML = '<strong>Real world:</strong> bacteria can only change their pocket in ways that keep their enzyme working. In this game they can\'t make it entirely water-loving.';
+    } else {
+      $('#labMeta').textContent = `${M.expert ? 'Expert mission' : 'Mission'} ${this.list().indexOf(M) + 1} of ${this.list().length}: ${M.target}`;
+      $('#labTitle').textContent = M.name;
+      $('#labBrief').textContent = this.stage ? M.mutation.brief : M.brief;
+      $('#labFact').innerHTML = M.fact;
+    }
+    $('#stage').classList.toggle('two', !!this.human);
+    const ST = this.X ? XSTICKS : STICKS;
+    $('#cheat').innerHTML = Object.keys(ST).filter(t => this.parts.includes(t)).map(t => `<tr><td>${ico(t)} ${TYPES[t].name}</td><td>${ST[t]}</td></tr>`).join('');
+    $('#howto').textContent = this.X ? (this.X.bendable ? 'Tap a spot on your molecule, then pick a part. Tap the joints underneath to bend the molecule so its shape matches the pocket.' : 'Tap a spot on your molecule, then pick a part. Ring parts hang below the molecule, so they need a deep spot.')
+      : 'Tap a spot on your molecule, then pick a part for it. Each spot sits next to the amino acid above it.';
+    this.renderHud(); this.renderGoals(); this.renderBench(); this.renderStageBox(); this.renderNotebook();
+    if (this.last && !this.assay) { if (!$('#results .res')) this.buildResults(true); this.updateResults(true); }
+    else if (!this.assay) $('#results').innerHTML = '';
+  },
+  renderHud() {
+    const hud = $('#raceHud'), R = this.race;
+    if (!R) { hud.hidden = true; return; }
+    hud.hidden = false;
+    const flask = full => `<svg viewBox="0 0 18 20" aria-hidden="true"><path d="M6 1h6M7 1v6L2 17a1.5 1.5 0 0 0 1.3 2h11.4A1.5 1.5 0 0 0 16 17L11 7V1" fill="${full ? '#F5B041' : 'none'}" stroke="${full ? '#F5B041' : '#2A6283'}" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
+    hud.innerHTML = `<span class="lbl">Generation ${Math.min(R.gen, CONFIG.raceGenerations)} of ${CONFIG.raceGenerations}</span>
+      <span class="gens" aria-hidden="true">${Array.from({ length: CONFIG.raceGenerations }, (_, i) => `<span class="g ${i < (R.over ? R.survived : R.gen - 1) ? 'done' : i === R.gen - 1 && !R.over ? 'now' : ''}"></span>`).join('')}</span>
+      <span>Spare tests <span class="flasks" role="img" aria-label="${R.spare} spare tests">${Array.from({ length: CONFIG.raceSpareTests }, (_, i) => flask(i < R.spare)).join('')}</span></span>
+      <span>Tests used <span class="stat">${R.tests}</span></span>
+      ${this.mutation && !R.over ? `<span class="lbl mut">Latest mutation: ${TYPES[this.mutation.from].res} → ${TYPES[this.mutation.to].res} at the ${SPOTS[this.mutation.spot].toLowerCase()} spot</span>` : ''}`;
+  },
+  renderGoals() {
+    const L = this.last && this.last.res, fresh = L && L.drug === this.drug.join('') && (L.bends || '') === this.bends.join('') && L.pocket === this.bact && !this.assay;
+    const item = (state, txt) => `<li class="${state}"><span class="mk" aria-hidden="true">${state === 'ok' ? '✓' : state === 'bad' ? '✕' : ''}</span><span>${txt}${state ? `<span class="sr">: ${state === 'ok' ? 'done' : 'not yet'}</span>` : ''}</span></li>`;
+    let h = item(fresh ? (L.blocked ? 'ok' : 'bad') : '', `Stays in the <strong>bacterial</strong> pocket at least ${SIM.passBact}% of the time`);
+    if (this.human) h += item(fresh ? (L.safe ? 'ok' : 'bad') : '', `Stays in the <strong>human</strong> pocket no more than ${SIM.passHuman}% of the time`);
+    this.rules.forEach(k => { h += item(RULES[k].test(this.drug) ? 'ok' : 'bad', RULES[k].label); });
+    if (this.mode === 'mission') h += `<li class="tests">Tests used: ${this.tests}. Solve it in ${this.par()} for three stars.</li>`;
+    $('#goals').innerHTML = h;
+  },
+  renderBench() {
+    if (this.X) return this.renderBenchX();
+    $('#pmap').style.gridTemplateColumns = ''; $('#pmap').classList.remove('x', 'n5'); $('#shapeWrap').hidden = true;
+    const busy = this.busy(), H = this.human;
+    let h = '<span></span>' + SPOTS.map(s => `<span class="hd">${s}</span>`).join('');
+    const chips = (row, pk) => pk.split('').map((t, k) => `<span class="chip ${row === 'human' && H[k] !== this.bact[k] ? 'diff' : ''}" data-row="${row}" data-k="${k}" aria-label="${SPOTS[k]} spot: ${TYPES[t].resFull}, ${TYPES[t].kind}">${ico(t)}${TYPES[t].res}</span>`).join('');
+    h += `<span class="rl">Bacteria</span>${chips('bact', this.bact)}`;
+    if (H) h += `<span class="rl">Human</span>${chips('human', H)}`;
+    h += '<span class="rl">Your molecule</span>' + this.drug.map((t, k) =>
+      `<button type="button" class="slot" data-k="${k}" aria-pressed="${k === this.sel}" ${busy ? 'disabled' : ''} aria-label="${SPOTS[k]} part of your molecule: ${TYPES[t].name.toLowerCase()}. Select to change it.">${ico(t)}</button>`).join('');
+    $('#pmap').innerHTML = h;
+    $$('#pmap .slot').forEach(b => b.addEventListener('click', () => { this.sel = +b.dataset.k; Sound.tick(); this.renderBench(); $(`#pmap .slot[data-k="${this.sel}"]`).focus(); }));
+    this.benchTail(busy);
+  },
+  benchTail(busy) {
+    $('#palette').innerHTML = this.parts.map(t => `<button type="button" class="pbtn" data-t="${t}" ${busy ? 'disabled' : ''}>${ico(t)}<span><b>${TYPES[t].name}</b><small>${TYPES[t].group}</small></span></button>`).join('');
+    $$('#palette .pbtn').forEach(b => b.addEventListener('click', () => this.setDrugPart(this.sel, b.dataset.t)));
+    const tb = $('#testBtn'); tb.disabled = busy; tb.textContent = this.assay ? 'Simulating…' : 'Test in a simulation';
+    $('#benchWrap').hidden = this.phase === 'over';
+  },
+  renderBenchX() {
+    const busy = this.busy(), M = this.X, N = this.drug.length, B = M.bact.sites, H = M.human && M.human.sites, pm = $('#pmap');
+    pm.style.gridTemplateColumns = `auto repeat(${N}, minmax(0, 1fr))`; pm.classList.add('x'); pm.classList.toggle('n5', N >= 5);
+    const diff = (a, b) => a.t !== b.t || !!a.deep !== !!b.deep;
+    const chip = (row, st, k) => `<span class="chip ${st.deep ? 'deep' : ''} ${row === 'human' && diff(st, B[k]) ? 'diff' : ''}" data-row="${row}" data-k="${k}" aria-label="Spot ${k + 1}: ${RESFULL[st.res] || TYPES[st.t].resFull}, ${TYPES[st.t].kind}${st.deep ? ', deep spot' : ''}">${ico(st.t)}<span class="cn">${esc(st.res)}${st.deep ? '<small>deep</small>' : ''}</span></span>`;
+    let h = '<span></span>' + B.map((_, k) => `<span class="hd">Spot ${k + 1}</span>`).join('');
+    h += `<span class="rl">Bacteria</span>${B.map((st, k) => chip('bact', st, k)).join('')}`;
+    if (H) h += `<span class="rl">Human</span>${H.map((st, k) => chip('human', st, k)).join('')}`;
+    h += '<span class="rl">Your molecule</span>' + this.drug.map((t, k) =>
+      `<button type="button" class="slot" data-k="${k}" aria-pressed="${k === this.sel}" ${busy ? 'disabled' : ''} aria-label="Spot ${k + 1} of your molecule: ${TYPES[t].name.toLowerCase()}. Select to change it.">${ico(t)}</button>`).join('');
+    if (M.bendable) h += '<span class="rl">Bends</span>' + this.drug.map((_, k) => {
+      if (k === 0 || k === N - 1) return '<span></span>';
+      const b = BEND_TXT[this.bends[k - 1]];
+      return `<button type="button" class="bend" data-j="${k - 1}" ${busy ? 'disabled' : ''} aria-label="Joint at spot ${k + 1}: ${b.label}. Select to change it.">${b.svg}<small>${b.label}</small></button>`;
+    }).join('');
+    pm.innerHTML = h;
+    $$('#pmap .slot').forEach(b => b.addEventListener('click', () => { this.sel = +b.dataset.k; Sound.tick(); this.renderBench(); $(`#pmap .slot[data-k="${this.sel}"]`).focus(); }));
+    $$('#pmap .bend').forEach(b => b.addEventListener('click', () => { const j = +b.dataset.j; this.setBend(j); const nb = $(`#pmap .bend[data-j="${j}"]`); if (nb) nb.focus(); }));
+    $('#shapeWrap').hidden = !M.bendable; if (M.bendable) this.drawShape();
+    this.benchTail(busy);
+  },
+  drawShape() {   // the pocket's shape (dotted) and the molecule's shape as currently bent (solid)
+    const cv = $('#shapeCv'), { ctx, w, h } = fitCanvas(cv), M = this.X, N = this.drug.length; if (!w) return;
+    this.shapeW = w; ctx.clearRect(0, 0, w, h);
+    const D = dockPose(M.bact.bends.split(''), N), mol = alignTo(buildShape(this.bends, N), D);
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; D.concat(mol).forEach(p => { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); });
+    const sc = Math.min((w - 40) / (x1 - x0 + 1), (h - 24) / (y1 - y0 + 1)), cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    const X = p => w / 2 + (p[0] - cx) * sc, Y = p => h / 2 - (p[1] - cy) * sc, r = sc * 0.36;
+    ctx.save(); ctx.setLineDash([4, 4]); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(168,197,204,0.75)';
+    ctx.beginPath(); D.forEach((p, k) => ctx[k ? 'lineTo' : 'moveTo'](X(p), Y(p))); ctx.stroke();
+    D.forEach(p => { ctx.beginPath(); ctx.arc(X(p), Y(p), r, 0, TAU); ctx.stroke(); }); ctx.restore();
+    const ok = this.bends.join('') === M.bact.bends;
+    ctx.strokeStyle = ok ? '#9BE7B0' : '#EAF6F4'; ctx.lineWidth = 3; ctx.lineJoin = ctx.lineCap = 'round';
+    ctx.beginPath(); mol.forEach((p, k) => ctx[k ? 'lineTo' : 'moveTo'](X(p), Y(p))); ctx.stroke();
+    mol.forEach((p, k) => drawPart(ctx, X(p), Y(p), r * 0.8, this.drug[k] === 'R' ? 'N' : this.drug[k], false));
+    $('#shapeMsg').textContent = ok ? 'Your molecule\'s shape matches the pocket.' : 'Dotted: the pocket. Solid: your molecule. Bend it to match.';
+  },
+  renderStageBox() {
+    const box = $('#stageBox'), R = this.race, M = this.M; let h = '';
+    if (this.note) h += `<div class="box"><p style="margin:0">${esc(this.note)}</p></div>`;
+    if (this.phase === 'stagewin') {
+      h += `<div class="box"><p class="box-title">It works!</p><p>Your molecule blocks the bacterial enzyme. But bacteria multiply fast, and every so often a mutation changes one of their amino acids. What happens if one changes inside the pocket?</p><button class="btn primary" id="evolveBtn" type="button">Let the bacteria evolve</button></div>`;
+    } else if (this.mode === 'mission' && this.phase !== 'done' && this.mutation) {
+      h += `<div class="box warn"><p class="box-title">Superbug!</p><p style="margin:0">${esc(M.mutation.event)}</p></div>`;
+    } else if (this.phase === 'done') {
+      const L = this.list(), nxt = L[L.indexOf(M) + 1];
+      h += `<div class="box"><p class="box-title">Mission complete!</p><div class="stars" role="img" aria-label="${this.starsWon} of 3 stars">${starsSVG(this.starsWon)}</div>
+        <p>You designed a working antibiotic in ${this.tests} test${this.tests === 1 ? '' : 's'}.${this.starsWon < 3 ? ' Try again for three stars by thinking it through before you test.' : ''}</p>
+        <p class="small">${M.done}</p>
+        <div class="btnrow">${nxt ? '<button class="btn primary" id="nextBtn" type="button">Next mission</button>' : M.expert ? '<button class="btn primary" data-go="missions" type="button">All missions</button>' : '<button class="btn primary" data-go="race" type="button">Try the arms race</button><button class="btn" id="expertBtn" type="button">Expert missions</button>'}<button class="btn" id="againBtn" type="button">Play again</button></div></div>`;
+    } else if (R && this.phase === 'evolving' && this.evoStep === 'waiting') {
+      h += `<div class="box"><p class="box-title">Blocked!</p><p style="margin:0">You beat generation ${R.gen}. The bacteria are evolving…</p></div>`;
+    } else if (R && this.phase !== 'over' && this.mutation) {
+      const mu = this.mutation;
+      h += `<div class="box warn"><p class="box-title">Generation ${R.gen}</p><p style="margin:0">A mutation swapped ${TYPES[mu.from].resFull} (${TYPES[mu.from].kind}) for ${TYPES[mu.to].resFull} (${TYPES[mu.to].kind}) at the ${SPOTS[mu.spot].toLowerCase()} spot.</p></div>`;
+    } else if (R && this.phase === 'over') {
+      h += `<div class="box ${R.won ? '' : 'warn'}"><p class="box-title">${R.won ? 'You beat the superbug!' : 'The superbug wins'}</p>
+        <p>${R.won ? `You held off all ${CONFIG.raceGenerations} generations` : `You held off ${R.survived} generation${R.survived === 1 ? '' : 's'}`} using ${R.tests} test${R.tests === 1 ? '' : 's'} in ${fmtTime(R.time)}.</p>
+        ${R.survived > 0 && !R.famed ? `<form id="fameForm"><label for="fameName">Add your name to the hall of fame</label><div class="row"><input type="text" id="fameName" maxlength="14" autocomplete="off" placeholder="Nickname"><button class="btn primary" type="submit">Add</button></div><p class="small" style="margin:6px 0 0">Please use a nickname, not your full name.</p></form>` : ''}
+        ${R.famed ? '<p>You\'re on the board. <button class="link-btn" data-go="fame" type="button">See the hall of fame</button></p>' : ''}
+        <div class="btnrow"><button class="btn primary" id="raceAgain" type="button">Play again</button></div></div>`;
+    }
+    box.innerHTML = h;
+    const on = (id, f) => { const el = $('#' + id); if (el) el.addEventListener('click', f); };
+    on('evolveBtn', () => { this.note = ''; this.evolveMission(); });
+    on('nextBtn', () => { const L = this.list(); this.openMission(L[L.indexOf(M) + 1]); $('#screen-lab').scrollTop = 0; });
+    on('expertBtn', () => { this.openMission(XMISSIONS[0]); $('#screen-lab').scrollTop = 0; });
+    on('againBtn', () => this.openMission(M));
+    on('raceAgain', () => { this.startRace(); $('#screen-lab').scrollTop = 0; });
+    const f = $('#fameForm');
+    if (f) f.addEventListener('submit', e => {
+      e.preventDefault(); const nm = $('#fameName').value.replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 14);
+      if (!nm) { $('#fameName').focus(); return; }
+      Fame.add({ name: nm, gens: R.survived, tests: R.tests, time: R.time, at: Date.now() }); R.famed = true; this.renderStageBox();
+    });
+  },
+  renderNotebook() {
+    const wrap = $('#notebookWrap'), list = $('#notebook');
+    wrap.hidden = !this.history.length;
+    list.innerHTML = this.history.map((r, i) => `<li><button type="button" data-i="${i}" aria-label="Load design ${r.drug.split('').map(t => TYPES[t].name).join(', ')}">
+      <span class="dots" aria-hidden="true">${r.drug.split('').map(ico).join('')}${this.X && this.X.bendable ? `<span class="nb-bends">${r.bends.split('').map(b => BEND_TXT[b].short).join('')}</span>` : ''}</span>
+      <span>Bacteria ${r.bact}%${r.human != null ? `, human ${r.human}%` : ''}</span><span class="${r.pass ? 'ok' : 'bad'}">${r.pass ? 'Pass' : 'Fail'}</span></button></li>`).join('');
+    $$('#notebook button').forEach(b => b.addEventListener('click', () => {
+      if (this.busy()) return; const r = this.history[+b.dataset.i];
+      r.drug.split('').forEach((t, k) => { if (this.parts.includes(t)) this.drug[k] = t; });
+      if (this.X) { if (this.X.bendable && r.bends) this.bends = r.bends.split(''); this.applyDrug(); }
+      else ['bact', 'human'].forEach(side => this.reps[side].forEach(s => s.setDrug(this.drug)));
+      this.redock(); Sound.place(); this.renderBench(); this.renderGoals();
+    }));
+  },
+
+  /* ----- results: bars, replica barcodes, verdicts and hints ----- */
+  buildResults(fromLast) {
+    const sides = fromLast ? (this.last.res.human != null ? ['bact', 'human'] : ['bact']) : this.assay.sides;
+    $('#results').innerHTML = sides.map(side => `<div class="res" data-side="${side}">
+      <div class="res-h"><span>${side === 'bact' ? 'Bacterial enzyme' : 'Human enzyme'}</span><b class="pct">0%</b></div>
+      <div class="bar"><i style="width:0;background:${side === 'bact' ? '#9BE7B0' : '#FF7A6B'}"></i><span class="tick" style="left:calc(${side === 'bact' ? SIM.passBact : SIM.passHuman}% - 1px)" title="Goal"></span></div>
+      <canvas class="barcode" aria-label="${SIM.replicas} replica simulations: bright where the molecule was in the pocket"></canvas><p class="verdict"></p></div>`).join('') + '<ul class="hints"></ul>';
+  },
+  updateResults(final) {
+    const src = this.assay || this.last; if (!src) return;
+    const code = src.code, frames = src.frames, f = this.assay ? this.assay.f : frames;
+    Object.keys(code).forEach(side => {
+      const el = $(`#results .res[data-side="${side}"]`); if (!el) return;
+      let ins = 0; code[side].forEach(row => { for (let i = 0; i < f; i++) ins += row[i]; });
+      const pct = f ? Math.round(100 * ins / (f * SIM.replicas)) : 0;
+      $('.pct', el).textContent = pct + '%'; $('.bar i', el).style.width = pct + '%';
+      this.drawBarcode($('.barcode', el), code[side], f, frames, side);
+      const v = $('.verdict', el);
+      if (final && this.last) {
+        const r = this.last.res, ok = side === 'bact' ? r.blocked : r.safe; v.className = 'verdict ' + (ok ? 'ok' : 'bad');
+        v.textContent = side === 'bact' ? (ok ? 'Blocks the bacterial enzyme' : r.bact >= 50 ? 'Falls out too often' : 'Doesn\'t stay in the pocket')
+          : (ok ? 'Leaves the human enzyme alone' : 'Sticks to the human enzyme: side effects');
+      } else { v.textContent = ''; v.className = 'verdict'; }
+    });
+    const hl = $('#results .hints');
+    if (hl) hl.innerHTML = final && this.last && !this.last.res.pass && this.last.res.counted ? this.hints(this.last.res).map(x => `<li>${x}</li>`).join('') : '';
+  },
+  drawBarcode(cv, rows, f, frames, side) {
+    const { ctx, w, h } = fitCanvas(cv), R = rows.length, gap = 2, rh = (h - gap * (R - 1)) / R, on = side === 'bact' ? '#9BE7B0' : '#FF7A6B';
+    ctx.clearRect(0, 0, w, h);
+    rows.forEach((row, r) => {
+      const y = r * (rh + gap); ctx.fillStyle = '#143A55'; ctx.fillRect(0, y, w, rh);
+      let i = 0;
+      while (i < f) { let j = i; while (j < f && row[j] === row[i]) j++; ctx.fillStyle = row[i] ? on : '#1D4B66'; ctx.fillRect(w * i / frames, y, Math.max(1, w * (j - i) / frames), rh); i = j; }
+    });
+  },
+  hints(res) {
+    if (this.X) return this.xhints(res);
+    const out = [], d = res.drug.split(''), pk = res.pocket.split(''), strong = [];
+    const say = (k, part, resT) => {
+      const P = TYPES[part], Rt = TYPES[resT], spot = `<strong>${SPOTS[k]}:</strong> `;
+      if (part === resT && (part === '+' || part === '-')) return spot + `your ${P.kind} part and ${Rt.res} are both ${P.kind}, so they push apart.`;
+      if (part === 'O') return spot + `your oily part sits next to ${Rt.res}, which is ${Rt.kind}. Oily parts only like oily spots.`;
+      if (resT === 'O') return spot + `your ${P.kind} part sits next to oily ${Rt.res}. ${P.name} parts don't like oily spots.`;
+      return spot + `your ${P.kind} part only sticks weakly to ${Rt.res}.`;
+    };
+    if (!res.blocked) {
+      const bad = [], weak = [];
+      d.forEach((t, k) => { const e = pairEps(t, pk[k]); if (e >= 1.4) strong.push(k); else if (e < 0) bad.push(k); else weak.push(k); });
+      bad.forEach(k => out.push(say(k, d[k], pk[k])));
+      if (strong.length >= 2 && !bad.length) out.push('So close! Two strong matches and one weak one. The jiggling is random, so you could test again, or look for a stronger match.');
+      else if (strong.length < 2) { weak.forEach(k => { if (out.length < 2) out.push(say(k, d[k], pk[k])); }); out.push('Strong matches are oily next to oily, and positive next to negative. You need at least two.'); }
+    }
+    if (!res.safe && res.humanPocket) {
+      const shared = d.map((t, k) => pairEps(t, res.humanPocket[k]) >= 1.4 ? SPOTS[k].toLowerCase() : null).filter(Boolean);
+      out.push(`Your molecule fits the human pocket too${shared.length ? ` (at the ${shared.join(' and ')} spot${shared.length > 1 ? 's' : ''})` : ''}. Build on the spots where the two pockets are different: they're outlined in the map.`);
+    }
+    res.rules.forEach(r => { if (!r.ok) out.push(RULES[r.key].hint); });
+    return out.slice(0, 3);
+  },
+  xsay(part, st) {   // why a part and a spot don't get on (expert pockets)
+    const P = TYPES[part], R = st.res, rt = st.t;
+    if (part === 'R') return `your ring sits on ${R}, which is ${TYPES[rt].kind}. Rings are greasy: they like flat rings, positive spots and oily spots.`;
+    if (rt === 'A') return part === 'O' ? `oily parts stick to the flat ring of ${R}, but a positive part would stick harder (cation–\u2060π).`
+      : `${R} has a flat, greasy ring that pushes ${P.kind} parts away. A positive part would sit on it nicely (cation–\u2060π).`;
+    if (part === rt && (part === '+' || part === '-')) return `your ${P.kind} part and ${R} are both ${P.kind}, so they push apart.`;
+    if (part === 'O') return `your oily part sits next to ${R}, which is ${TYPES[rt].kind}. Oily parts only like oily spots and flat rings.`;
+    if (rt === 'O') return `your ${P.kind} part sits next to oily ${R}. ${P.name} parts don't like oily spots.`;
+    return `your ${P.kind} part only sticks weakly to ${R}.`;
+  },
+  xhints(res) {
+    const out = [], d = res.drug.split(''), M = this.X, B = M.bact.sites, sp = k => `<strong>Spot ${k + 1}:</strong> `;
+    const shapeOK = !M.bendable || res.bends === M.bact.bends;
+    if (!res.blocked) {
+      const bad = [], weak = [];
+      if (!shapeOK) bad.push('Your molecule is the wrong shape for this pocket, so it bumps into the walls. Change the bends until your shape matches the dotted one.');
+      d.forEach((t, k) => {
+        const st = B[k];
+        if (t === 'R' && !st.deep) bad.push(sp(k) + `there's no room for a ring here: ${st.res} is in the way. Rings only fit deep spots.`);
+        else if (t !== 'R' && st.deep) bad.push(sp(k) + `this is a deep spot. Only a ring hangs down far enough to reach ${st.res}.`);
+        else { const e = pairEpsX(t, st.t); if (e < 0) bad.push(sp(k) + this.xsay(t, st)); else if (e < 1.4) weak.push(sp(k) + this.xsay(t, st)); }
+      });
+      bad.forEach(x => out.push(x));
+      if (!bad.length) { weak.forEach(x => { if (out.length < 2) out.push(x); }); out.push('In these longer pockets every spot counts. The strongest matches are a ring on a flat ring (π–\u2060π), a positive part on a flat ring or a ring on a positive spot (cation–\u2060π), positive with negative, and oily with oily.'); }
+    }
+    if (!res.safe && res.humanPocket) {
+      const Hs = res.humanPocket.sites, diffs = Hs.map((h, k) => (h.t !== B[k].t || !!h.deep !== !!B[k].deep) ? 'spot ' + (k + 1) : null).filter(Boolean);
+      out.push(`Your molecule fits the human pocket too. The two pockets differ at ${diffs.join(' and ')} (outlined in the map): choose parts there that suit the bacterial pocket but not the human one.`);
+    }
+    res.rules.forEach(r => { if (!r.ok) out.push(RULES[r.key].hint); });
+    return out.slice(0, 3);
+  },
+  setNote(t) { const n = $('#stageNote'); n.hidden = !t; n.textContent = t; },
+
+  /* ----- canvas ----- */
+  bindCanvas() {
+    const cv = $('#labCanvas');
+    cv.addEventListener('pointerdown', e => {
+      if (this.assay) return;
+      const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+      this.panels.forEach(P => {
+        if (mx < P.px0 || mx > P.px0 + P.pw || my < P.py0 || my > P.py0 + P.ph) return;
+        const wx = (mx - P.X0) / P.s, wy = -(my - P.Y0) / P.s, sim = this.shown(P.side); let bi = -1, bd = 0.9 * 0.9;
+        const i0 = sim.gen ? sim.np : 26, i1 = sim.gen ? sim.np + sim.nd : 29;
+        for (let i = i0; i < i1; i++) { const d = (sim.x[i] - wx) ** 2 + (sim.y[i] - wy) ** 2; if (d < bd) { bd = d; bi = i; } }
+        if (bi >= 0) { sim.grab = { i: bi, x: wx, y: wy }; this.grab = P; cv.setPointerCapture(e.pointerId); e.preventDefault(); }
+      });
+    });
+    cv.addEventListener('pointermove', e => {
+      if (!this.grab) return; const P = this.grab, r = cv.getBoundingClientRect(), sim = this.shown(P.side);
+      sim.grab.x = (e.clientX - r.left - P.X0) / P.s; sim.grab.y = -(e.clientY - r.top - P.Y0) / P.s;
+    });
+    const end = () => this.onUp(); cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  },
+  onUp() { if (!this.grab) return; this.shown(this.grab.side).grab = null; this.grab = null; },
+  tick() {
+    if (this.X && this.X.bendable) { const cw = $('#shapeCv').clientWidth; if (cw && cw !== this.shapeW) this.drawShape(); }   // first time the panel is visible
+    if (this.assay) this.stepAssay();
+    else { this.shown('bact').step(40); if (this.human) this.shown('human').step(40); }
+    const cv = $('#labCanvas'), { ctx, w, h } = fitCanvas(cv); ctx.clearRect(0, 0, w, h);
+    const sides = this.human ? ['bact', 'human'] : ['bact'], side2 = w >= 640 && w / h > 1.05;
+    let box = CLASSIC_BOX;   // both panels share one scale so the pockets can be compared
+    if (this.X) { const bs = sides.map(sd => this.shown(sd).box), top = Math.max(...bs.map(b => b.top)), bot = Math.min(...bs.map(b => b.top - b.h)); box = { w: Math.max(...bs.map(b => b.w)), top, h: top - bot }; }
+    this.panels = sides.map((side, k) => {
+      const n = sides.length, pw = side2 ? w / n : w, ph = side2 ? h : h / n;
+      const P = panelGeom(side2 ? k * pw : 0, side2 ? 0 : k * ph, pw, ph, 52, 36, box); P.side = side; return P;
+    });
+    this.panels.forEach(P => drawEnzyme(ctx, this.shown(P.side), P, {
+      title: P.side === 'bact' ? 'Bacterial enzyme' : 'Human enzyme', status: true, goodWhenBound: P.side === 'bact',
+      flashSpot: P.side === 'bact' ? this.flash.spot : -1, flashT: this.flash.t
+    }));
+    if (sides.length === 2) {
+      ctx.strokeStyle = 'rgba(234,246,244,0.1)'; ctx.lineWidth = 1; ctx.beginPath();
+      if (side2) { ctx.moveTo(w / 2, 28); ctx.lineTo(w / 2, h - 16); } else { ctx.moveTo(16, h / 2); ctx.lineTo(w - 16, h / 2); } ctx.stroke();
+    }
+  }
+};
+// bacterial pockets the race can use: the enzyme must still work (at most one water-loving spot), and a good answer must exist
+function raceOK(b, H) {
+  if (b.split('').filter(t => t === 'P').length > 1) return false;
+  for (let i = 0; i < 64; i++) { const m = TYPE_ORDER[i >> 4] + TYPE_ORDER[(i >> 2) & 3] + TYPE_ORDER[i & 3]; if (predicted(m, b) >= RACE_SOLVE.bact && predicted(m, H) <= RACE_SOLVE.human) return true; }
+  return false;
+}
+function raceStates(H) { const out = []; for (let i = 0; i < 64; i++) { const b = TYPE_ORDER[i >> 4] + TYPE_ORDER[(i >> 2) & 3] + TYPE_ORDER[i & 3]; if (raceOK(b, H)) out.push(b); } return out; }
+
+/* =====================================================================
+   Science page widgets
+   ===================================================================== */
+function supPow(mant, exp) { return (mant ? mant + ' × ' : '') + '10<sup>' + exp + '</sup>'; }
+function updateMdCalc(t) {
+  const steps = t * 1e15 / CONFIG.timestepFs; $('#mdSteps').innerHTML = bigWords(steps) + ' steps';
+  const days = (t * 1e9) / CONFIG.gpuNsPerDay;
+  const dur = days < 1 / 24 ? `about ${Math.max(1, Math.round(days * 1440))} minutes` : days < 2 ? `about ${Math.round(days * 24)} hours` : days < 365 ? `about ${Math.round(days)} days` : `about ${bigWords(days / 365.25)} years`;
+  $('#mdCost').textContent = `With ${CONFIG.timestepFs}-femtosecond steps. For a small protein in water, one modern graphics card (GPU) might simulate roughly ${CONFIG.gpuNsPerDay} nanoseconds per day, so this would take ${dur}.`;
+}
+function siteHost() { try { return new URL(CONFIG.groupWebsite).host + new URL(CONFIG.groupWebsite).pathname.replace(/\/$/, ''); } catch (e) { return CONFIG.groupWebsite; } }
+function initLearn() {
+  $$('#mdTimeSeg button').forEach(b => b.addEventListener('click', () => { $$('#mdTimeSeg button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); updateMdCalc(+b.dataset.t); }));
+  updateMdCalc(1e-6);
+  $('#chemTable').innerHTML = TYPE_ORDER.map(t => `<tr><td>${ico(t)} ${TYPES[t].name}</td><td>${TYPES[t].group}</td><td>${STICKS[t]}</td></tr>`).join('');
+  $('#aboutBody').innerHTML = CONFIG.aboutParagraphs.map(p => `<p>${esc(p)}</p>`).join('') +
+    (CONFIG.groupWebsite ? `<p><a href="${esc(CONFIG.groupWebsite)}" target="_blank" rel="noopener">Visit our website: ${esc(siteHost())}</a></p>` : '');
+}
+
+/* =====================================================================
+   Hall of fame (arms race)
+   ===================================================================== */
+const Fame = {
+  list: store.get('fame', []),
+  save() { store.set('fame', this.list); },
+  sorted() { return this.list.slice().sort((a, b) => b.gens - a.gens || a.tests - b.tests || a.time - b.time); },
+  best() { return this.sorted()[0] || null; },
+  add(e) { this.list.push(e); this.save(); },
+  remove(i) { this.list.splice(i, 1); this.save(); },
+  render() {
+    const body = $('#fameBody');
+    if (!this.list.length) { body.innerHTML = `<div class="empty"><h3>No one's on the board yet</h3><p>Play the superbug arms race to add your name.</p><button class="btn primary" data-go="race">Play the arms race</button></div>`; return; }
+    body.innerHTML = '<ol class="fame-list"><li class="fame-head"><span></span><span>Name</span><span>Generations</span><span>Tests</span><span class="tm">Time</span></li>' +
+      this.sorted().slice(0, 10).map((e, k) => `<li><span class="rank">${k + 1}</span><span class="nm">${esc(e.name)}</span><span>${e.gens}</span><span class="mv">${e.tests}</span><span class="mv tm">${fmtTime(e.time)}</span></li>`).join('') + '</ol>';
+  },
+  renderAdmin() {
+    const ul = $('#fameAdmin');
+    ul.innerHTML = this.list.length ? this.list.map((e, i) => `<li><span>${esc(e.name)}, ${e.gens} generations, ${e.tests} tests</span><button class="btn sm quiet" data-rm="${i}">Remove</button></li>`).join('') : '<li class="small">No entries yet.</li>';
+  }
+};
+enterHooks.fame = () => Fame.render();
+
+/* =====================================================================
+   Settings, sound toggle, idle reset
+   ===================================================================== */
+function syncSoundBtn() {
+  const b = $('#soundBtn'); b.setAttribute('aria-pressed', String(Sound.on));
+  b.querySelector('.on').style.display = Sound.on ? '' : 'none'; b.querySelector('.off').style.display = Sound.on ? 'none' : '';
+  $('#soundLabel').textContent = Sound.on ? 'Sound on' : 'Sound off';
+}
+$('#soundBtn').addEventListener('click', () => { Sound.on = !Sound.on; store.set('sound', Sound.on); syncSoundBtn(); if (Sound.on) Sound.tick(); });
+$('#settingsBtn').addEventListener('click', () => { $('#setSound').checked = Sound.on; $('#setIdle').value = String(Settings.idle); Fame.renderAdmin(); $('#settingsDlg').showModal(); });
+$('#closeSet').addEventListener('click', () => $('#settingsDlg').close());
+$('#setSound').addEventListener('change', e => { Sound.on = e.target.checked; store.set('sound', Sound.on); syncSoundBtn(); });
+$('#setIdle').addEventListener('change', e => { Settings.idle = +e.target.value; store.set('idle', Settings.idle); });
+$('#newPlayerBtn').addEventListener('click', () => { newPlayer(); $('#settingsDlg').close(); go('home'); });
+$('#fullBtn').addEventListener('click', () => { if (document.fullscreenElement) document.exitFullscreen(); else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {}); });
+$('#clearFameBtn').addEventListener('click', () => { if (confirm('Remove every name from the hall of fame?')) { Fame.list = []; Fame.save(); Fame.renderAdmin(); if (current === 'fame') Fame.render(); } });
+$('#fameAdmin').addEventListener('click', e => { const b = e.target.closest('[data-rm]'); if (!b) return; Fame.remove(+b.dataset.rm); Fame.renderAdmin(); if (current === 'fame') Fame.render(); });
+function newPlayer() { progress.clear(); Lab.cancel(); Lab.mode = null; Lab.race = null; }
+const Idle = {
+  last: Date.now(), timer: null, left: 0,
+  poke() { this.last = Date.now(); if (this.timer) { clearInterval(this.timer); this.timer = null; $('#idleOverlay').hidden = true; } },
+  check() {
+    if (!Settings.idle || current === 'home' || this.timer || Lab.assay) return;
+    if (Date.now() - this.last > Settings.idle * 60000) {
+      this.left = 15; $('#idleCount').textContent = this.left; $('#idleOverlay').hidden = false;
+      this.timer = setInterval(() => {
+        this.left--; $('#idleCount').textContent = this.left;
+        if (this.left <= 0) { clearInterval(this.timer); this.timer = null; $('#idleOverlay').hidden = true; if ($('#settingsDlg').open) $('#settingsDlg').close(); newPlayer(); go('home'); this.last = Date.now(); }
+      }, 1000);
+    }
+  }
+};
+['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(ev => window.addEventListener(ev, () => Idle.poke(), { passive: true, capture: true }));
+setInterval(() => Idle.check(), 1000);
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+FONT = getComputedStyle(document.body).fontFamily;
+$('#heroT1').textContent = CONFIG.titleLine1; $('#heroT2').textContent = CONFIG.titleLine2;
+$('#brandTitle').textContent = CONFIG.titleLine1 + ' ' + CONFIG.titleLine2; document.title = CONFIG.titleLine1 + ' ' + CONFIG.titleLine2;
+$('#heroGroup').innerHTML = `Made by the <strong>${esc(CONFIG.groupName)}</strong>${CONFIG.groupPlace ? ', ' + esc(CONFIG.groupPlace) : ''}. ${esc(CONFIG.groupTagline)}.` +
+  (CONFIG.groupWebsite ? ` <a href="${esc(CONFIG.groupWebsite)}" target="_blank" rel="noopener">${esc(siteHost())}</a>` : '');
+syncSoundBtn(); Hero.init(); Lab.init(); initLearn();
+{ const h = (location.hash || '#home').slice(1); go(h === 'lab' ? 'missions' : h, false); }
+let lastT = performance.now();
+function frame(t) {
+  const dt = Math.min(0.05, Math.max(0, (t - lastT) / 1000)); lastT = t;
+  try { if (current === 'home') Hero.tick(dt); else if (current === 'lab') Lab.tick(dt); } catch (err) { console.error(err); }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
