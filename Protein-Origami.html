@@ -1,0 +1,2518 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Protein Origami</title>
+<meta name="description" content="A protein folding puzzle and live molecular dynamics simulation for science outreach.">
+<meta name="theme-color" content="#0B2233">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 34'%3E%3Cpath d='M8 26V8h18v18' fill='none' stroke='%23EAF6F4' stroke-opacity='.55' stroke-width='3.5' stroke-linejoin='round'/%3E%3Cline x1='8' y1='26' x2='26' y2='26' stroke='%23FFD98A' stroke-width='3' stroke-dasharray='3 2.4'/%3E%3Ccircle cx='8' cy='26' r='6' fill='%23F5B041'/%3E%3Ccircle cx='8' cy='8' r='4.6' fill='%2310314A' stroke='%235CC8D6' stroke-width='2.8'/%3E%3Ccircle cx='26' cy='8' r='4.6' fill='%2310314A' stroke='%235CC8D6' stroke-width='2.8'/%3E%3Ccircle cx='26' cy='26' r='6' fill='%23F5B041'/%3E%3C/svg%3E">
+<link rel="canonical" href="https://stansfeldlab.github.io/Protein-Origami.html">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Protein Origami">
+<meta property="og:description" content="Fold protein chains, watch a live molecular dynamics simulation and design an antibiotic. A game from the Stansfeld Research Group, University of Warwick.">
+<meta property="og:url" content="https://stansfeldlab.github.io/Protein-Origami.html">
+<style>
+:root{
+  --abyss:#0B2233; --deep:#10314A; --deep-2:#143A55; --tide:#1D4B66; --tide-2:#2A6283;
+  --foam:#EAF6F4; --mist:#A8C5CC; --dim:#7FA2AD;
+  --saffron:#F5B041; --saffron-hi:#FFD98A; --saffron-lo:#B9750F; --saffron-ink:#2A1A03;
+  --lagoon:#5CC8D6; --lagoon-lo:#2B8C9A;
+  --coral:#FF7A6B;
+  --display: ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", "Nunito", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --text: "Avenir Next", "Segoe UI", "Nunito", system-ui, -apple-system, Roboto, sans-serif;
+  --bar: 60px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  background:linear-gradient(180deg,#0F2D42 0%,var(--abyss) 55%);
+  color:var(--foam); font:400 1.0625rem/1.55 var(--text);
+  -webkit-font-smoothing:antialiased; overflow:hidden;
+  display:flex; flex-direction:column; height:100dvh;
+}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--saffron-hi);outline-offset:3px;border-radius:8px}
+h1,h2,h3{font-family:var(--display);line-height:1.1;margin:0 0 .4em;letter-spacing:-.01em}
+h2{font-size:clamp(1.6rem,3vw,2.1rem);font-weight:800}
+h3{font-size:1.3rem;font-weight:750}
+p{margin:0 0 .9em}
+a{color:var(--lagoon)}
+.small{font-size:.875rem;color:var(--mist)}
+[hidden]{display:none!important}
+
+/* ---------- top bar ---------- */
+.topbar{height:var(--bar);flex:none;display:flex;align-items:center;gap:12px;padding:0 14px;
+  background:rgba(11,34,51,.82);backdrop-filter:blur(8px);border-bottom:1px solid rgba(234,246,244,.07);z-index:5}
+.brand{display:flex;align-items:center;gap:10px;background:none;border:0;cursor:pointer;padding:6px;font:800 1.15rem/1 var(--display);white-space:nowrap}
+.brand svg{flex:none}
+.mainnav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;flex:1;min-width:0}
+.mainnav::-webkit-scrollbar{display:none}
+.mainnav button{background:none;border:0;padding:10px 12px;border-radius:10px;cursor:pointer;color:var(--mist);font-weight:600;white-space:nowrap;position:relative}
+.mainnav button:hover{color:var(--foam);background:rgba(234,246,244,.05)}
+.mainnav button[aria-current="page"]{color:var(--foam)}
+.mainnav button[aria-current="page"]::after{content:"";position:absolute;left:12px;right:12px;bottom:3px;height:3px;border-radius:3px;background:var(--saffron)}
+.tools{display:flex;gap:4px;flex:none}
+.icon-btn{width:44px;height:44px;display:grid;place-items:center;border-radius:50%;border:0;background:none;cursor:pointer;color:var(--mist)}
+.icon-btn:hover{background:rgba(234,246,244,.07);color:var(--foam)}
+.mainnav .short{display:none}
+@media (max-width:720px){ .brand span{display:none} .mainnav button{padding:10px 8px;font-size:.95rem} .mainnav .full{display:none} .mainnav .short{display:inline} }
+@media (max-width:440px){ .topbar{padding:0 8px;gap:4px} #soundBtn{display:none} .mainnav button{padding:10px 7px} }
+
+/* ---------- screens ---------- */
+main{flex:1;position:relative;min-height:0}
+.screen{position:absolute;inset:0;overflow:auto;display:none}
+.screen.active{display:block}
+.wrap{max-width:1100px;margin:0 auto;padding:28px 20px 60px}
+
+/* ---------- buttons ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.5em;min-height:46px;padding:.65em 1.25em;border-radius:999px;
+  border:2px solid var(--tide-2);background:rgba(234,246,244,.02);color:var(--foam);font-weight:650;cursor:pointer;line-height:1.15;text-align:center}
+.btn:hover{border-color:var(--mist)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.primary{background:var(--saffron);border-color:var(--saffron);color:var(--saffron-ink)}
+.btn.primary:hover{background:#FFC25E;border-color:#FFC25E}
+.btn.big{min-height:58px;font-size:1.15rem;padding:.7em 1.6em}
+.btn.quiet{border-color:transparent;background:none;color:var(--mist)}
+.btn.quiet:hover{color:var(--foam);background:rgba(234,246,244,.06)}
+.btn.sm{min-height:38px;padding:.4em .9em;font-size:.9rem}
+.link-btn{background:none;border:0;padding:4px 0;color:var(--lagoon);cursor:pointer;font-weight:600}
+.link-btn:hover{text-decoration:underline}
+
+/* ---------- home ---------- */
+#screen-home{overflow:hidden}
+#heroCanvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.hero-copy{position:relative;z-index:1;max-width:620px;padding:clamp(28px,7vh,90px) clamp(20px,6vw,80px) 30px}
+.hero-copy h1{font-size:clamp(3.2rem,8.5vw,6.8rem);font-weight:850;line-height:.9;letter-spacing:-.035em;margin-bottom:.32em}
+.hero-copy h1 .l2{display:block;color:var(--saffron)}
+.lede{font-size:clamp(1.1rem,1.8vw,1.35rem);line-height:1.45;max-width:30em;color:var(--foam)}
+.hero-actions{display:flex;flex-wrap:wrap;gap:12px;margin:26px 0 22px}
+.hero-status{display:flex;align-items:center;gap:10px;color:var(--mist);font-size:.95rem;max-width:30em;min-height:3em}
+.hero-status .dot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--lagoon);box-shadow:0 0 0 4px rgba(92,200,214,.18)}
+.hero-group{position:absolute;z-index:1;left:clamp(20px,6vw,80px);bottom:18px;right:20px;margin:0;color:var(--dim);font-size:.9rem}
+.hero-group strong{color:var(--mist);font-weight:650}
+@media (max-width:760px){
+  #screen-home{overflow:auto}
+  #screen-home.active{display:flex;flex-direction:column}
+  .hero-copy{padding-top:24px;padding-bottom:0;order:1}
+  .hero-actions{margin-bottom:8px}
+  #heroCanvas{position:relative;inset:auto;height:260px;flex:none;order:2}
+  .hero-group{position:static;order:3;padding:0 20px 24px}
+}
+
+/* ---------- level select ---------- */
+.levels-head{max-width:46em}
+.lgroup{margin-top:34px}
+.lgroup > p{color:var(--mist);max-width:44em}
+.strand{position:relative;margin-top:8px}
+.strand svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.lvl{position:absolute;width:150px;display:flex;flex-direction:column;align-items:center;gap:4px;background:none;border:0;cursor:pointer;padding:0;text-align:center}
+.lvl-bead{width:72px;height:72px;border-radius:50%;display:grid;place-items:center;font:800 1.6rem/1 var(--display);
+  background:var(--deep);border:5px solid var(--lagoon);color:var(--foam);transition:transform .15s}
+.lvl:hover .lvl-bead,.lvl:focus-visible .lvl-bead{transform:scale(1.08)}
+.lvl:focus-visible{outline:none}
+.lvl:focus-visible .lvl-bead{outline:3px solid var(--saffron-hi);outline-offset:4px}
+.lvl-bead.part{border-color:var(--saffron)}
+.lvl-bead.done{background:radial-gradient(circle at 35% 30%,#FFE3A3,var(--saffron) 55%,var(--saffron-lo));border-color:var(--saffron-lo);color:var(--saffron-ink)}
+.lvl-name{font-weight:700;margin-top:4px;line-height:1.2}
+.lvl-sub{font-size:.85rem;color:var(--mist)}
+.stars-txt{letter-spacing:2px;color:var(--saffron);font-size:1rem;line-height:1}
+.stars-txt .off{color:var(--tide-2)}
+
+/* ---------- play ---------- */
+.play-layout,.lab-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(310px,380px);height:100%}
+.board,.lab-stage{position:relative;min-height:0}
+#boardCanvas,#labCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#boardCanvas:active,#labCanvas:active{cursor:grabbing}
+#boardCanvas:focus-visible,#labCanvas:focus-visible{outline:3px solid var(--saffron-hi);outline-offset:-6px;border-radius:14px}
+.board-hint{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);background:rgba(16,49,74,.92);border:1px solid var(--tide-2);
+  padding:10px 18px;border-radius:999px;pointer-events:none;font-weight:600;white-space:nowrap;transition:opacity .4s}
+.side{background:var(--deep);border-left:1px solid rgba(234,246,244,.06);padding:22px 22px 40px;overflow:auto;min-height:0}
+.side h2{margin-bottom:.25em}
+.lvl-meta{color:var(--mist);font-size:.9rem;margin:10px 0 6px}
+.score{margin:18px 0 16px;padding:16px 18px;border-radius:16px;background:var(--abyss)}
+.score-main{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.score-num{font:850 3rem/1 var(--display);font-variant-numeric:tabular-nums;color:var(--saffron)}
+.score-of{color:var(--mist);font-weight:600}
+.stars{display:flex;gap:6px;margin:10px 0 8px}
+.stars svg{width:30px;height:30px}
+.score-sub{margin:0;color:var(--mist);font-size:.92rem;font-variant-numeric:tabular-nums}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px}
+.actions .wide{grid-column:1/-1}
+.win{border:2px solid var(--saffron);border-radius:16px;padding:16px 18px;margin-bottom:18px;background:rgba(245,176,65,.08)}
+.win-title{font:800 1.45rem/1.15 var(--display);color:var(--saffron-hi);margin-bottom:.35em}
+.win form{margin:12px 0 10px}
+.win label{display:block;font-weight:650;margin-bottom:6px}
+.row{display:flex;gap:8px}
+.row input{flex:1;min-width:0}
+input[type=text]{min-height:46px;border-radius:12px;border:2px solid var(--tide-2);background:var(--abyss);padding:0 14px}
+input[type=text]:focus{border-color:var(--saffron);outline:none}
+.legend{list-style:none;padding:0;margin:0 0 18px;display:grid;gap:10px;font-size:.95rem}
+.legend li{display:flex;align-items:center;gap:12px}
+.lg-h,.lg-p{width:24px;height:24px;border-radius:50%;flex:none}
+.lg-h{background:radial-gradient(circle at 35% 30%,#FFE3A3,var(--saffron) 55%,var(--saffron-lo))}
+.lg-p{border:5px solid var(--lagoon);background:rgba(92,200,214,.2)}
+.lg-c{width:24px;height:6px;flex:none;border-radius:3px;background:repeating-linear-gradient(90deg,var(--saffron-hi) 0 5px,transparent 5px 8px);box-shadow:0 0 8px rgba(255,217,138,.6)}
+details{border-top:1px solid rgba(234,246,244,.08);padding:12px 0}
+details summary{cursor:pointer;font-weight:700;color:var(--foam);list-style-position:outside}
+details[open] summary{margin-bottom:8px}
+details ul{padding-left:1.2em;margin:0}
+details li{margin-bottom:6px}
+.fact{margin-top:14px;padding-left:14px;border-left:4px solid var(--lagoon);color:var(--mist)}
+.fact strong{color:var(--foam)}
+#peekBox{margin-bottom:18px}
+#peekCanvas{width:100%;height:190px;display:block;border-radius:14px;background:var(--abyss)}
+kbd{font:600 .85em/1 var(--text);border:1px solid var(--tide-2);border-bottom-width:3px;border-radius:6px;padding:2px 6px;background:var(--abyss)}
+
+/* ---------- lab ---------- */
+.lab-readout{position:absolute;left:16px;top:14px;display:flex;flex-wrap:wrap;gap:6px 18px;font-size:.92rem;color:var(--mist);pointer-events:none;font-variant-numeric:tabular-nums;max-width:calc(100% - 32px)}
+.lab-readout b{color:var(--foam);font-weight:700}
+.lab-tool{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);display:flex;background:rgba(16,49,74,.94);border:1px solid var(--tide-2);border-radius:999px;padding:4px}
+.lab-tool button{border:0;background:none;padding:9px 16px;border-radius:999px;cursor:pointer;font-weight:650;color:var(--mist);white-space:nowrap}
+.lab-tool button[aria-pressed="true"]{background:var(--foam);color:var(--abyss)}
+.lab-note{position:absolute;left:16px;top:44px;color:var(--saffron-hi);font-size:.9rem;font-weight:600;pointer-events:none;margin:0}
+.ctl{margin:16px 0}
+.ctl label{display:flex;justify-content:space-between;font-weight:650;gap:10px}
+.ctl output{color:var(--mist);font-weight:600;font-variant-numeric:tabular-nums}
+.ctl .ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--dim);margin-top:-2px}
+input[type=range]{width:100%;height:36px;background:none;-webkit-appearance:none;appearance:none;margin:2px 0;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:8px;border-radius:4px;background:var(--tide)}
+input[type=range]::-moz-range-track{height:8px;border-radius:4px;background:var(--tide)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:50%;background:var(--foam);margin-top:-9px;border:4px solid var(--deep);box-shadow:0 0 0 2px var(--foam)}
+input[type=range]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:var(--foam);border:4px solid var(--deep)}
+#tempSl::-webkit-slider-runnable-track{background:linear-gradient(90deg,var(--lagoon),#7B8FA0 45%,var(--coral))}
+#tempSl::-moz-range-track{background:linear-gradient(90deg,var(--lagoon),#7B8FA0 45%,var(--coral))}
+input[type=range]:disabled{opacity:.6;cursor:default}
+.btnrow{display:flex;flex-wrap:wrap;gap:8px}
+.exp{margin:20px 0;padding:16px 18px;border-radius:16px;background:var(--abyss)}
+.exp h3{font-size:1.1rem;margin-bottom:.3em}
+.exp p{color:var(--mist);font-size:.95rem}
+.results{margin:12px 0 0;font-size:.95rem;font-variant-numeric:tabular-nums}
+.results p{margin:0 0 4px;color:var(--foam)}
+.plot{margin:14px 0}
+.plot-title{display:flex;justify-content:space-between;font-weight:650;font-size:.95rem}
+.plot-title span:last-child{color:var(--mist);font-variant-numeric:tabular-nums}
+.plot canvas{width:100%;height:84px;display:block;margin-top:4px}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0}
+.chip{width:28px;height:28px;border-radius:50%;border:4px solid var(--lagoon);background:rgba(92,200,214,.18);cursor:pointer;padding:0}
+.chip.h{border-color:var(--saffron-lo);background:radial-gradient(circle at 35% 30%,#FFE3A3,var(--saffron) 55%,var(--saffron-lo))}
+.chip:hover{transform:scale(1.12)}
+select{min-height:44px;border-radius:12px;border:2px solid var(--tide-2);background:var(--abyss);padding:0 10px;width:100%}
+
+/* ---------- learn ---------- */
+.article{max-width:720px;margin:0 auto;padding:34px 22px 80px}
+.article h2{font-size:clamp(1.9rem,4vw,2.6rem);margin-top:1.4em}
+.article h2:first-child{margin-top:0}
+.article > p,.article li{max-width:38em}
+.article .intro{font-size:1.2rem;color:var(--foam)}
+.article details{margin:4px 0 8px;border-top:0;border-left:4px solid var(--tide-2);padding:4px 0 4px 16px}
+.article details summary{color:var(--lagoon)}
+.article details p{color:var(--mist);font-size:.98rem}
+.widget{margin:20px 0 26px;padding:20px;border-radius:18px;background:var(--deep)}
+.widget .big{font:800 clamp(1.5rem,3.5vw,2.2rem)/1.15 var(--display);margin:6px 0 10px}
+.widget .big sup{font-size:.55em}
+.widget canvas{width:100%;display:block;border-radius:12px;background:var(--abyss)}
+#funnelCanvas{height:250px}
+.seg{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 14px}
+.seg button{border:2px solid var(--tide-2);background:none;border-radius:999px;padding:8px 14px;cursor:pointer;font-weight:650}
+.seg button[aria-pressed="true"]{background:var(--foam);color:var(--abyss);border-color:var(--foam)}
+.loop{width:100%;height:auto;display:block;margin:10px 0 20px}
+.status-line{font-weight:650;min-height:1.6em;margin:10px 0 0}
+
+/* ---------- fame ---------- */
+.fame-level{margin-top:28px}
+.fame-level h3{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.fame-level h3 small{font:600 .9rem var(--text);color:var(--mist)}
+.fame-list{list-style:none;padding:0;margin:8px 0 0;max-width:560px}
+.fame-list li{display:grid;grid-template-columns:2.2em 1fr auto auto;gap:14px;align-items:center;padding:10px 4px;border-bottom:1px solid rgba(234,246,244,.07);font-variant-numeric:tabular-nums}
+.fame-list .rank{font:800 1.2rem var(--display);color:var(--saffron)}
+.fame-list .nm{font-weight:700;overflow-wrap:anywhere}
+.fame-list .mv{color:var(--mist);font-size:.9rem}
+.empty{margin-top:30px;padding:30px;border:2px dashed var(--tide-2);border-radius:18px;max-width:560px}
+
+/* ---------- dialogs ---------- */
+dialog{background:var(--deep);color:var(--foam);border:1px solid var(--tide-2);border-radius:20px;padding:0;max-width:min(560px,calc(100vw - 24px));width:100%;max-height:calc(100dvh - 40px)}
+dialog::backdrop{background:rgba(5,18,28,.7)}
+.dlg{padding:24px}
+.dlg h2{font-size:1.6rem}
+.dlg section{padding:14px 0;border-top:1px solid rgba(234,246,244,.08)}
+.dlg section:first-of-type{border-top:0}
+.switch{display:flex;align-items:center;justify-content:space-between;gap:16px;font-weight:600;cursor:pointer;padding:4px 0}
+.switch input{width:24px;height:24px;accent-color:var(--saffron)}
+.fame-admin{list-style:none;padding:0;margin:10px 0;max-height:220px;overflow:auto}
+.fame-admin li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid rgba(234,246,244,.06);font-size:.95rem}
+.idle{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:rgba(5,18,28,.82);cursor:pointer}
+.idle div{text-align:center;padding:30px;max-width:460px}
+.idle h2{font-size:2.4rem}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------- snap puzzles, lab tabs, antibiotic lab ---------- */
+.lsec{margin-top:46px;padding-top:28px;border-top:1px solid rgba(234,246,244,.1)}
+.lsec:first-child{margin-top:26px;border-top:0;padding-top:0}
+.lsec > h3{font-size:clamp(1.4rem,2.6vw,1.75rem)}
+.lsec > p{color:var(--mist);max-width:44em}
+.lgroup h4{font:750 1.15rem/1.2 var(--display);margin:0 0 .3em}
+.lgroup{margin-top:22px}
+.lvl-bead.snap{border-radius:28%}
+.legend .lg-svg{width:36px;height:27px;flex:none}
+.tabs{display:flex;background:var(--abyss);border-radius:999px;padding:4px;margin:0 0 20px}
+.tabs button{flex:1;border:0;background:none;padding:10px 12px;border-radius:999px;cursor:pointer;font-weight:700;color:var(--mist)}
+.tabs button[aria-selected="true"]{background:var(--foam);color:var(--abyss)}
+.lab-stage.drug .lab-readout,.lab-stage.drug .lab-tool,.lab-stage.drug .lab-note{display:none}
+.mission{margin:4px 0 18px;padding:16px 18px;border-radius:16px;background:var(--abyss);border-left:4px solid var(--saffron)}
+.mission .m-step{color:var(--saffron-hi);font-weight:700;font-size:.9rem;margin-bottom:4px}
+.mission p:last-child{margin-bottom:0}
+.mission ul{margin:8px 0 0;padding-left:1.2em;color:var(--mist);font-size:.95rem}
+.sub{font-size:1.1rem;margin:18px 0 2px}
+.designer{display:flex;align-items:center;gap:6px;margin:10px 0 8px}
+.part{width:60px;height:60px;border-radius:50%;border:5px solid var(--lagoon);display:grid;place-items:center;font:850 1.7rem/1 var(--display);cursor:pointer;background:rgba(92,200,214,.15);color:var(--foam);padding:0;flex:none}
+.part.t-O{background:radial-gradient(circle at 35% 30%,#FFE3A3,var(--saffron) 55%,var(--saffron-lo));border-color:var(--saffron-lo)}
+.part.t-pos{background:#2F4C8C;border-color:#7AA2FF;color:#C9D8FF}
+.part.t-neg{background:#8C2F45;border-color:#FF6B8B;color:#FFC9D4}
+.part:hover:not(:disabled){transform:scale(1.06)}
+.part:disabled{opacity:.6;cursor:default}
+.bondline{width:16px;height:6px;border-radius:3px;background:var(--mist);flex:none}
+.keyrow{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.85rem;color:var(--mist);margin:0 0 6px}
+.keyrow span{display:inline-flex;align-items:center;gap:6px}
+.lib{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}
+.libbtn{border:2px solid var(--tide-2);background:none;border-radius:14px;padding:8px 4px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-weight:700}
+.libbtn[aria-pressed="true"]{border-color:var(--foam);background:rgba(234,246,244,.06)}
+.libbtn:disabled{opacity:.5;cursor:default}
+.dots{display:flex;gap:2px}
+.d{width:17px;height:17px;border-radius:50%;display:grid;place-items:center;font:800 .72rem/1 var(--text);font-style:normal;border:3px solid var(--lagoon);background:rgba(92,200,214,.15)}
+.d.t-O{background:var(--saffron);border-color:var(--saffron-lo)}
+.d.t-pos{background:#2F4C8C;border-color:#7AA2FF;color:#fff}
+.d.t-neg{background:#8C2F45;border-color:#FF6B8B;color:#fff}
+.res{margin:10px 0 0}
+.res-h{display:flex;justify-content:space-between;gap:10px;font-weight:650;font-size:.95rem}
+.res-h b{font-variant-numeric:tabular-nums}
+.bar{height:12px;border-radius:6px;background:var(--tide);overflow:hidden;margin-top:4px}
+.bar i{display:block;height:100%;background:var(--lagoon);border-radius:6px}
+.verdict{margin:6px 0 0;font-weight:650;font-size:.95rem}
+.verdict.ok{color:#9BE7B0}
+.verdict.bad{color:var(--coral)}
+.wide-btn{width:100%;margin-top:8px}
+.article ul.plain{padding-left:1.2em}
+
+@media (max-width:860px){
+  .play-layout,.lab-layout{display:block;height:auto}
+  .board,.lab-stage{height:64dvh;min-height:340px}
+  .lab-stage.drug{height:86dvh;min-height:520px}
+  .side{border-left:0;border-top:1px solid rgba(234,246,244,.06);overflow:visible}
+}
+@media (prefers-reduced-motion:reduce){ *{transition:none!important} }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <button class="brand" data-go="home" aria-label="Protein Origami: start screen">
+    <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true">
+      <path d="M8 26V8h18v18" fill="none" stroke="#EAF6F4" stroke-opacity=".55" stroke-width="3.5" stroke-linejoin="round"/>
+      <line x1="8" y1="26" x2="26" y2="26" stroke="#FFD98A" stroke-width="3" stroke-dasharray="3 2.4"/>
+      <circle cx="8" cy="26" r="6" fill="#F5B041"/><circle cx="8" cy="8" r="4.6" fill="#10314A" stroke="#5CC8D6" stroke-width="2.8"/>
+      <circle cx="26" cy="8" r="4.6" fill="#10314A" stroke="#5CC8D6" stroke-width="2.8"/><circle cx="26" cy="26" r="6" fill="#F5B041"/>
+    </svg>
+    <span id="brandTitle">Protein Origami</span>
+  </button>
+  <nav class="mainnav" aria-label="Main">
+    <button data-go="levels">Puzzles</button>
+    <button data-go="lab"><span class="full">Simulation lab</span><span class="short">Lab</span></button>
+    <button data-go="learn"><span class="full">The science</span><span class="short">Science</span></button>
+    <button data-go="fame"><span class="full">Hall of fame</span><span class="short">Scores</span></button>
+  </nav>
+  <div class="tools">
+    <button class="icon-btn" id="soundBtn" aria-pressed="true" title="Sound">
+      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" stroke="none"/>
+        <path class="on" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>
+        <path class="off" d="M16 9l5 6M21 9l-5 6"/>
+      </svg>
+      <span class="sr" id="soundLabel">Sound on</span>
+    </button>
+    <button class="icon-btn" id="settingsBtn" title="Settings for event organisers">
+      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
+      </svg>
+      <span class="sr">Settings</span>
+    </button>
+  </div>
+</header>
+
+<main>
+<!-- ================= HOME ================= -->
+<section id="screen-home" class="screen" aria-label="Start">
+  <canvas id="heroCanvas" aria-hidden="true"></canvas>
+  <div class="hero-copy">
+    <h1><span id="heroT1">Protein</span><span class="l2" id="heroT2">Origami</span></h1>
+    <p class="lede">Proteins are tiny chains that fold themselves into exactly the right shape to do their job. Your body is full of them. Can you fold one as well as a computer can?</p>
+    <div class="hero-actions">
+      <button class="btn primary big" data-go="levels">Start folding</button>
+      <button class="btn big" data-go="lab">Run a simulation</button>
+      <button class="btn big" data-go="drug">Design an antibiotic</button>
+      <button class="btn quiet big" data-go="learn">How it works</button>
+    </div>
+    <p class="hero-status" aria-live="off"><span class="dot" id="heroDot"></span><span id="heroStatus">Live simulation running behind this text.</span></p>
+  </div>
+  <p class="hero-group" id="heroGroup"></p>
+</section>
+
+<!-- ================= LEVELS ================= -->
+<section id="screen-levels" class="screen" aria-label="Puzzles">
+  <div class="wrap">
+    <div class="levels-head">
+      <h2>Fold the chain</h2>
+      <p>Proteins fold because their amino acids stick together in particular ways. Start with the snap puzzles, then try the grid challenge that researchers use.</p>
+    </div>
+    <div id="levelGroups"></div>
+  </div>
+</section>
+
+<!-- ================= PLAY ================= -->
+<section id="screen-play" class="screen" aria-label="Puzzle">
+  <div class="play-layout">
+    <div class="board">
+      <canvas id="boardCanvas" tabindex="0" aria-label="Folding board. Use the left and right square bracket keys to pick a bead and the arrow keys to move it."></canvas>
+      <div class="board-hint" id="boardHint">Drag a bead to fold the chain</div>
+    </div>
+    <aside class="side" aria-label="Puzzle information">
+      <button class="link-btn" data-go="levels">All puzzles</button>
+      <p class="lvl-meta" id="lvlMeta"></p>
+      <h2 id="lvlName"></h2>
+      <p id="lvlIntro"></p>
+
+      <div class="score">
+        <div class="score-main"><span class="score-num" id="scoreNow">0</span><span class="score-of">of <span id="scoreBest">1</span> <span id="scoreUnit">connections</span></span></div>
+        <div class="stars" id="stars" role="img" aria-label="0 of 3 stars"></div>
+        <p class="score-sub"><span id="energyTxt">Energy 0</span>, <span id="timeTxt">0:00</span>, <span id="movesTxt">0 moves</span></p>
+        <p class="sr" id="liveScore" aria-live="polite"></p>
+      </div>
+
+      <div class="win" id="winBox" hidden>
+        <p class="win-title" id="winTitle">Perfect fold!</p>
+        <p id="winText"></p>
+        <form id="fameForm">
+          <label for="fameName">Add your name to the hall of fame</label>
+          <div class="row"><input type="text" id="fameName" maxlength="14" autocomplete="off" placeholder="Nickname"><button class="btn primary" type="submit">Add</button></div>
+          <p class="small" style="margin:6px 0 0">Please use a nickname, not your full name.</p>
+        </form>
+        <p id="fameDone" hidden>You're on the board. <button class="link-btn" data-go="fame" type="button">See the hall of fame</button></p>
+        <button class="btn primary" id="nextBtn" type="button">Next puzzle</button>
+      </div>
+
+      <div class="actions">
+        <button class="btn" id="undoBtn">Undo</button>
+        <button class="btn" id="resetBtn">Start over</button>
+        <button class="btn wide" id="peekBtn">Peek at a best fold</button>
+        <button class="btn wide" id="mdBtn">Watch it move in a simulation</button>
+      </div>
+
+      <div id="peekBox" hidden>
+        <canvas id="peekCanvas" aria-label="A best fold for this chain"></canvas>
+        <p class="small" id="peekText" style="margin-top:8px"></p>
+      </div>
+
+      <ul class="legend" id="legendBox"></ul>
+      <label class="switch" id="aaRow" style="margin-bottom:10px">Show amino acid names <input type="checkbox" id="aaNames"></label>
+
+      <details>
+        <summary>How to play</summary>
+        <ul id="howtoList"></ul>
+      </details>
+      <p class="fact"><strong>Did you know?</strong> <span id="factTxt"></span></p>
+      <p class="small" id="shapesTxt"></p>
+    </aside>
+  </div>
+</section>
+
+<!-- ================= LAB ================= -->
+<section id="screen-lab" class="screen" aria-label="Simulation lab">
+  <div class="lab-layout">
+    <div class="lab-stage">
+      <canvas id="labCanvas" aria-label="Live molecular dynamics simulation of a protein chain. Drag beads to pull them."></canvas>
+      <div class="lab-readout">
+        <span>Simulated time <b id="rTime">0</b></span>
+        <span>Steps <b id="rSteps">0</b></span>
+        <span>Oily contacts <b id="rCont">0</b></span>
+      </div>
+      <p class="lab-note" id="labNote"></p>
+      <div class="lab-tool" role="group" aria-label="What dragging does">
+        <button type="button" data-mode="pull" aria-pressed="true">Pull beads</button>
+        <button type="button" data-mode="mutate" aria-pressed="false">Mutate beads</button>
+      </div>
+    </div>
+    <aside class="side" aria-label="Simulation controls">
+      <div class="tabs" id="labTabs" role="tablist" aria-label="Simulation">
+        <button type="button" role="tab" data-tab="fold" aria-selected="true">Protein folding</button>
+        <button type="button" role="tab" data-tab="drug" aria-selected="false">Antibiotics</button>
+      </div>
+      <div id="foldPane">
+      <h2>Simulation lab</h2>
+      <p>A working molecular dynamics simulation, simplified to beads moving on a flat surface. Every bead feels springs, sticky oily forces and random kicks from water. The computer works out the forces and moves every bead a tiny step forward in time, again and again.</p>
+
+      <div class="ctl">
+        <label for="tempSl">Temperature <output id="tempOut" for="tempSl"></output></label>
+        <input type="range" id="tempSl" min="0.05" max="1.5" step="0.01" value="0.22">
+        <div class="ends"><span>Cold</span><span>Hot</span></div>
+      </div>
+      <div class="ctl">
+        <label for="epsSl">How sticky oily beads are <output id="epsOut" for="epsSl"></output></label>
+        <input type="range" id="epsSl" min="0" max="2" step="0.05" value="1">
+        <div class="ends"><span>Not at all</span><span>Very</span></div>
+      </div>
+      <div class="ctl">
+        <label for="spdSl">Simulation speed <output id="spdOut" for="spdSl"></output></label>
+        <input type="range" id="spdSl" min="1" max="100" step="1" value="30">
+      </div>
+      <div class="btnrow">
+        <button class="btn sm" id="pauseBtn">Pause</button>
+        <button class="btn sm" id="heatBtn">Heat it up</button>
+        <button class="btn sm" id="unfoldBtn">Unfold</button>
+      </div>
+
+      <div class="exp">
+        <h3>Experiment: slow or fast cooling?</h3>
+        <p>Melt the chain, then cool it down. Which way ends with more oily contacts?</p>
+        <div class="btnrow">
+          <button class="btn sm primary" id="slowBtn">Cool slowly</button>
+          <button class="btn sm" id="fastBtn">Cool instantly</button>
+        </div>
+        <div class="results" id="expResults" aria-live="polite"></div>
+      </div>
+
+      <div class="plot">
+        <div class="plot-title"><span>Energy</span><span id="eNow"></span></div>
+        <canvas id="plotE" aria-label="Energy over time"></canvas>
+      </div>
+      <div class="plot">
+        <div class="plot-title"><span>Oily contacts</span><span id="cNow"></span></div>
+        <canvas id="plotC" aria-label="Oily contacts over time"></canvas>
+      </div>
+
+      <div class="ctl">
+        <label for="seqSel">Protein sequence</label>
+        <select id="seqSel"></select>
+        <div class="chips" id="chips" aria-label="Sequence. Tap a bead to mutate it."></div>
+        <div class="btnrow"><button class="btn sm" id="shorterBtn">Remove a bead</button><button class="btn sm" id="longerBtn">Add a bead</button></div>
+      </div>
+
+      <details>
+        <summary>What's going on in this simulation?</summary>
+        <ul>
+          <li><strong>Springs</strong> hold neighbouring beads together, like the chemical bonds along a real protein chain.</li>
+          <li><strong>Oily beads attract</strong> each other a little when they're close. Everything else just bumps off each other.</li>
+          <li><strong>The water is invisible</strong>, but it's there: it slows the beads down and gives them random kicks. The hotter it is, the harder the kicks. Scientists call this an implicit solvent with a Langevin thermostat.</li>
+          <li>For the scientists: 2D bead–spring chain, harmonic bonds, weak angle stiffness, Lennard-Jones attraction between H beads and WCA repulsion for all other pairs, BAOAB Langevin integrator, all in reduced units (energies in units of ε, time in τ).</li>
+        </ul>
+      </details>
+      </div>
+      <div id="drugPane" hidden>
+        <h2>Antibiotic lab</h2>
+        <p>Bacteria need one of their enzymes to grow. An antibiotic works by jamming that enzyme's pocket, like chewing gum in a lock. But your body has a similar enzyme, and a good medicine must leave that one alone.</p>
+        <div class="mission" id="mission" aria-live="polite"></div>
+        <h3 class="sub">Your molecule</h3>
+        <p class="small" style="margin:0">Tap each part to change it.</p>
+        <div class="designer" id="designer"></div>
+        <div class="keyrow"><span><i class="d t-O"></i>oily</span><span><i class="d t-pos">+</i>positive</span><span><i class="d t-neg">−</i>negative</span><span><i class="d t-P"></i>water-loving</span></div>
+        <p class="small" id="drugName" style="margin:0"></p>
+        <button class="btn primary wide-btn" id="assayBtn" type="button">Test this molecule</button>
+        <div id="assayOut" aria-live="polite"></div>
+        <h3 class="sub">Or pick one from the library</h3>
+        <div class="lib" id="library"></div>
+        <div class="btnrow" style="margin-top:16px"><button class="btn sm" id="evolveBtn" type="button">Let the bacteria evolve</button><button class="btn sm" id="drugResetBtn" type="button">Start again</button></div>
+        <details style="margin-top:14px">
+          <summary>How this works</summary>
+          <ul>
+            <li>Each test is a short molecular dynamics run. The molecule starts in the pocket, where a docking program would place it, and the simulation shows whether it stays there while everything jiggles.</li>
+            <li>Every run is a little different because the jiggling is random, so each test quietly runs eight copies of each simulation and averages them. Researchers do the same, and call the copies replicas.</li>
+            <li>The three amino acids lining each pocket decide what sticks: oily with oily, positive with negative, and water-loving parts weakly with charged or water-loving ones. Two of the same charge push apart.</li>
+            <li>You can drag the molecule with your finger to feel how strongly it's held.</li>
+            <li>For the scientists: 2D Langevin dynamics in reduced units. Each enzyme keeps its fold with an elastic network plus weak position restraints; the ligand is a three-bead molecule with an angle term; ligand–protein interactions are Lennard-Jones wells whose depth depends on the pair of types, with WCA repulsion otherwise. Occupancy is the fraction of frames with the ligand's centre within 0.8σ of the docked pose.</li>
+          </ul>
+        </details>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<!-- ================= LEARN ================= -->
+<section id="screen-learn" class="screen" aria-label="The science">
+  <article class="article">
+    <h2>Tiny machines made from a string of beads</h2>
+    <p class="intro">Proteins do almost every job in your body. Haemoglobin carries oxygen in your blood. Enzymes break down your food. Antibodies grab hold of germs. Keratin makes your hair and nails.</p>
+    <p>Each protein is a chain of smaller building blocks called <strong>amino acids</strong>, joined like beads on a string. There are 20 kinds. The order of the beads, called the <strong>sequence</strong>, is written in your DNA. Once a chain is made, it folds itself up into a precise 3D shape, and that shape decides what the protein can do.</p>
+    <details><summary>For the scientists</summary>
+      <p>In the 1950s and 60s Christian Anfinsen showed that an unfolded enzyme, ribonuclease A, could refold by itself and work again: the sequence alone carries the instructions for the structure. He shared the 1972 Nobel Prize in Chemistry. The human genome has around 20,000 protein-coding genes, and a typical protein is a few hundred amino acids long.</p>
+    </details>
+
+    <h2>Oil and water</h2>
+    <p>Shake a jar of oil and water and the oil drops soon find each other again. Some amino acids are oily too. We call them <strong>hydrophobic</strong>, which means “water-fearing”. In water, a protein folds so that its oily amino acids cluster together in the middle, away from the water, while the <strong>polar</strong> (water-loving) ones stay on the outside.</p>
+    <p>This is the <strong>hydrophobic effect</strong>, and it's the main force that makes proteins fold. It's exactly what you're doing in the puzzles.</p>
+    <details><summary>For the scientists</summary>
+      <p>Side chains such as leucine, isoleucine, valine and phenylalanine form the cores of most globular proteins. The hydrophobic effect is largely driven by water itself: water molecules next to a nonpolar surface are restricted in how they can hydrogen-bond, so burying that surface increases the entropy of the surrounding water. Hydrogen bonds, salt bridges and van der Waals packing then fine-tune the structure. Folded proteins are only marginally stable, typically by about 20–60 kJ/mol, the equivalent of a handful of hydrogen bonds.</p>
+    </details>
+
+    <h2>The rules of the puzzles</h2>
+    <p>In the <strong>snap puzzles</strong>, each piece is an amino acid with a side chain that decides what it can stick to. Oily side chains stick together (the hydrophobic effect). A positive and a negative side chain attract each other and form a <strong>salt bridge</strong>. Two cysteines can join with a <strong>disulfide bond</strong>, a strong sulfur bridge. Water-loving side chains are happy on the outside, touching the water.</p>
+    <p>Real proteins are complicated, so scientists often use simplified models to understand the big ideas. The <strong>grid challenge</strong> uses the <strong>HP model</strong>, invented by Ken Dill in 1985. There are only two kinds of bead, H (hydrophobic) and P (polar), and the chain lives on a square grid. Every time two oily beads sit next to each other without being directly joined, that's a contact. Each contact lowers the energy by 1, and the best fold has the lowest energy.</p>
+    <details><summary>For the scientists</summary>
+      <p>Even this toy model is hard. Finding the lowest-energy fold of an HP chain on the 2D square lattice is NP-hard (proved in 1998), so no known method solves every case quickly. The research benchmark levels are standard test sequences from Unger and Moult (1993) that have been used for decades to compare folding algorithms. The best scores shown in this game were checked with an exact computer search for every level up to 25 beads, and match the best scores reported in the literature for the 36- and 48-bead chains.</p>
+      <p>One handy rule: the square grid is like a chessboard, so beads that are an even number of places apart along the chain sit on the same colour square and can never touch.</p>
+    </details>
+
+    <h2>Too many shapes to try one by one</h2>
+    <p>Suppose each amino acid could only point in 3 different ways. A chain of 100 would still have 3<sup>100</sup> possible shapes. How long would it take to try them all?</p>
+    <div class="widget" id="levWidget">
+      <div class="ctl" style="margin-top:0">
+        <label for="levSl">Length of the protein <output id="levOut" for="levSl">100 amino acids</output></label>
+        <input type="range" id="levSl" min="5" max="400" step="1" value="100">
+      </div>
+      <p>Possible shapes</p>
+      <p class="big" id="levShapes"></p>
+      <p id="levTime"></p>
+    </div>
+    <p>Real proteins fold in anything from a few millionths of a second to a few minutes. This puzzle is called <strong>Levinthal's paradox</strong> (1969). The answer is that proteins don't search randomly. Each small step that tucks away some oil makes the chain a bit more stable, so it gets guided downhill towards the right shape.</p>
+
+    <h2>Rolling downhill: the folding funnel</h2>
+    <p>Scientists picture folding as a ball rolling down a bumpy funnel. Height is energy, and the bottom is the folded shape. The bumps are traps where the chain gets tangled. Temperature is how much the ball jiggles.</p>
+    <div class="widget">
+      <canvas id="funnelCanvas" aria-label="A ball jiggling down a bumpy energy funnel"></canvas>
+      <div class="ctl">
+        <label for="funSl">Temperature <output id="funOut" for="funSl"></output></label>
+        <input type="range" id="funSl" min="0.01" max="0.5" step="0.005" value="0.08">
+        <div class="ends"><span>Cold</span><span>Hot</span></div>
+      </div>
+      <div class="btnrow"><button class="btn sm primary" id="funDrop">Drop a new chain</button></div>
+      <p class="status-line" id="funStatus" aria-live="polite"></p>
+      <p class="small" style="margin:0">Try it cold: the ball gets stuck in a bump. Try it hot: it keeps bouncing back out of the bottom. Somewhere in between, it finds the bottom and stays there.</p>
+    </div>
+
+    <h2>Molecular dynamics: making movies of molecules</h2>
+    <p>Molecular dynamics, or MD, is a way of using a computer to watch molecules move. The computer knows where every atom is and how atoms push and pull on each other. Then it repeats the same few steps, over and over:</p>
+    <svg class="loop" viewBox="0 0 680 230" role="img" aria-label="The molecular dynamics loop: know where every atom is, calculate the forces, move every atom a tiny step, then repeat.">
+      <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#A8C5CC"/></marker></defs>
+      <g font-family="Avenir Next, Segoe UI, system-ui, sans-serif" fill="#EAF6F4" text-anchor="middle">
+        <rect x="10" y="20" width="190" height="96" rx="16" fill="#10314A" stroke="#2A6283" stroke-width="2"/>
+        <text x="105" y="56" font-size="30" font-weight="800" fill="#F5B041">1</text>
+        <text x="105" y="84" font-size="16" font-weight="600">Know where every</text><text x="105" y="104" font-size="16" font-weight="600">atom is</text>
+        <rect x="245" y="20" width="190" height="96" rx="16" fill="#10314A" stroke="#2A6283" stroke-width="2"/>
+        <text x="340" y="56" font-size="30" font-weight="800" fill="#F5B041">2</text>
+        <text x="340" y="84" font-size="16" font-weight="600">Calculate the force</text><text x="340" y="104" font-size="16" font-weight="600">on each atom</text>
+        <rect x="480" y="20" width="190" height="96" rx="16" fill="#10314A" stroke="#2A6283" stroke-width="2"/>
+        <text x="575" y="56" font-size="30" font-weight="800" fill="#F5B041">3</text>
+        <text x="575" y="84" font-size="16" font-weight="600">Move every atom a</text><text x="575" y="104" font-size="16" font-weight="600">tiny step (F = ma)</text>
+        <path d="M200 68H243M435 68H478" stroke="#A8C5CC" stroke-width="2.5" fill="none" marker-end="url(#ah)"/>
+        <path d="M575 116V180H105V118" stroke="#A8C5CC" stroke-width="2.5" fill="none" marker-end="url(#ah)" stroke-dasharray="7 6"/>
+        <text x="340" y="208" font-size="16" fill="#A8C5CC">Repeat millions or billions of times</text>
+      </g>
+    </svg>
+    <p>Each step moves time forward by only about 2 <strong>femtoseconds</strong>. A femtosecond is a millionth of a billionth of a second: there are about as many femtoseconds in one second as there are seconds in 32 million years.</p>
+    <div class="widget">
+      <p style="margin-bottom:4px;font-weight:650">How much simulated time do you want?</p>
+      <div class="seg" id="mdTimeSeg" role="group" aria-label="Simulated time">
+        <button type="button" data-t="1e-9" aria-pressed="false">1 nanosecond</button>
+        <button type="button" data-t="1e-6" aria-pressed="true">1 microsecond</button>
+        <button type="button" data-t="1e-3" aria-pressed="false">1 millisecond</button>
+        <button type="button" data-t="1" aria-pressed="false">1 second</button>
+      </div>
+      <p class="big" id="mdSteps"></p>
+      <p id="mdCost"></p>
+    </div>
+    <p>The <a href="#lab" data-go="lab">simulation lab</a> in this game is a real, if tiny, molecular dynamics simulation of a bead chain. Research simulations work the same way, with every atom of the protein and thousands of water molecules around it.</p>
+    <details><summary>For the scientists</summary>
+      <p>The forces come from a force field such as AMBER, CHARMM or GROMOS: terms for bond stretching, angle bending and torsions, plus electrostatics and van der Waals interactions between every pair of nearby atoms. Water is usually modelled explicitly and often makes up most of the atoms. The timestep is limited by the fastest motions, the vibrations of bonds to hydrogen atoms, which last around 10 femtoseconds.</p>
+      <p>The first MD simulation of a protein (McCammon, Gelin and Karplus, 1977) covered less than 10 picoseconds. In 2013 Martin Karplus, Michael Levitt and Arieh Warshel shared the Nobel Prize in Chemistry for developing multiscale models of complex chemical systems. Today, GPUs and special-purpose supercomputers such as Anton can reach microseconds to milliseconds.</p>
+    </details>
+
+    <h2>A photo and a movie</h2>
+    <p>In 2020, the AI program AlphaFold showed it could predict many protein structures from their sequence with remarkable accuracy. In 2024 its creators, Demis Hassabis and John Jumper, shared the Nobel Prize in Chemistry with David Baker, who designs brand-new proteins.</p>
+    <p>A predicted structure is like a photo. But proteins are never still: they wobble, flex, open and close, and grab other molecules. Molecular dynamics gives us the movie, showing how a protein moves, how a medicine might bind to it, and what changes when a mutation swaps one amino acid for another.</p>
+
+    <h2>Designing antibiotics</h2>
+    <p>Antibiotics are medicines that kill bacteria or stop them growing. Most work by jamming one of the bacteria's own proteins. Penicillin, discovered by Alexander Fleming in 1928, blocks the enzymes bacteria use to build their cell walls, so the bacteria burst.</p>
+    <p>A good antibiotic has to do three things:</p>
+    <ul class="plain">
+      <li><strong>Stick</strong> tightly in a pocket of a protein the bacteria need.</li>
+      <li><strong>Leave our own proteins alone</strong>, so it doesn't cause side effects.</li>
+      <li><strong>Keep working</strong> when the bacteria evolve.</li>
+    </ul>
+    <p>That last one is getting harder. Bacteria multiply fast, and a lucky mutation that changes one amino acid in a drug's target can stop the drug fitting. Other bacteria make enzymes that cut antibiotics apart. Drug-resistant infections directly caused about 1.14 million deaths worldwide in 2021, and researchers forecast nearly 39 million more between 2025 and 2050 unless we act.</p>
+    <p>Computers help at every step. Scientists can search millions of molecules on screen (virtual screening), predict how each one sits in a pocket (docking), then use molecular dynamics to check whether it really stays put while the protein wobbles, and how a resistance mutation changes the fit. You can try this in the <a href="#drug" data-go="drug">antibiotic lab</a>.</p>
+    <details><summary>For the scientists</summary>
+      <p>MD is used to estimate binding free energies (for example with free energy perturbation), to measure how long a drug stays bound (its residence time), and to find “cryptic” pockets that only open as the protein moves. Selectivity can come down to small differences: the antibiotic trimethoprim binds bacterial dihydrofolate reductase thousands of times more tightly than the human enzyme. Resistance can also be tackled with combinations: co-amoxiclav pairs amoxicillin with clavulanic acid, which blocks the β-lactamase enzymes that would destroy it. Machine learning has joined the toolkit too: halicin (2020) and abaucin (2023) were found by AI models trained to spot molecules that kill bacteria.</p>
+      <p>The antibiotic lab in this game is a 2D toy: three pocket amino acids, three-part molecules and simple oily, charged and polar interactions. Real binding depends on 3D shape, hydrogen-bond geometry, displacing water from the pocket and much more.</p>
+    </details>
+
+    <h2>When folding goes wrong</h2>
+    <p>Sometimes proteins misfold, or clump together into sticky tangles. Misfolded proteins are involved in Alzheimer's disease, Parkinson's disease and cystic fibrosis. In the most common form of cystic fibrosis, a single missing amino acid stops a protein called CFTR from folding properly. Some modern cystic fibrosis medicines help it fold.</p>
+    <p>Cells have helper proteins called <strong>chaperones</strong> that help chains fold correctly. Understanding how folding works, and how it fails, helps scientists design new medicines.</p>
+    <details><summary>For the scientists</summary>
+      <p>Alzheimer's disease involves aggregates of amyloid-β and tau; Parkinson's involves α-synuclein. In prion diseases such as Creutzfeldt–Jakob disease, a misfolded form of the prion protein converts healthy copies into the misfolded form. The common cystic fibrosis mutation, F508del, causes CFTR to misfold and be degraded; “corrector” drugs help it fold and reach the cell surface.</p>
+    </details>
+
+    <h2 id="aboutHead">Who made this</h2>
+    <div id="aboutBody"></div>
+  </article>
+</section>
+
+<!-- ================= FAME ================= -->
+<section id="screen-fame" class="screen" aria-label="Hall of fame">
+  <div class="wrap">
+    <h2>Hall of fame</h2>
+    <p style="color:var(--mist);max-width:40em">The fastest perfect folds at this event. Get full stars on any puzzle, without peeking, to add your name.</p>
+    <div id="fameBody"></div>
+  </div>
+</section>
+</main>
+
+<!-- ================= SETTINGS ================= -->
+<dialog id="settingsDlg" aria-labelledby="setTitle">
+  <div class="dlg">
+    <h2 id="setTitle">Settings</h2>
+    <section>
+      <label class="switch">Sound effects <input type="checkbox" id="setSound"></label>
+      <label class="switch">Faces on oily beads <input type="checkbox" id="setFaces"></label>
+    </section>
+    <section>
+      <label for="setIdle" style="font-weight:600">Go back to the start screen when nobody's playing</label>
+      <select id="setIdle" style="margin-top:8px">
+        <option value="0">Never</option><option value="2">After 2 minutes</option><option value="5">After 5 minutes</option><option value="10">After 10 minutes</option>
+      </select>
+      <p class="small" style="margin-top:8px">Useful at a stand: the game resets for the next visitor, clearing their stars but keeping the hall of fame.</p>
+    </section>
+    <section>
+      <div class="btnrow">
+        <button class="btn sm" id="newPlayerBtn">New player (clear stars)</button>
+        <button class="btn sm" id="fullBtn">Full screen</button>
+      </div>
+    </section>
+    <section>
+      <h3 style="font-size:1.1rem">Hall of fame entries</h3>
+      <ul class="fame-admin" id="fameAdmin"></ul>
+      <button class="btn sm" id="clearFameBtn">Clear the hall of fame</button>
+      <p class="small" style="margin-top:10px">Stars and the hall of fame are saved in this browser on this device only.</p>
+    </section>
+    <div class="btnrow" style="justify-content:flex-end;margin-top:6px"><button class="btn primary" id="closeSet">Done</button></div>
+  </div>
+</dialog>
+
+<div class="idle" id="idleOverlay" hidden>
+  <div><h2>Still folding?</h2><p>Tap anywhere to keep playing. Going back to the start in <span id="idleCount">15</span> seconds.</p></div>
+</div>
+
+<script>
+'use strict';
+/* =====================================================================
+   CONFIG: edit these to personalise the game for your group / event
+   ===================================================================== */
+const CONFIG = {
+  titleLine1: 'Protein',
+  titleLine2: 'Origami',
+  groupName: 'Stansfeld Research Group, University of Warwick',
+  groupTagline: 'We use molecular dynamics simulations to watch proteins move, fold and work.',
+  groupWebsite: 'https://stansfeldlab.github.io/',
+  aboutParagraphs: [
+    'This game was made by the Stansfeld Research Group, a computational group at the University of Warwick in the School of Life Sciences and the Department of Chemistry, led by Phill Stansfeld.',
+    'We use computer simulations, including molecular dynamics, together with AI structure prediction, to study membrane proteins: the proteins that sit in the oily membranes around every cell. That includes the proteins bacteria use to build their tough outer layers and to resist antibiotics. Come and ask us about it!'
+  ],
+  soundOnByDefault: true,
+  idleMinutesDefault: 0,          // 0 = never reset automatically
+  timestepFs: 2,                  // MD timestep used in the "how long" calculator
+  gpuNsPerDay: 400                // rough throughput of one modern GPU for a small solvated protein
+};
+
+/* ---------- small utilities ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const TAU = Math.PI * 2;
+const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('protein-origami:' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('protein-origami:' + k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } }
+};
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+let gaussSpare = null;
+function gauss() {
+  if (gaussSpare !== null) { const g = gaussSpare; gaussSpare = null; return g; }
+  let u, v, s; do { u = Math.random() * 2 - 1; v = Math.random() * 2 - 1; s = u * u + v * v; } while (s >= 1 || s === 0);
+  const m = Math.sqrt(-2 * Math.log(s) / s); gaussSpare = v * m; return u * m;
+}
+function fitCanvas(cv) {
+  const r = cv.getBoundingClientRect();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w: r.width, h: r.height };
+}
+function fmtTime(s) { s = Math.floor(s); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function supPow(mant, exp) { return (mant ? mant + ' × ' : '') + '10<sup>' + exp + '</sup>'; }
+function bigWords(x) {
+  if (x < 1e6) return Math.round(x).toLocaleString('en-GB');
+  const units = [[1e18, 'quintillion'], [1e15, 'quadrillion'], [1e12, 'trillion'], [1e9, 'billion'], [1e6, 'million']];
+  if (x >= 1e21) { const e = Math.floor(Math.log10(x)); return supPow((x / Math.pow(10, e)).toFixed(1), e); }
+  for (const [u, w] of units) if (x >= u) { const v = x / u; return (v >= 100 ? Math.round(v) : v.toFixed(1).replace(/\.0$/, '')) + ' ' + w; }
+}
+
+/* ---------- puzzle levels (best scores verified by exact search / literature) ---------- */
+const GROUPS = [
+  { name: 'Warm-up', text: 'Short chains to get the hang of the grid.' },
+  { name: 'Build a core', text: 'Longer chains. Each one has exactly one best fold, just like a real protein has one working shape.' },
+  { name: 'Research benchmarks', text: 'Real test sequences that scientists have used for over 30 years to compare computer folding methods (Unger and Moult, 1993). Can you match the computer?' }
+];
+const LEVELS = [
+  { g: 0, name: 'Hide the oil', seq: 'HPPH', best: 1, nBest: 1, fold: '0,0 1,0 1,1 0,1',
+    intro: 'The orange beads are oily: they don\'t like water. Drag an end bead to bend the chain until the two orange beads touch.' },
+  { g: 0, name: 'First fold', seq: 'HPPHPH', best: 2, nBest: 1, fold: '1,0 2,0 2,1 1,1 0,1 0,0',
+    intro: 'Three oily beads now. Fold the chain to get two contacts. You can drag any bead, not just the ends.' },
+  { g: 0, name: 'Hairpin', seq: 'HPPHHPPH', best: 3, nBest: 1, fold: '2,0 3,0 3,1 2,1 1,1 0,1 0,0 1,0',
+    intro: 'Proteins often fold back on themselves like a hairpin. Find all three contacts.' },
+  { g: 0, name: 'Zig-zag', seq: 'HPPHPPHPPH', best: 4, nBest: 1, fold: '2,0 3,0 3,1 2,1 2,2 1,2 1,1 0,1 0,0 1,0',
+    intro: 'An oily bead in every third place. There\'s only one best shape. Can you find it?' },
+  { g: 1, name: 'First core', seq: 'HPPHPPHPHPHH', best: 5, nBest: 1, fold: '2,1 3,1 3,2 2,2 2,3 1,3 1,2 0,2 0,1 0,0 1,0 1,1',
+    intro: 'Real proteins hide their oily beads in a core in the middle. Build one with 5 contacts.' },
+  { g: 1, name: 'Tight squeeze', seq: 'HPHPHPPHPHPHHH', best: 7, nBest: 1, fold: '2,0 3,0 3,1 3,2 2,2 2,3 1,3 1,2 0,2 0,1 0,0 1,0 1,1 2,1',
+    intro: 'Seven contacts are possible. Every oily bead will need to touch at least one other.' },
+  { g: 1, name: 'One true fold', seq: 'HHPPPPHPHPHHPHHH', best: 7, nBest: 1, fold: '0,2 1,2 1,3 1,4 2,4 2,3 2,2 3,2 3,1 3,0 2,0 1,0 0,0 0,1 1,1 2,1',
+    intro: 'A long water-loving loop at the start. Out of millions of shapes, only one scores 7.' },
+  { g: 1, name: 'Nine to find', seq: 'HPHPHPHPPHHPPHHHHH', best: 9, nBest: 1, fold: '2,0 3,0 3,1 4,1 4,2 4,3 3,3 3,4 2,4 2,3 1,3 0,3 0,2 1,2 1,1 2,1 2,2 3,2',
+    intro: 'Hint: on a square grid, two beads can only touch if they are an odd number of places apart along the chain.' },
+  { g: 2, name: 'Benchmark 1', seq: 'HPHPPHHPHPPHPHHPPHPH', best: 9, nBest: 2, bench: true, fold: '3,1 4,1 4,2 4,3 3,3 3,2 2,2 2,3 1,3 1,4 0,4 0,3 0,2 1,2 1,1 0,1 0,0 1,0 2,0 2,1',
+    intro: 'A real research test puzzle. The best possible score is 9 contacts, and there are only 2 ways to get it.' },
+  { g: 2, name: 'Benchmark 2', seq: 'HHPPHPPHPPHPPHPPHPPHPPHH', best: 9, nBest: 19, bench: true, fold: '2,3 3,3 4,3 5,3 5,4 4,4 3,4 2,4 2,5 1,5 1,4 0,4 0,3 1,3 1,2 1,1 2,1 2,0 3,0 3,1 4,1 4,2 3,2 2,2',
+    intro: 'Another classic benchmark. There are 19 different best folds, so there are lots of ways to win.' },
+  { g: 2, name: 'Benchmark 3', seq: 'PPHPPHHPPPPHHPPPPHHPPPPHH', best: 8, nBest: 16, bench: true, fold: '0,3 1,3 2,3 2,4 3,4 3,3 4,3 5,3 6,3 6,2 5,2 4,2 4,1 5,1 5,0 4,0 3,0 3,1 2,1 1,1 0,1 0,2 1,2 2,2 3,2',
+    intro: 'Oily beads come in pairs, separated by long water-loving loops. Best score: 8.' },
+  { g: 2, name: 'Benchmark 4', seq: 'PPPHHPPHHPPPPPHHHHHHHPPHHPPPPHHPPHPP', best: 14, nBest: 0, bench: true, fold: '0,4 0,5 1,5 2,5 2,4 1,4 1,3 2,3 2,2 1,2 1,1 2,1 3,1 4,1 4,2 3,2 3,3 4,3 4,4 3,4 3,5 3,6 4,6 4,5 5,5 6,5 7,5 7,4 6,4 5,4 5,3 6,3 6,2 5,2 5,1 5,0',
+    intro: 'Expert level. A long oily stretch in the middle wants to become the core.' },
+  { g: 2, name: 'Benchmark 5', seq: 'PPHPPHHPPHHPPPPPHHHHHHHHHHPPPPPPHHPPHHPPHPPHHHHH', best: 23, nBest: 0, bench: true, fold: '0,5 1,5 2,5 2,6 3,6 3,5 4,5 4,6 5,6 5,5 6,5 7,5 7,4 8,4 8,3 7,3 6,3 6,4 5,4 4,4 3,4 2,4 2,3 3,3 3,2 2,2 1,2 1,3 0,3 0,2 0,1 1,1 2,1 3,1 3,0 4,0 4,1 5,1 5,0 6,0 6,1 7,1 7,2 6,2 5,2 4,2 4,3 5,3',
+    intro: 'Grand master. 48 beads and 23 contacts to find. Computers find this one hard too.' }
+];
+LEVELS.forEach((L, i) => { L.id = i + 1; L.n = L.seq.length; L.foldPos = L.fold.split(' ').map(p => { const [x, y] = p.split(',').map(Number); return { x, y }; }); });
+
+/* ---------- amino-acid types shared by the snap puzzles and the antibiotic lab ---------- */
+const AA = {
+  O: { name: 'Oily', ex: 'leucine', short: 'Leu', col: '#F5B041', dark: '#8A5A10' },
+  P: { name: 'Water-loving', ex: 'serine', short: 'Ser', col: '#5CC8D6', dark: '#1F5F69' },
+  '+': { name: 'Positive', ex: 'lysine', short: 'Lys', col: '#7AA2FF', dark: '#2F4C8C' },
+  '-': { name: 'Negative', ex: 'aspartate', short: 'Asp', col: '#FF6B8B', dark: '#8C2F45' },
+  C: { name: 'Cysteine', ex: 'cysteine', short: 'Cys', col: '#E8E36A', dark: '#6E6B1E' },
+  N: { name: 'Other', ex: '', short: '', col: '#2F6380', dark: '#1A4560' }
+};
+function fits(a, b) { return (a === 'O' && b === 'O') || (a === 'C' && b === 'C') || (a === '+' && b === '-') || (a === '-' && b === '+'); }
+const LOCK_E = { O: 1, '+': 1.5, '-': 1.5, C: 2.5 };   // rough relative strengths shown as "energy"
+function maxPairs(seq) {   // most connections possible: each piece one partner, at least 3 apart along the chain
+  const t = seq.split(''), idx = t.map((c, i) => c === 'P' ? -1 : i).filter(i => i >= 0); let best = 0;
+  const rec = (rem, cnt) => {
+    if (cnt > best) best = cnt; if (!rem.length || cnt + Math.floor(rem.length / 2) <= best) return;
+    const [a, ...rest] = rem; rec(rest, cnt);
+    rest.forEach((b, k) => { if (Math.abs(a - b) >= 3 && fits(t[a], t[b])) rec(rest.slice(0, k).concat(rest.slice(k + 1)), cnt + 1); });
+  };
+  rec(idx, 0); return best;
+}
+
+/* snap puzzle levels: target folds and pairings verified offline (best = maximum possible pairing) */
+const SNAP_LEVELS = [
+  { name: 'Opposites attract', seq: '+PPPP-', fold: '0,0 1,0 2,0 2,1 1,1 0,1', pairs: [[0, 5]],
+    intro: 'Positive (+) and negative (−) pieces fit together like jigsaw pieces. Drag one end of the chain round until the + slots into the −.',
+    fact: 'Opposite charges attract, like a balloon rubbed on your jumper sticking to a wall. Inside a protein, a + and − pair is called a salt bridge.' },
+  { name: 'Oil drops', seq: 'OPPOOPPO', fold: '0,0 1,0 1,1 0,1 0,2 1,2 1,3 0,3', pairs: [[0, 3], [4, 7]],
+    intro: 'Oily pieces stick to other oily pieces, hiding from the water. Make two oily pairs.',
+    fact: 'Oily amino acids hide from water for the same reason oil and vinegar separate in salad dressing.' },
+  { name: 'Zip it up', seq: '+O-PP+O-', fold: '0,0 1,0 2,0 3,0 3,1 2,1 1,1 0,1', pairs: [[0, 7], [1, 6], [2, 5]],
+    intro: 'Fold the chain in half like a hairpin, then zip it up. Three connections to make.',
+    fact: 'Hairpins are everywhere in real proteins: the chain folds back on itself and the two halves zip together.' },
+  { name: 'Sulfur bridge', seq: 'CO+OPPO-OC', fold: '0,0 1,0 2,0 3,0 4,0 4,1 3,1 2,1 1,1 0,1', pairs: [[0, 9], [1, 8], [2, 7], [3, 6]],
+    intro: 'Meet cysteine (S). Two cysteines lock together with a sulfur bridge, one of the strongest links in a protein.',
+    fact: 'Perms work by breaking and re-forming the sulfur bridges between cysteines in the keratin protein of your hair.' },
+  { name: 'Three strands', seq: '+OPPC-O-PP+C', fold: '0,0 1,0 2,0 3,0 3,1 2,1 1,1 0,1 0,2 1,2 2,2 3,2', pairs: [[0, 7], [1, 6], [5, 10], [4, 11]],
+    intro: 'Fold the chain back and forth into three strands, like the sheets in real proteins. Each piece can only hold one partner, so choose carefully.',
+    fact: 'Silk gets its strength from protein strands lined up side by side in sheets, a bit like this puzzle.' },
+  { name: 'Wrong partner', seq: '+PP-PPPP+-', fold: '0,0 1,0 1,1 1,2 1,3 1,4 0,4 0,3 0,2 0,1', pairs: [[0, 9], [3, 8]],
+    intro: 'Careful! If the first + grabs the nearest −, the other + is left on its own. That\'s misfolding. Tap a snapped piece to pull it apart.',
+    fact: 'When proteins stick to the wrong partners they can clump together. This happens in Alzheimer\'s and Parkinson\'s diseases.' },
+  { name: 'Hide the core', seq: '+POPOPPOPOP-OO', fold: '2,0 3,0 3,1 3,2 2,2 2,3 1,3 1,2 0,2 0,1 0,0 1,0 1,1 2,1', pairs: [[0, 11], [2, 13], [4, 7], [9, 12]],
+    intro: 'Build an oily core in the middle, with a salt bridge (+ and −) to lock it shut.',
+    fact: 'Salt bridges help proteins from microbes that live in hot springs stay folded at high temperatures.' },
+  { name: 'Mini protein', seq: 'CP+PO-OO-PP+OO+OP-PC', fold: '3,1 4,1 4,2 4,3 3,3 3,2 2,2 2,3 1,3 1,4 0,4 0,3 0,2 1,2 1,1 0,1 0,0 1,0 2,0 2,1', pairs: [[0, 19], [2, 5], [4, 7], [6, 13], [8, 11], [12, 15], [14, 17]],
+    intro: 'Everything together: oily pairs, salt bridges and a sulfur bridge. Seven connections hold this little protein in shape.',
+    fact: 'Insulin, the hormone that controls your blood sugar, is held in shape by three sulfur bridges.' }
+];
+SNAP_LEVELS.forEach((L, i) => {
+  L.num = i + 1; L.key = 'j' + (i + 1); L.mode = 'snap'; L.n = L.seq.length; L.best = maxPairs(L.seq);
+  L.foldPos = L.fold.split(' ').map(p => { const [x, y] = p.split(',').map(Number); return { x, y }; });
+});
+LEVELS.forEach(L => { L.key = 'g' + L.id; L.mode = 'grid'; });
+function findLevel(key) { return SNAP_LEVELS.find(L => L.key === key) || LEVELS.find(L => L.key === key); }
+function levelLabel(L) { return L.mode === 'snap' ? `Snap puzzle ${L.num}, ${L.n} pieces` : `Grid challenge ${L.id}, ${L.n} beads`; }
+
+function pieceSVG(t) {
+  const T = AA[t];
+  const body = t === 'O' ? '<circle cx="10" cy="12" r="8" fill="#F5B041"/>'
+    : t === 'P' ? '<circle cx="10" cy="12" r="6.6" fill="rgba(92,200,214,.2)" stroke="#5CC8D6" stroke-width="2.8"/>'
+    : `<circle cx="10" cy="12" r="7" fill="${T.dark}" stroke="${T.col}" stroke-width="2.4"/><text x="10" y="15.8" text-anchor="middle" font-size="11" font-weight="800" fill="${T.col}" font-family="system-ui,sans-serif">${t === '+' ? '+' : t === '-' ? '−' : 'S'}</text>`;
+  const side = {
+    O: '<ellipse cx="22" cy="12" rx="5" ry="5.6" fill="#F5B041" stroke="#8A5A10" stroke-width=".8"/>',
+    '+': `<rect x="16" y="10.3" width="6" height="3.4" fill="${T.col}"/><circle cx="24.5" cy="12" r="3.4" fill="${T.col}"/>`,
+    '-': `<path d="M16 6.4H28.6V8.6A3.6 3.6 0 0 0 28.6 15.4V17.6H16Z" fill="${T.col}"/>`,
+    C: `<rect x="16" y="10.4" width="5.5" height="3.2" fill="${T.col}"/><circle cx="23.4" cy="12" r="3" fill="${T.col}"/>`,
+    P: '<circle cx="22.5" cy="12" r="2.8" fill="none" stroke="#5CC8D6" stroke-width="1.8"/>'
+  }[t];
+  return `<svg class="lg-svg" viewBox="0 0 32 24" aria-hidden="true">${side}${body}</svg>`;
+}
+const SNAP_LEGEND = ['O', '+', '-', 'C', 'P'].map(t => `<li>${pieceSVG(t)}<span>${{
+  O: '<strong>Oily</strong> (like leucine): sticks to other oily pieces',
+  '+': '<strong>Positive</strong> (like lysine): its tab fits a negative',
+  '-': '<strong>Negative</strong> (like aspartate): its socket fits a positive',
+  C: '<strong>Cysteine</strong>: two of them make a strong sulfur bridge',
+  P: '<strong>Water-loving</strong> (like serine): happy on the outside, never snaps'
+}[t]}</span></li>`).join('');
+const GRID_LEGEND = `<li><span class="lg-h"></span><span><strong>Oily</strong> (hydrophobic): hides from water</span></li>
+  <li><span class="lg-p"></span><span><strong>Water-loving</strong> (polar): happy on the outside</span></li>
+  <li><span class="lg-c"></span><span><strong>Contact</strong>: two oily beads touching (energy −1)</span></li>`;
+const SNAP_HOWTO = `<li>Drag any piece. The rest of the chain follows, like a string.</li>
+  <li>Pieces that fit snap together when they touch: + with −, oily with oily, cysteine with cysteine.</li>
+  <li>Each piece holds only one partner. Tap a snapped piece to pull it apart.</li>
+  <li>Make every connection to finish the puzzle.</li>
+  <li>Keyboard: <kbd>[</kbd> and <kbd>]</kbd> pick a piece, arrow keys move it, <kbd>Enter</kbd> pulls it apart, <kbd>U</kbd> undoes.</li>`;
+const GRID_HOWTO = `<li>Drag any bead to a free square next to it. The rest of the chain follows, like pulling a string.</li>
+  <li>Two oily beads score a contact when they sit side by side but aren't joined directly by the chain.</li>
+  <li>More contacts means lower energy, and a more stable protein.</li>
+  <li>Keyboard: <kbd>[</kbd> and <kbd>]</kbd> pick a bead, arrow keys move it, <kbd>U</kbd> undoes.</li>`;
+
+
+const FACTS = [
+  'Egg white turns white when you cook it because heat unfolds its proteins and they tangle together.',
+  'Your DNA holds the recipes for about 20,000 different proteins.',
+  'The biggest human protein, titin, is a chain of about 34,000 amino acids. It acts like a spring in your muscles.',
+  'Jellyfish make a protein that glows green. Scientists use it to light up cells, and its discovery won the 2008 Nobel Prize in Chemistry.',
+  'Some small proteins fold in a few millionths of a second.',
+  'Spider silk, hair, nails and feathers are all made of proteins.',
+  'Fireflies glow thanks to an enzyme (a protein) called luciferase.',
+  'Even in this simple grid game, finding the best fold is a famously hard problem for computers.',
+  'In 2011, players of the online game Foldit helped work out the structure of a protein from a virus that had puzzled scientists for years.',
+  'In a molecular dynamics simulation, each step moves time forward by just a couple of femtoseconds: millionths of a billionth of a second.',
+  'Most of the atoms in a typical protein simulation belong to the water around the protein, not the protein itself.',
+  'The 2013 Nobel Prize in Chemistry went to three scientists for building computer models of molecules, the ideas behind molecular dynamics.',
+  'Cells have helper proteins called chaperones that stop new chains from tangling while they fold.'
+];
+
+// number of self-avoiding walks on the square lattice, c_m for m steps (exact, m <= 24)
+const SAW = [1, 4, 12, 36, 100, 284, 780, 2172, 5916, 16268, 44100, 120292, 324932, 881500, 2374444, 6416596, 17245332, 46466676, 124658732, 335116620, 897697164, 2408806028, 6444560484, 17266613812, 46146397316];
+function shapeCount(n) { // distinct lattice conformations up to rotation/reflection
+  const m = n - 1; if (m <= 1) return 1;
+  const c = m < SAW.length ? SAW[m] : 1.17704 * Math.pow(2.63815853, m) * Math.pow(m, 11 / 32);
+  return { value: 1 + (c - 4) / 8, exact: m < SAW.length };
+}
+
+/* ---------- sound ---------- */
+const Sound = {
+  ctx: null, on: store.get('sound', CONFIG.soundOnByDefault),
+  c() { if (!this.ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; this.ctx = new AC(); } if (this.ctx.state === 'suspended') this.ctx.resume(); return this.ctx; },
+  tone(f, d = 0.15, type = 'sine', v = 0.07, when = 0) {
+    if (!this.on) return; const c = this.c(); if (!c) return;
+    const t = c.currentTime + when, o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + d + 0.03);
+  },
+  contact(k) { const sc = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24, 26, 28]; this.tone(392 * Math.pow(2, sc[Math.min(k, sc.length - 1)] / 12), 0.22, 'triangle', 0.08); },
+  lose() { this.tone(196, 0.14, 'sine', 0.05); },
+  bonk() { this.tone(120, 0.08, 'square', 0.025); },
+  tick() { this.tone(720, 0.035, 'sine', 0.018); },
+  win() { [0, 4, 7, 12, 16].forEach((s, i) => this.tone(523.25 * Math.pow(2, s / 12), 0.42, 'triangle', 0.075, i * 0.085)); }
+};
+
+/* ---------- settings ---------- */
+const Settings = {
+  faces: store.get('faces', true),
+  aaNames: store.get('aaNames', false),
+  idle: store.get('idle', CONFIG.idleMinutesDefault)
+};
+
+/* =====================================================================
+   Bead drawing (shared by every view)
+   ===================================================================== */
+function drawBead(ctx, x, y, r, isH, opt = {}) {
+  if (isH) {
+    const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.08, x, y, r);
+    g.addColorStop(0, '#FFE6AD'); g.addColorStop(0.55, '#F5B041'); g.addColorStop(1, '#B9750F');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+    if (opt.mood != null && opt.mood >= 0 && r >= 9) drawFace(ctx, x, y, r, opt.mood);
+  } else {
+    const lw = Math.max(2, r * 0.3);
+    ctx.fillStyle = 'rgba(92,200,214,0.2)'; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+    ctx.lineWidth = lw; ctx.strokeStyle = '#5CC8D6'; ctx.beginPath(); ctx.arc(x, y, r - lw / 2, 0, TAU); ctx.stroke();
+  }
+  if (opt.ring) { ctx.lineWidth = Math.max(2.5, r * 0.16); ctx.strokeStyle = '#EAF6F4'; ctx.beginPath(); ctx.arc(x, y, r + Math.max(4, r * 0.25), 0, TAU); ctx.stroke(); }
+}
+function drawFace(ctx, x, y, r, mood) {
+  ctx.save(); ctx.strokeStyle = ctx.fillStyle = '#5A3405'; ctx.lineCap = 'round'; ctx.lineWidth = Math.max(1.4, r * 0.11);
+  const ex = r * 0.32, ey = -r * 0.12, er = r * 0.1;
+  if (mood >= 2) { for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(x + s * ex, y + ey + er * 0.6, er * 1.3, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke(); } }
+  else { for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(x + s * ex, y + ey, er, 0, TAU); ctx.fill(); } }
+  ctx.beginPath();
+  if (mood <= 0) ctx.arc(x, y + r * 0.52, r * 0.2, Math.PI * 1.15, Math.PI * 1.85);
+  else if (mood === 1) ctx.arc(x, y + r * 0.12, r * 0.26, Math.PI * 0.25, Math.PI * 0.75);
+  else ctx.arc(x, y + r * 0.08, r * 0.34, Math.PI * 0.15, Math.PI * 0.85);
+  ctx.stroke(); ctx.restore();
+}
+function drawContact(ctx, x1, y1, x2, y2, w, glow) {
+  ctx.save(); ctx.strokeStyle = 'rgba(255,217,138,0.95)'; ctx.lineWidth = w; ctx.lineCap = 'round';
+  ctx.shadowColor = 'rgba(255,200,90,0.9)'; ctx.shadowBlur = 8 + glow * 18;
+  ctx.setLineDash([w * 0.9, w * 0.9]); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.restore();
+}
+
+/* =====================================================================
+   Molecular dynamics engine: 2D bead-spring chain, Langevin (BAOAB)
+   ===================================================================== */
+class ChainMD {
+  constructor(seq) {
+    this.p = { kT: 0.35, eps: 1.0, gamma: 1.0, dt: 0.008, kb: 150, r0: 1.0, ka: 0.6, rc: 2.5, kg: 25, wall: 0 };
+    this.grab = null; this.setSequence(seq, true);
+  }
+  setSequence(seq, reinit) {
+    const n = seq.length, changed = !this.x || this.n !== n;
+    this.seq = seq; this.n = n; this.isH = Uint8Array.from(seq, c => c === 'H' ? 1 : 0);
+    if (changed) { ['x', 'y', 'vx', 'vy', 'fx', 'fy'].forEach(k => this[k] = new Float64Array(n)); }
+    if (changed || reinit) this.initExtended();
+  }
+  setType(i, h) { this.isH[i] = h ? 1 : 0; this.seq = Array.from(this.isH, v => v ? 'H' : 'P').join(''); }
+  thermalise() { const s = Math.sqrt(this.p.kT); for (let i = 0; i < this.n; i++) { this.vx[i] = gauss() * s; this.vy[i] = gauss() * s; } }
+  initExtended() {
+    const n = this.n;
+    for (let i = 0; i < n; i++) { this.x[i] = (i - (n - 1) / 2) * 1.0; this.y[i] = 0.12 * Math.sin(i * 1.7); }
+    this.p.wall = Math.max(12, n * 0.62 + 4);
+    this.thermalise(); this.time = 0; this.steps = 0; this.U = this.forces();
+  }
+  initFromLattice(pos) {
+    const n = this.n; let cx = 0, cy = 0; pos.forEach(p => { cx += p.x; cy += p.y; }); cx /= n; cy /= n;
+    for (let i = 0; i < n; i++) { this.x[i] = (pos[i].x - cx) * 1.06; this.y[i] = (pos[i].y - cy) * 1.06; }
+    this.p.wall = Math.max(12, n * 0.62 + 4);
+    this.thermalise(); this.time = 0; this.steps = 0; this.U = this.forces();
+  }
+  forces() {
+    const { x, y, fx, fy, n, isH, p } = this; fx.fill(0); fy.fill(0); let U = 0;
+    // bonds
+    for (let i = 0; i < n - 1; i++) {
+      const dx = x[i + 1] - x[i], dy = y[i + 1] - y[i], r = Math.sqrt(dx * dx + dy * dy) || 1e-9, dr = r - p.r0;
+      U += 0.5 * p.kb * dr * dr; const f = -p.kb * dr / r;
+      fx[i + 1] += f * dx; fy[i + 1] += f * dy; fx[i] -= f * dx; fy[i] -= f * dy;
+    }
+    // angles: U = ka (1 + cos theta), straight chain = 0
+    if (p.ka > 0) for (let i = 1; i < n - 1; i++) {
+      const ax = x[i - 1] - x[i], ay = y[i - 1] - y[i], bx = x[i + 1] - x[i], by = y[i + 1] - y[i];
+      const la = Math.sqrt(ax * ax + ay * ay) || 1e-9, lb = Math.sqrt(bx * bx + by * by) || 1e-9;
+      const c = (ax * bx + ay * by) / (la * lb); U += p.ka * (1 + c);
+      const k = p.ka, iab = 1 / (la * lb);
+      const fax = -k * (bx * iab - c * ax / (la * la)), fay = -k * (by * iab - c * ay / (la * la));
+      const fbx = -k * (ax * iab - c * bx / (lb * lb)), fby = -k * (ay * iab - c * by / (lb * lb));
+      fx[i - 1] += fax; fy[i - 1] += fay; fx[i + 1] += fbx; fy[i + 1] += fby; fx[i] -= fax + fbx; fy[i] -= fay + fby;
+    }
+    // non-bonded: WCA repulsion for all pairs, plus LJ attraction (depth eps) for H-H pairs
+    const rc2 = p.rc * p.rc, rmin2 = 1.2599210498948732, eps = p.eps;
+    const ic = 1 / rc2, ic6 = ic * ic * ic, Ushift = 4 * (ic6 * ic6 - ic6);
+    for (let i = 0; i < n - 2; i++) {
+      const xi = x[i], yi = y[i], hi = isH[i];
+      for (let j = i + 2; j < n; j++) {
+        const dx = x[j] - xi, dy = y[j] - yi, r2 = dx * dx + dy * dy;
+        if (r2 > rc2) continue;
+        const hh = hi && isH[j];
+        if (!hh && r2 > rmin2) continue;
+        const r2c = Math.max(r2, 0.36), inv2 = 1 / r2c, s6 = inv2 * inv2 * inv2, lj = 4 * (s6 * s6 - s6);
+        let f;
+        if (r2 < rmin2) { U += lj + 1 - (hh ? eps : 0); f = 24 * (2 * s6 * s6 - s6) * inv2; }
+        else { U += eps * (lj - Ushift); f = eps * 24 * (2 * s6 * s6 - s6) * inv2; }
+        fx[j] += f * dx; fy[j] += f * dy; fx[i] -= f * dx; fy[i] -= f * dy;
+      }
+    }
+    // soft circular wall keeps the chain on screen
+    const R = p.wall;
+    for (let i = 0; i < n; i++) {
+      const r = Math.sqrt(x[i] * x[i] + y[i] * y[i]);
+      if (r > R) { const f = -4 * (r - R) / r; fx[i] += f * x[i]; fy[i] += f * y[i]; U += 2 * (r - R) * (r - R); }
+    }
+    // user pulling a bead (steered MD)
+    if (this.grab) {
+      const g = this.grab; let gx = p.kg * (g.x - x[g.i]), gy = p.kg * (g.y - y[g.i]);
+      const m = Math.hypot(gx, gy), cap = 60; if (m > cap) { gx *= cap / m; gy *= cap / m; }
+      fx[g.i] += gx; fy[g.i] += gy; g.force = Math.min(m, cap);
+    }
+    return U;
+  }
+  step(ns) {
+    const { x, y, vx, vy, fx, fy, n, p } = this, dt = p.dt, h = 0.5 * dt;
+    const c1 = Math.exp(-p.gamma * dt), c2 = Math.sqrt((1 - c1 * c1) * p.kT);
+    for (let s = 0; s < ns; s++) {
+      for (let i = 0; i < n; i++) { vx[i] += h * fx[i]; vy[i] += h * fy[i]; x[i] += h * vx[i]; y[i] += h * vy[i]; }
+      for (let i = 0; i < n; i++) { vx[i] = c1 * vx[i] + c2 * gauss(); vy[i] = c1 * vy[i] + c2 * gauss(); x[i] += h * vx[i]; y[i] += h * vy[i]; }
+      this.U = this.forces();
+      for (let i = 0; i < n; i++) {
+        vx[i] += h * fx[i]; vy[i] += h * fy[i];
+        const v2 = vx[i] * vx[i] + vy[i] * vy[i]; if (v2 > 400) { const k = 20 / Math.sqrt(v2); vx[i] *= k; vy[i] *= k; }
+      }
+    }
+    this.time += ns * dt; this.steps += ns;
+    if (!Number.isFinite(this.U)) this.initExtended();
+  }
+  contacts() { // H-H pairs at least 3 apart along the chain and closer than 1.5
+    const out = []; const { x, y, n, isH } = this;
+    for (let i = 0; i < n; i++) if (isH[i]) for (let j = i + 3; j < n; j++) if (isH[j]) {
+      const dx = x[j] - x[i], dy = y[j] - y[i]; if (dx * dx + dy * dy < 2.25) out.push([i, j]);
+    }
+    return out;
+  }
+  potential() { // potential energy without wall and grab terms, for display
+    const g = this.grab; this.grab = null; const w = this.p.wall; this.p.wall = 1e9;
+    const U = this.forces(); this.grab = g; this.p.wall = w; this.forces(); return U;
+  }
+}
+
+/* view helper for MD canvases */
+function makeView() { return { cx: 0, cy: 0, s: 30, init: false }; }
+function updateView(v, md, W, H, opt = {}) {
+  let minx = 1e9, maxx = -1e9, miny = 1e9, maxy = -1e9, cx = 0, cy = 0;
+  for (let i = 0; i < md.n; i++) { const x = md.x[i], y = md.y[i]; cx += x; cy += y; if (x < minx) minx = x; if (x > maxx) maxx = x; if (y < miny) miny = y; if (y > maxy) maxy = y; }
+  cx /= md.n; cy /= md.n;
+  const ext = Math.max(maxx - minx, (maxy - miny) * (W / H), opt.minExt || 10) + 3;
+  const ts = clamp(Math.min(W / ext, H / Math.max(maxy - miny + 3, opt.minExt || 10)), 6, opt.maxS || 44);
+  const tcx = (minx + maxx) / 2, tcy = (miny + maxy) / 2;
+  if (!v.init || opt.snap) { v.cx = tcx; v.cy = tcy; v.s = ts; v.init = true; return; }
+  if (opt.freeze) return;
+  const k = opt.k || 0.05; v.cx += (tcx - v.cx) * k; v.cy += (tcy - v.cy) * k; v.s += (ts - v.s) * k * 0.6;
+}
+function drawMD(ctx, md, v, ox, oy, opt = {}) {
+  const S = v.s, tx = i => ox + (md.x[i] - v.cx) * S, ty = i => oy + (md.y[i] - v.cy) * S;
+  const contacts = md.contacts();
+  const moodOf = new Int8Array(md.n); contacts.forEach(([i, j]) => { moodOf[i]++; moodOf[j]++; });
+  contacts.forEach(([i, j]) => drawContact(ctx, tx(i), ty(i), tx(j), ty(j), Math.max(2, S * 0.11), opt.glow || 0));
+  ctx.save(); ctx.lineCap = ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(234,246,244,0.55)'; ctx.lineWidth = Math.max(2, S * 0.16);
+  ctx.beginPath(); for (let i = 0; i < md.n; i++) { if (i) ctx.lineTo(tx(i), ty(i)); else ctx.moveTo(tx(i), ty(i)); } ctx.stroke(); ctx.restore();
+  const r = Math.max(4, S * 0.42);
+  for (let i = 0; i < md.n; i++) drawBead(ctx, tx(i), ty(i), r, md.isH[i], { mood: opt.faces ? Math.min(2, moodOf[i]) : -1, ring: opt.ring === i });
+  return contacts;
+}
+
+/* =====================================================================
+   Router
+   ===================================================================== */
+let current = 'home';
+const enterHooks = {};
+function go(name, push = true) {
+  let tab = null;
+  if (name === 'drug') { tab = 'drug'; name = 'lab'; }
+  if (!document.getElementById('screen-' + name)) name = 'home';
+  current = name;
+  $$('.screen').forEach(s => s.classList.toggle('active', s.id === 'screen-' + name));
+  $$('.mainnav button').forEach(b => {
+    const on = b.dataset.go === name || (name === 'play' && b.dataset.go === 'levels');
+    if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+  });
+  if (tab) LabTabs.set(tab);
+  if (push && location.hash !== '#' + (tab || name)) history.pushState(null, '', '#' + (tab || name));
+  if (enterHooks[name]) enterHooks[name]();
+  $('#screen-' + name).scrollTop = 0;
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-go]'); if (!b) return;
+  e.preventDefault(); go(b.dataset.go);
+});
+window.addEventListener('popstate', () => go((location.hash || '#home').slice(1), false));
+
+/* =====================================================================
+   Home hero: live MD folding/unfolding cycle
+   ===================================================================== */
+const Hero = {
+  md: null, view: makeView(), phase: 'cool', t: 0,
+  init() {
+    this.md = new ChainMD(LEVELS[8].seq); this.md.p.kT = 1.2; this.md.thermalise();
+    this.phase = 'heat'; this.t = 0;
+    if (reduceMotion) { for (let k = 0; k < 300; k++) { this.md.p.kT = 1.1 - 0.95 * k / 300; this.md.step(50); } for (let k = 0; k < 200; k++) this.md.step(50); this.phase = 'still'; }
+    this.setStatus();
+  },
+  setStatus() {
+    const txt = {
+      heat: 'Live simulation: heating up. The chain shakes itself apart.',
+      cool: 'Live simulation: cooling down. The oily beads find each other.',
+      hold: 'Live simulation: cold and settled. The oily beads have clustered together.',
+      still: 'A folded chain: oily beads tucked into a core.'
+    }[this.phase];
+    $('#heroStatus').textContent = txt;
+    $('#heroDot').style.background = this.phase === 'heat' ? 'var(--coral)' : this.phase === 'cool' ? 'var(--lagoon)' : 'var(--saffron)';
+  },
+  tick(dt) {
+    const cv = $('#heroCanvas'), { ctx, w, h } = fitCanvas(cv), md = this.md;
+    if (this.phase !== 'still') {
+      // schedule runs on simulated time: heat 60, cool slowly over 600, hold 300 (reduced units)
+      md.step(80); this.t += 80 * md.p.dt; const prev = this.phase;
+      if (this.phase === 'heat') { md.p.kT = 1.1; if (this.t > 60) { this.phase = 'cool'; this.t = 0; } }
+      else if (this.phase === 'cool') { md.p.kT = 1.1 + (0.15 - 1.1) * Math.min(1, this.t / 600); if (this.t > 600) { this.phase = 'hold'; this.t = 0; } }
+      else if (this.phase === 'hold') { md.p.kT = 0.15; if (this.t > 360) { this.phase = 'heat'; this.t = 0; } }
+      if (prev !== this.phase) { this.setStatus(); if (this.onPhase) this.onPhase(prev, md.contacts().length); }
+    }
+    ctx.clearRect(0, 0, w, h);
+    const wide = w > 760;
+    const ox = wide ? w * 0.7 : w * 0.5, oy = h * 0.5;
+    const area = wide ? Math.min(w * 0.5, h * 0.85) : Math.min(w * 0.95, h * 0.95);
+    updateView(this.view, md, area, area, { minExt: 12, maxS: 46, k: 0.03 });
+    drawMD(ctx, md, this.view, ox, oy, { faces: Settings.faces, glow: this.phase === 'hold' ? 0.5 + 0.5 * Math.sin(performance.now() / 500) : 0 });
+  }
+};
+
+/* =====================================================================
+   Level select (levels drawn as beads on a strand)
+   ===================================================================== */
+const progress = {
+  data: (() => { const d = store.get('progress', {}), out = {}; for (const k in d) out[/^\d+$/.test(k) ? 'g' + k : k] = d[k]; return out; })(),
+  get(k) { return this.data[k] || 0; },
+  set(k, c) { if (c > this.get(k)) { this.data[k] = c; store.set('progress', this.data); } },
+  clear() { this.data = {}; store.set('progress', {}); }
+};
+function starsFor(c, best) {
+  if (c >= best) return 3;
+  if (c >= Math.max(1, Math.ceil(best * 0.7)) && best > 1) return 2;
+  if (c >= Math.max(1, Math.ceil(best * 0.35)) && c > 0) return 1;
+  return 0;
+}
+function starsText(k) { return '<span aria-hidden="true">' + '★'.repeat(k) + '<span class="off">' + '★'.repeat(3 - k) + '</span></span>'; }
+const SECTIONS = [
+  { title: 'Snap puzzles', text: 'Amino acids fit together like jigsaw pieces. Drag the chain around and the pieces that fit snap together.',
+    groups: [{ name: 'First steps', text: 'Meet the pieces, one kind at a time.', levels: SNAP_LEVELS.slice(0, 4) },
+             { name: 'Trickier proteins', text: 'Sheets, a misfolding trap, an oily core and a mini protein.', levels: SNAP_LEVELS.slice(4) }] },
+  { title: 'Grid challenge', text: 'For experts: the HP lattice model that researchers use to test folding methods. Beads move one square at a time and only oily contacts count.',
+    groups: GROUPS.map((g, gi) => ({ name: g.name, text: g.text, levels: LEVELS.filter(L => L.g === gi) })) }
+];
+function renderLevels() {
+  const root = $('#levelGroups'); root.innerHTML = '';
+  SECTIONS.forEach(sec => {
+    const head = document.createElement('div'); head.className = 'lsec';
+    head.innerHTML = `<h3>${esc(sec.title)}</h3><p>${esc(sec.text)}</p>`;
+    sec.groups.forEach(g => {
+      const el = document.createElement('section'); el.className = 'lgroup';
+      el.innerHTML = `<h4>${esc(g.name)}</h4><p class="small">${esc(g.text)}</p><div class="strand"><svg aria-hidden="true"><path fill="none" stroke="#2A6283" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></svg></div>`;
+      const strand = $('.strand', el);
+      g.levels.forEach(L => {
+        const c = progress.get(L.key), st = starsFor(c, L.best), num = L.mode === 'snap' ? L.num : L.id, unit = L.mode === 'snap' ? 'pieces' : 'beads';
+        const b = document.createElement('button'); b.className = 'lvl';
+        b.setAttribute('aria-label', `${L.mode === 'snap' ? 'Snap puzzle' : 'Grid challenge'} ${num}: ${L.name}, ${L.n} ${unit}, ${st} of 3 stars`);
+        b.innerHTML = `<span class="lvl-bead ${L.mode} ${st === 3 ? 'done' : c > 0 ? 'part' : ''}">${num}</span><span class="lvl-name">${esc(L.name)}</span><span class="lvl-sub">${L.n} ${unit}</span><span class="stars-txt">${starsText(st)}</span>`;
+        b.addEventListener('click', () => Play.open(L));
+        strand.appendChild(b);
+      });
+      head.appendChild(el);
+    });
+    root.appendChild(head);
+  });
+  layoutStrands();
+}
+function layoutStrands() {
+  $$('.strand').forEach(strand => {
+    const nodes = $$('.lvl', strand), W = strand.clientWidth; if (!W) return;
+    const cols = clamp(Math.floor(W / 165), 2, 5), colW = W / cols, rowH = 178;
+    const rows = Math.ceil(nodes.length / cols); strand.style.height = rows * rowH + 'px';
+    const pts = [];
+    nodes.forEach((nd, k) => {
+      const r = Math.floor(k / cols); let c = k % cols; if (r % 2) c = cols - 1 - c;
+      const x = colW * (c + 0.5), y = r * rowH + 40;
+      nd.style.left = (x - 75) + 'px'; nd.style.top = (y - 36) + 'px'; pts.push([x, y]);
+    });
+    $('path', strand).setAttribute('d', pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' '));
+  });
+}
+enterHooks.levels = () => renderLevels();
+window.addEventListener('resize', () => { if (current === 'levels') layoutStrands(); });
+
+/* =====================================================================
+   The lattice puzzle
+   ===================================================================== */
+const Game = {
+  L: null, n: 0, isH: [], pos: [], G: 12, occ: null, start: [], undoStack: [], moves: 0,
+  t0: null, solvedTime: null, contacts: [], prevContacts: 0, drawPos: [], selected: 0, drag: null,
+  shake: null, glow: 0, celebrated: false, peeked: false, famed: false, layout: null, lastUi: 0, hintGone: false,
+
+  load(L) {
+    Play.active = this; Play.setChrome('grid');
+    this.L = L; this.n = L.n; this.isH = Array.from(L.seq, c => c === 'H');
+    this.G = L.n <= 12 ? L.n + 4 : Math.max(15, Math.ceil(2.3 * Math.sqrt(L.n)) + 8);
+    this.occ = new Int16Array(this.G * this.G);
+    this.start = this.makeStart(L);
+    this.resetState(); this.renderPanel();
+  },
+  makeStart(L) {
+    const n = L.n, G = this.G;
+    if (n <= 12) { const y = Math.floor(G / 2), x0 = Math.floor((G - n) / 2); return Array.from({ length: n }, (_, i) => ({ x: x0 + i, y })); }
+    // a random-coil start with as few oily contacts as possible (seeded, so it's the same every time)
+    const rnd = mulberry32(L.id * 7919 + 17), B = Math.ceil(2.3 * Math.sqrt(n)) + 1, off = Math.floor((G - B) / 2);
+    let best = null, bestC = 1e9;
+    for (let attempt = 0; attempt < 4000 && bestC > 0; attempt++) {
+      const occ = new Set(), pos = [{ x: Math.floor(B / 2), y: Math.floor(B / 2) }]; occ.add(pos[0].x + ',' + pos[0].y);
+      let dir = Math.floor(rnd() * 4), ok = true;
+      for (let i = 1; i < n; i++) {
+        const opts = [];
+        for (let d = 0; d < 4; d++) {
+          const q = { x: pos[i - 1].x + [1, 0, -1, 0][d], y: pos[i - 1].y + [0, 1, 0, -1][d] };
+          if (q.x < 0 || q.y < 0 || q.x >= B || q.y >= B || occ.has(q.x + ',' + q.y)) continue;
+          opts.push({ q, w: d === dir ? 2.2 : 1, d });
+        }
+        if (!opts.length) { ok = false; break; }
+        let s = rnd() * opts.reduce((a, o) => a + o.w, 0), pick = opts[0];
+        for (const o of opts) { s -= o.w; if (s <= 0) { pick = o; break; } }
+        pos.push(pick.q); occ.add(pick.q.x + ',' + pick.q.y); dir = pick.d;
+      }
+      if (!ok) continue;
+      const c = countContacts(pos, this.isH).length;
+      if (c < bestC) { bestC = c; best = pos; }
+    }
+    if (!best) best = Array.from({ length: n }, (_, i) => ({ x: Math.floor(i / 2), y: Math.ceil(i / 2) }));
+    return best.map(p => ({ x: p.x + off, y: p.y + off }));
+  },
+  resetState() {
+    this.pos = this.start.map(p => ({ ...p })); this.drawPos = this.pos.map(p => ({ ...p }));
+    this.undoStack = []; this.moves = 0; this.t0 = null; this.solvedTime = null; this.celebrated = false; this.peeked = false; this.famed = false;
+    this.selected = 0; this.drag = null; this.glow = 0; this.hintGone = false;
+    $('#boardHint').style.opacity = 1; $('#winBox').hidden = true; $('#peekBox').hidden = true; $('#peekBtn').textContent = 'Peek at a best fold';
+    this.rebuild(true);
+  },
+  rebuild(silent) {
+    this.occ.fill(-1); this.pos.forEach((p, i) => this.occ[p.y * this.G + p.x] = i);
+    this.contacts = countContacts(this.pos, this.isH);
+    const c = this.contacts.length;
+    if (!silent) {
+      if (c > this.prevContacts) Sound.contact(c); else if (c < this.prevContacts) Sound.lose(); else Sound.tick();
+    }
+    this.prevContacts = c;
+    progress.set(this.L.key, c);
+    if (c >= this.L.best && !this.celebrated && !silent) this.celebrate();
+    this.updateScore();
+  },
+  occAt(x, y) { if (x < 0 || y < 0 || x >= this.G || y >= this.G) return -2; return this.occ[y * this.G + x]; },
+
+  /* try to move bead i to lattice cell T; the chain follows like a string */
+  tryMove(i, T) {
+    const pos = this.pos, n = this.n, cur = pos[i];
+    if (this.occAt(T.x, T.y) !== -1 || !adj(cur, T)) return null;
+    const prev = i > 0 ? pos[i - 1] : null, next = i < n - 1 ? pos[i + 1] : null;
+    const prevOK = !prev || adj(prev, T), nextOK = !next || adj(next, T);
+    const np = pos.map(p => ({ x: p.x, y: p.y })); np[i] = { x: T.x, y: T.y };
+    const pull = (arr, k, s, vacated) => {
+      let j = k + s; if (j < 0 || j >= n || adj(pos[j], arr[k])) return;
+      arr[j] = { ...vacated };
+      for (j = k + 2 * s; j >= 0 && j < n; j += s) { if (adj(pos[j], arr[j - s])) break; arr[j] = { ...pos[j - s] }; }
+    };
+    if (prevOK && nextOK) return np;
+    if (!prevOK && nextOK) { pull(np, i, -1, cur); return validChain(np) ? np : null; }
+    if (prevOK && !nextOK) { pull(np, i, 1, cur); return validChain(np) ? np : null; }
+    // straight segment pulled sideways: one side follows into the old cell, the other side shifts across
+    const d = { x: T.x - cur.x, y: T.y - cur.y };
+    for (const [s1, s2] of [[-1, 1], [1, -1]]) {
+      const nb = pos[i + s2], C = { x: nb.x + d.x, y: nb.y + d.y };
+      if (this.occAt(C.x, C.y) !== -1) continue;
+      const a = pos.map(p => ({ x: p.x, y: p.y })); a[i] = { x: T.x, y: T.y };
+      pull(a, i, s1, cur); a[i + s2] = C; pull(a, i + s2, s2, nb);
+      if (validChain(a)) return a;
+    }
+    return null;
+  },
+  stepToward(i, tx, ty) {
+    let moved = false;
+    for (let guard = 0; guard < 10; guard++) {
+      const cur = this.pos[i], ddx = tx - cur.x, ddy = ty - cur.y;
+      if (!ddx && !ddy) break;
+      const tries = [];
+      if (Math.abs(ddx) >= Math.abs(ddy)) { tries.push({ x: cur.x + Math.sign(ddx), y: cur.y }); if (ddy) tries.push({ x: cur.x, y: cur.y + Math.sign(ddy) }); }
+      else { tries.push({ x: cur.x, y: cur.y + Math.sign(ddy) }); if (ddx) tries.push({ x: cur.x + Math.sign(ddx), y: cur.y }); }
+      let ok = false;
+      for (const T of tries) { const r = this.tryMove(i, T); if (r) { this.applyMove(r); ok = moved = true; break; } }
+      if (!ok) { this.blocked(i); break; }
+    }
+    return moved;
+  },
+  applyMove(np) {
+    this.pos = np; this.moves++;
+    if (this.t0 == null) this.t0 = performance.now();
+    if (!this.hintGone) { this.hintGone = true; $('#boardHint').style.opacity = 0; }
+    if (reduceMotion) this.drawPos = np.map(p => ({ ...p }));
+    this.rebuild(false);
+  },
+  blocked(i) {
+    const now = performance.now();
+    if (!this.shake || now - this.shake.t > 350) { this.shake = { i, t: now }; Sound.bonk(); }
+  },
+  pushUndo() { this.undoStack.push(this.pos.map(p => ({ ...p }))); if (this.undoStack.length > 300) this.undoStack.shift(); },
+  undo() { const p = this.undoStack.pop(); if (!p) return; this.pos = p; this.moves++; this.rebuild(false); },
+
+  celebrate() {
+    this.celebrated = true; this.solvedTime = this.t0 ? (performance.now() - this.t0) / 1000 : 0; this.glow = 1;
+    Sound.win();
+    const L = this.L, box = $('#winBox');
+    $('#winTitle').textContent = L.bench ? 'Benchmark matched!' : 'Perfect fold!';
+    let txt = `You found the best possible score in ${fmtTime(this.solvedTime)} with ${this.moves} moves.`;
+    if (L.bench && !L.nBest) txt = `You matched the best score ever reported for this research benchmark, in ${fmtTime(this.solvedTime)} with ${this.moves} moves.`;
+    if (this.peeked) txt += ' You had a peek, so try another puzzle without peeking to get on the hall of fame.';
+    $('#winText').textContent = txt;
+    $('#fameForm').hidden = this.peeked || this.famed; $('#fameDone').hidden = !this.famed;
+    $('#nextBtn').hidden = !Play.next();
+    box.hidden = false; $('#fameName').value = '';
+  },
+  updateScore() {
+    const c = this.contacts.length, best = this.L.best, st = starsFor(c, best);
+    $('#scoreNow').textContent = c; $('#scoreBest').textContent = best;
+    $('#energyTxt').textContent = 'Energy ' + (c ? '−' + c : '0');
+    $('#movesTxt').textContent = this.moves + (this.moves === 1 ? ' move' : ' moves');
+    const starsEl = $('#stars'); starsEl.setAttribute('aria-label', `${st} of 3 stars`);
+    starsEl.innerHTML = [0, 1, 2].map(k => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.4l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z" fill="${k < st ? '#F5B041' : 'none'}" stroke="${k < st ? '#F5B041' : '#2A6283'}" stroke-width="2" stroke-linejoin="round"/></svg>`).join('');
+    $('#liveScore').textContent = `${c} of ${best} oily contacts`;
+    $('#undoBtn').disabled = !this.undoStack.length;
+  },
+  renderPanel() {
+    const L = this.L;
+    $('#lvlMeta').textContent = `Grid challenge ${L.id} of ${LEVELS.length}, ${L.n} beads` + (L.bench ? ', research benchmark' : '');
+    $('#lvlName').textContent = L.name; $('#lvlIntro').textContent = L.intro;
+    $('#factTxt').textContent = FACTS[(L.id - 1) % FACTS.length];
+    const sc = shapeCount(L.n);
+    $('#shapesTxt').innerHTML = L.n < 3 ? '' : `This chain can be laid on the grid in ${sc.exact ? 'exactly' : 'about'} ${bigWords(sc.value)} different ways (not counting rotated or mirrored copies). ` +
+      (L.nBest === 1 ? 'Only one of them scores ' + L.best + '.' : L.nBest ? `${L.nBest} of them score ${L.best}.` : `The best score anyone has found is ${L.best}.`);
+  },
+  tick(dt) {
+    const cv = $('#boardCanvas'), { ctx, w, h } = fitCanvas(cv), G = this.G;
+    const cell = Math.floor(Math.min(w, h) * 0.94 / G), ox = (w - cell * G) / 2, oy = (h - cell * G) / 2;
+    this.layout = { cell, ox, oy };
+    const k = 1 - Math.pow(0.0005, dt);
+    this.drawPos.forEach((d, i) => { d.x += (this.pos[i].x - d.x) * k; d.y += (this.pos[i].y - d.y) * k; });
+    if (this.glow > 0) this.glow = Math.max(0, this.glow - dt * 0.6);
+    const now = performance.now();
+    if (this.t0 != null && now - this.lastUi > 250) {
+      this.lastUi = now; const t = this.celebrated ? this.solvedTime : (now - this.t0) / 1000; $('#timeTxt').textContent = fmtTime(t);
+    } else if (this.t0 == null) $('#timeTxt').textContent = '0:00';
+
+    ctx.clearRect(0, 0, w, h);
+    // grid
+    ctx.fillStyle = 'rgba(234,246,244,0.025)'; roundRect(ctx, ox, oy, cell * G, cell * G, 18); ctx.fill();
+    ctx.fillStyle = 'rgba(168,197,204,0.22)';
+    const dot = Math.max(1.2, cell * 0.05);
+    for (let gy = 0; gy < G; gy++) for (let gx = 0; gx < G; gx++) { ctx.beginPath(); ctx.arc(ox + (gx + 0.5) * cell, oy + (gy + 0.5) * cell, dot, 0, TAU); ctx.fill(); }
+    const P = i => {
+      let x = ox + (this.drawPos[i].x + 0.5) * cell, y = oy + (this.drawPos[i].y + 0.5) * cell;
+      if (this.shake && this.shake.i === i) { const a = (now - this.shake.t) / 300; if (a < 1) x += Math.sin(a * 30) * cell * 0.08 * (1 - a); }
+      return [x, y];
+    };
+    const celebrating = this.celebrated && this.contacts.length >= this.L.best;
+    const pulse = celebrating && !reduceMotion ? 0.35 + 0.25 * Math.sin(now / 420) : 0;
+    this.contacts.forEach(([i, j]) => { const a = P(i), b = P(j); drawContact(ctx, a[0], a[1], b[0], b[1], Math.max(3, cell * 0.13), Math.max(this.glow, pulse)); });
+    ctx.save(); ctx.lineCap = ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(234,246,244,0.55)'; ctx.lineWidth = Math.max(3, cell * 0.17);
+    ctx.beginPath(); for (let i = 0; i < this.n; i++) { const p = P(i); if (i) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); } ctx.stroke(); ctx.restore();
+    const mood = new Int8Array(this.n); this.contacts.forEach(([i, j]) => { mood[i]++; mood[j]++; });
+    const r = cell * 0.37, focused = document.activeElement === cv && this.kbdUsed;
+    for (let i = 0; i < this.n; i++) {
+      const p = P(i);
+      drawBead(ctx, p[0], p[1], r, this.isH[i], { mood: Settings.faces ? Math.min(2, mood[i]) : -1, ring: (this.drag && this.drag.i === i) || (focused && this.selected === i) });
+    }
+    // chain ends
+    if (cell >= 22) {
+      ctx.fillStyle = '#A8C5CC'; ctx.font = `600 ${Math.round(clamp(cell * 0.3, 10, 15))}px ${getComputedStyle(document.body).fontFamily}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const lab = (i, t) => { const p = P(i), q = P(i === 0 ? 1 : i - 1); let dx = p[0] - q[0], dy = p[1] - q[1]; const m = Math.hypot(dx, dy) || 1; ctx.fillText(t, p[0] + dx / m * cell * 0.62, p[1] + dy / m * cell * 0.62); };
+      lab(0, 'Start'); lab(this.n - 1, 'End');
+    }
+  },
+  cellFromEvent(e) {
+    const r = $('#boardCanvas').getBoundingClientRect(), { cell, ox, oy } = this.layout;
+    return { fx: (e.clientX - r.left - ox) / cell - 0.5, fy: (e.clientY - r.top - oy) / cell - 0.5 };
+  },
+  showPeek() {
+    const L = this.L, box = $('#peekBox');
+    if (!box.hidden) { box.hidden = true; $('#peekBtn').textContent = 'Peek at a best fold'; return; }
+    if (!this.celebrated) this.peeked = true;
+    box.hidden = false; $('#peekBtn').textContent = 'Hide the best fold';
+    $('#peekText').textContent = L.nBest === 1 ? 'This is the only fold with the best score. Rotated or mirrored, it still counts.' :
+      L.nBest ? `One of the ${L.nBest} folds with the best score.` : 'A fold that matches the best score reported by researchers.';
+    requestAnimationFrame(() => {
+      const { ctx, w, h } = fitCanvas($('#peekCanvas')); ctx.clearRect(0, 0, w, h);
+      const fp = L.foldPos, mx = Math.max(...fp.map(p => p.x)) + 1, my = Math.max(...fp.map(p => p.y)) + 1;
+      const cell = Math.min((w - 20) / mx, (h - 20) / my, 40), ox = (w - cell * mx) / 2, oy = (h - cell * my) / 2;
+      const P = i => [ox + (fp[i].x + 0.5) * cell, oy + (fp[i].y + 0.5) * cell];
+      countContacts(fp, this.isH).forEach(([i, j]) => { const a = P(i), b = P(j); drawContact(ctx, a[0], a[1], b[0], b[1], Math.max(2, cell * 0.12), 0); });
+      ctx.strokeStyle = 'rgba(234,246,244,0.55)'; ctx.lineWidth = Math.max(2, cell * 0.16); ctx.lineJoin = ctx.lineCap = 'round';
+      ctx.beginPath(); fp.forEach((_, i) => { const p = P(i); i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); }); ctx.stroke();
+      fp.forEach((_, i) => { const p = P(i); drawBead(ctx, p[0], p[1], cell * 0.36, this.isH[i], { mood: -1 }); });
+    });
+  }
+};
+function adj(a, b) { return Math.abs(a.x - b.x) + Math.abs(a.y - b.y) === 1; }
+function validChain(p) {
+  const seen = new Set();
+  for (let i = 0; i < p.length; i++) { const k = p[i].x + ',' + p[i].y; if (seen.has(k)) return false; seen.add(k); if (i && !adj(p[i], p[i - 1])) return false; }
+  return true;
+}
+function countContacts(pos, isH) {
+  const map = new Map(); pos.forEach((p, i) => map.set(p.x + ',' + p.y, i)); const out = [];
+  pos.forEach((p, i) => { if (!isH[i]) return; for (const [dx, dy] of [[1, 0], [0, 1]]) { const j = map.get((p.x + dx) + ',' + (p.y + dy)); if (j != null && isH[j] && Math.abs(i - j) > 1) out.push(i < j ? [i, j] : [j, i]); } });
+  return out;
+}
+function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+
+/* =====================================================================
+   Puzzle screen: shared by the snap puzzles and the grid challenge
+   ===================================================================== */
+const Play = {
+  active: null,
+  open(L) { (L.mode === 'snap' ? Snap : Game).load(L); go('play'); },
+  next() { const L = this.active && this.active.L; if (!L) return null; const list = L.mode === 'snap' ? SNAP_LEVELS : LEVELS; return list[list.indexOf(L) + 1] || null; },
+  setChrome(mode) {
+    const snap = mode === 'snap';
+    $('#scoreUnit').textContent = snap ? 'connections' : 'oily contacts';
+    $('#mdBtn').hidden = snap; $('#aaRow').hidden = !snap;
+    $('#legendBox').innerHTML = snap ? SNAP_LEGEND : GRID_LEGEND;
+    $('#howtoList').innerHTML = snap ? SNAP_HOWTO : GRID_HOWTO;
+    $('#boardHint').textContent = snap ? 'Drag a piece: pieces that fit snap together' : 'Drag a bead to fold the chain';
+    $('#boardCanvas').setAttribute('aria-label', snap
+      ? 'Snap puzzle. Use the left and right square bracket keys to pick a piece, the arrow keys to move it and Enter to pull it apart.'
+      : 'Folding board. Use the left and right square bracket keys to pick a bead and the arrow keys to move it.');
+  }
+};
+function renderStars(st) {
+  const el = $('#stars'); el.setAttribute('aria-label', `${st} of 3 stars`);
+  el.innerHTML = [0, 1, 2].map(k => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.4l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z" fill="${k < st ? '#F5B041' : 'none'}" stroke="${k < st ? '#F5B041' : '#2A6283'}" stroke-width="2" stroke-linejoin="round"/></svg>`).join('');
+}
+
+/* grid-challenge input handlers (moved into methods so the board can switch between puzzle types) */
+Object.assign(Game, {
+  onDown(e) {
+    if (!this.layout) return false;
+    const c = this.cellFromEvent(e); let bi = -1, bd = 0.62 * 0.62;
+    this.pos.forEach((p, i) => { const d = (p.x - c.fx) ** 2 + (p.y - c.fy) ** 2; if (d < bd) { bd = d; bi = i; } });
+    if (bi < 0) return false;
+    this.kbdUsed = false; this.selected = bi; this.drag = { i: bi, snap: this.pos.map(p => ({ ...p })), moved: false };
+    return true;
+  },
+  onMove(e) {
+    if (!this.drag) return; const c = this.cellFromEvent(e);
+    if (this.stepToward(this.drag.i, Math.round(c.fx), Math.round(c.fy))) this.drag.moved = true;
+  },
+  onUp() {
+    if (!this.drag) return;
+    if (this.drag.moved) { this.undoStack.push(this.drag.snap); this.updateScore(); }
+    this.drag = null;
+  },
+  onKey(e) {
+    const k = e.key; let used = true;
+    if (k === '[' || k === ',') this.selected = (this.selected - 1 + this.n) % this.n;
+    else if (k === ']' || k === '.') this.selected = (this.selected + 1) % this.n;
+    else if (k === 'u' || k === 'U') this.undo();
+    else if (k.startsWith('Arrow')) {
+      const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[k];
+      const p = this.pos[this.selected], snap = this.pos.map(q => ({ ...q }));
+      const r = this.tryMove(this.selected, { x: p.x + d[0], y: p.y + d[1] });
+      if (r) { this.undoStack.push(snap); this.applyMove(r); } else this.blocked(this.selected);
+    } else used = false;
+    if (used) { this.kbdUsed = true; e.preventDefault(); $('#liveScore').textContent = `Bead ${this.selected + 1} of ${this.n} selected, ${this.isH[this.selected] ? 'oily' : 'water-loving'}. ${this.contacts.length} of ${this.L.best} contacts.`; }
+  }
+});
+
+/* =====================================================================
+   Snap puzzles: a free-moving chain of jigsaw-style amino acids
+   ===================================================================== */
+let FONT = 'system-ui, sans-serif';
+function drawPiece(ctx, x, y, s, type, ang, opt = {}) {
+  const T = AA[type];
+  ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+  ctx.lineWidth = Math.max(1, s * 0.02); ctx.strokeStyle = T.dark; ctx.fillStyle = T.col;
+  if (type === 'O') {
+    const g = ctx.createRadialGradient(0.33 * s, -0.06 * s, 0.02 * s, 0.36 * s, 0, 0.19 * s);
+    g.addColorStop(0, '#FFE6AD'); g.addColorStop(1, '#D9921F'); ctx.fillStyle = g;
+    ctx.beginPath(); ctx.ellipse(0.36 * s, 0, 0.15 * s, 0.17 * s, 0, 0, TAU); ctx.fill(); ctx.stroke();
+  } else if (type === '+' || type === 'C') {
+    const hc = type === '+' ? 0.41 : 0.39, hr = type === '+' ? 0.095 : 0.085;
+    ctx.fillRect(0.18 * s, -0.05 * s, (hc - 0.18) * s, 0.1 * s);
+    ctx.beginPath(); ctx.arc(hc * s, 0, hr * s, 0, TAU); ctx.fill();
+  } else if (type === '-') {
+    const a = Math.atan2(0.108, -0.04);
+    ctx.beginPath(); ctx.moveTo(0.18 * s, -0.17 * s); ctx.lineTo(0.56 * s, -0.17 * s); ctx.lineTo(0.56 * s, -0.108 * s);
+    ctx.arc(0.6 * s, 0, 0.115 * s, -a, a, true); ctx.lineTo(0.56 * s, 0.17 * s); ctx.lineTo(0.18 * s, 0.17 * s); ctx.closePath(); ctx.fill();
+  } else if (type === 'P') {
+    ctx.strokeStyle = T.col; ctx.lineWidth = Math.max(2, s * 0.035);
+    ctx.beginPath(); ctx.moveTo(0.22 * s, 0); ctx.lineTo(0.3 * s, 0); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0.37 * s, 0, 0.07 * s, 0, TAU); ctx.stroke();
+  }
+  ctx.restore();
+  const r = 0.28 * s;
+  if (type === 'O') drawBead(ctx, x, y, r, true, { mood: opt.mood });
+  else if (type === 'P') drawBead(ctx, x, y, r, false, {});
+  else {
+    ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fillStyle = T.dark; ctx.fill();
+    const lw = Math.max(2, s * 0.045); ctx.lineWidth = lw; ctx.strokeStyle = T.col; ctx.beginPath(); ctx.arc(x, y, r - lw / 2, 0, TAU); ctx.stroke();
+    ctx.fillStyle = T.col; ctx.font = `800 ${Math.round(r * 1.3)}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(type === '+' ? '+' : type === '-' ? '−' : 'S', x, y + r * 0.08);
+  }
+  if (opt.hint) {
+    ctx.save(); ctx.strokeStyle = T.col; ctx.globalAlpha = opt.hint; ctx.lineWidth = Math.max(2, s * 0.04); ctx.setLineDash([s * 0.08, s * 0.07]);
+    ctx.beginPath(); ctx.arc(x, y, r + s * 0.12, 0, TAU); ctx.stroke(); ctx.restore();
+  }
+  if (opt.ring) { ctx.lineWidth = Math.max(2.5, s * 0.04); ctx.strokeStyle = '#EAF6F4'; ctx.beginPath(); ctx.arc(x, y, r + s * 0.08, 0, TAU); ctx.stroke(); }
+  if (opt.label && T.short) {
+    ctx.fillStyle = '#EAF6F4'; ctx.font = `700 ${Math.round(clamp(s * 0.2, 10, 14))}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(T.short, x - Math.cos(ang) * s * 0.42, y - Math.sin(ang) * s * 0.42);
+  }
+}
+function drawSnapLinks(ctx, X, Y, s, t, partner, glow) {
+  for (let i = 0; i < partner.length; i++) {
+    const j = partner[i]; if (j <= i) continue;
+    const dx = X(j) - X(i), dy = Y(j) - Y(i), m = Math.hypot(dx, dy) || 1, ux = dx / m, uy = dy / m;
+    ctx.save(); ctx.lineCap = 'round';
+    if (t[i] === 'O') {
+      ctx.strokeStyle = 'rgba(255,200,90,0.6)'; ctx.lineWidth = 0.26 * s; ctx.shadowColor = 'rgba(255,200,90,0.9)'; ctx.shadowBlur = 10 + glow * 16;
+      ctx.beginPath(); ctx.moveTo(X(i) + ux * 0.36 * s, Y(i) + uy * 0.36 * s); ctx.lineTo(X(j) - ux * 0.36 * s, Y(j) - uy * 0.36 * s); ctx.stroke();
+    } else if (t[i] === 'C') {
+      ctx.strokeStyle = '#E8E36A'; ctx.lineWidth = 0.1 * s; ctx.shadowColor = 'rgba(232,227,106,0.8)'; ctx.shadowBlur = 8 + glow * 16;
+      ctx.beginPath(); ctx.moveTo(X(i) + ux * 0.39 * s, Y(i) + uy * 0.39 * s); ctx.lineTo(X(j) - ux * 0.39 * s, Y(j) - uy * 0.39 * s); ctx.stroke();
+    } else {
+      ctx.fillStyle = 'rgba(234,246,244,0.25)'; ctx.shadowColor = 'rgba(180,200,255,0.9)'; ctx.shadowBlur = 12 + glow * 16;
+      ctx.beginPath(); ctx.arc((X(i) + X(j)) / 2, (Y(i) + Y(j)) / 2, 0.14 * s, 0, TAU); ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+function sideAngle(x, y, partner, i) {
+  const n = x.length, p = partner[i];
+  if (p >= 0) return Math.atan2(y[p] - y[i], x[p] - x[i]);
+  const a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1), tx = x[b] - x[a], ty = y[b] - y[a];
+  return Math.atan2(tx, -ty) + (i % 2 ? Math.PI : 0);
+}
+
+const Snap = {
+  L: null, n: 0, t: [], x: null, y: null, px: null, py: null, ang: null, partner: null,
+  world: { cx: 0, cy: 0, w: 10, h: 8 }, view: null, bounds: null, drag: null, undoStack: [], moves: 0,
+  t0: null, solvedTime: null, celebrated: false, peeked: false, famed: false, selected: 0, kbdUsed: false,
+  cool: {}, glow: 0, flashes: [], hintGone: false, lastUi: 0,
+
+  load(L) {
+    Play.active = this; this.L = L; this.n = L.n; this.t = L.seq.split('');
+    ['x', 'y', 'px', 'py', 'ang'].forEach(k => this[k] = new Float64Array(this.n)); this.partner = new Int16Array(this.n);
+    this.start = this.makeStart(L);
+    const xs = this.start.map(p => p.x), ys = this.start.map(p => p.y);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    this.world = { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: Math.max(x1 - x0 + 4, 8.5), h: Math.max(y1 - y0 + 4, 6.5) };
+    this.view = null; this.bounds = null;
+    Play.setChrome('snap'); this.resetState(); this.renderPanel();
+  },
+  makeStart(L) {
+    const n = L.n, t = L.seq;
+    if (n <= 8) return Array.from({ length: n }, (_, i) => ({ x: i - (n - 1) / 2, y: 0 }));
+    const rnd = mulberry32(L.num * 104729 + 3), R = 0.95 * Math.sqrt(n) + 1.4;
+    for (let attempt = 0; attempt < 6000; attempt++) {
+      const pts = [{ x: 0, y: 0 }]; let a = rnd() * TAU, ok = true;
+      for (let i = 1; i < n && ok; i++) {
+        let placed = false;
+        for (let tries = 0; tries < 14 && !placed; tries++) {
+          const na = a + (rnd() - 0.5) * 1.9, q = { x: pts[i - 1].x + Math.cos(na), y: pts[i - 1].y + Math.sin(na) };
+          if (Math.hypot(q.x, q.y) > R) continue;
+          let good = true;
+          for (let j = 0; j < i - 1 && good; j++) {
+            const d = Math.hypot(q.x - pts[j].x, q.y - pts[j].y);
+            if (d < 1.4 || (i - j >= 3 && fits(t[i], t[j]) && d < 2.0)) good = false;
+          }
+          if (good) { pts.push(q); a = na; placed = true; }
+        }
+        if (!placed) ok = false;
+      }
+      if (ok) return pts;
+    }
+    return Array.from({ length: n }, (_, i) => ({ x: i * 0.7 - n * 0.35, y: (i % 2) * 0.7 }));
+  },
+  resetState() {
+    for (let i = 0; i < this.n; i++) { this.x[i] = this.px[i] = this.start[i].x; this.y[i] = this.py[i] = this.start[i].y; }
+    this.partner.fill(-1);
+    for (let i = 0; i < this.n; i++) this.ang[i] = sideAngle(this.x, this.y, this.partner, i);
+    this.undoStack = []; this.moves = 0; this.t0 = null; this.solvedTime = null; this.celebrated = this.peeked = this.famed = false;
+    this.drag = null; this.selected = 0; this.glow = 0; this.flashes = []; this.cool = {}; this.hintGone = false;
+    $('#boardHint').style.opacity = 1; $('#winBox').hidden = true; $('#peekBox').hidden = true; $('#peekBtn').textContent = 'Peek at a best fold';
+    this.updateScore();
+  },
+  lockCount() { let c = 0; for (let i = 0; i < this.n; i++) if (this.partner[i] > i) c++; return c; },
+  energy() { let e = 0; for (let i = 0; i < this.n; i++) if (this.partner[i] > i) e += LOCK_E[this.t[i]]; return e; },
+  snapshot() { return { x: Float64Array.from(this.x), y: Float64Array.from(this.y), p: Int16Array.from(this.partner) }; },
+  pushUndo(s) { this.undoStack.push(s); if (this.undoStack.length > 200) this.undoStack.shift(); },
+  undo() {
+    const s = this.undoStack.pop(); if (!s) return;
+    this.x.set(s.x); this.y.set(s.y); this.px.set(s.x); this.py.set(s.y); this.partner.set(s.p); this.moves++; this.drag = null;
+    Sound.tick(); this.updateScore();
+  },
+  lock(i, j) {
+    this.partner[i] = j; this.partner[j] = i; const c = this.lockCount();
+    Sound.contact(c);
+    this.flashes.push({ x: (this.x[i] + this.x[j]) / 2, y: (this.y[i] + this.y[j]) / 2, t: performance.now(), col: AA[this.t[i]].col });
+    if (this.t0 == null) this.t0 = performance.now();
+    this.updateScore();
+    $('#liveScore').textContent = `${AA[this.t[i]].name} and ${AA[this.t[j]].name.toLowerCase()} pieces snapped together. ${c} of ${this.L.best} connections.`;
+    if (c >= this.L.best && !this.celebrated) this.celebrate();
+  },
+  unlock(i) {
+    const j = this.partner[i]; if (j < 0) return;
+    this.partner[i] = this.partner[j] = -1; this.cool[Math.min(i, j) + ',' + Math.max(i, j)] = performance.now() + 1200;
+    const dx = this.x[j] - this.x[i], dy = this.y[j] - this.y[i], m = Math.hypot(dx, dy) || 1;
+    this.x[j] += dx / m * 0.35; this.y[j] += dy / m * 0.35; this.x[i] -= dx / m * 0.2; this.y[i] -= dy / m * 0.2;
+    Sound.lose(); this.updateScore();
+    $('#liveScore').textContent = `Pulled apart. ${this.lockCount()} of ${this.L.best} connections.`;
+  },
+  celebrate() {
+    this.celebrated = true; this.solvedTime = this.t0 ? (performance.now() - this.t0) / 1000 : 0; this.glow = 1; Sound.win();
+    $('#winTitle').textContent = 'Perfectly folded!';
+    const mv = this.moves + (this.drag && this.drag.moved ? 1 : 0);
+    let txt = `You made all ${this.L.best} connection${this.L.best > 1 ? 's' : ''} in ${fmtTime(this.solvedTime)} with ${mv} move${mv === 1 ? '' : 's'}.`;
+    if (this.peeked) txt += ' You had a peek, so try another puzzle without peeking to get on the hall of fame.';
+    $('#winText').textContent = txt;
+    $('#fameForm').hidden = this.peeked || this.famed; $('#fameDone').hidden = !this.famed;
+    $('#nextBtn').hidden = !Play.next(); $('#winBox').hidden = false; $('#fameName').value = '';
+  },
+  updateScore() {
+    const c = this.lockCount(), best = this.L.best, e = this.energy();
+    progress.set(this.L.key, c);
+    $('#scoreNow').textContent = c; $('#scoreBest').textContent = best;
+    $('#energyTxt').textContent = 'Energy ' + (e ? '−' + (Number.isInteger(e) ? e : e.toFixed(1)) : '0');
+    $('#movesTxt').textContent = this.moves + (this.moves === 1 ? ' move' : ' moves');
+    renderStars(starsFor(c, best));
+    $('#undoBtn').disabled = !this.undoStack.length;
+  },
+  renderPanel() {
+    const L = this.L;
+    $('#lvlMeta').textContent = `Snap puzzle ${L.num} of ${SNAP_LEVELS.length}, ${L.n} pieces`;
+    $('#lvlName').textContent = L.name; $('#lvlIntro').textContent = L.intro; $('#factTxt').textContent = L.fact;
+    $('#shapesTxt').textContent = `Each piece can hold one partner. ${L.best} connection${L.best > 1 ? 's are' : ' is'} possible in this chain.`;
+  },
+
+  /* position-based physics: the chain is a string of beads in thick, syrupy water */
+  pairFix(i, j, L, d, minOnly) {
+    const x = this.x, y = this.y, dx = x[j] - x[i], dy = y[j] - y[i], r2 = dx * dx + dy * dy;
+    if (minOnly && r2 >= L * L) return;
+    const r = Math.sqrt(r2) || 1e-6, wi = i === d ? 0 : 1, wj = j === d ? 0 : 1, ws = wi + wj; if (!ws) return;
+    const c = (r - L) / r; x[i] += dx * c * wi / ws; y[i] += dy * c * wi / ws; x[j] -= dx * c * wj / ws; y[j] -= dy * c * wj / ws;
+  },
+  step() {
+    const n = this.n, x = this.x, y = this.y, px = this.px, py = this.py, t = this.t, P = this.partner, B = this.bounds;
+    const d = this.drag ? this.drag.i : -1, now = performance.now();
+    for (let i = 0; i < n; i++) {
+      if (i === d) continue;
+      const vx = (x[i] - px[i]) * 0.6, vy = (y[i] - py[i]) * 0.6; px[i] = x[i]; py[i] = y[i]; x[i] += vx; y[i] += vy;
+    }
+    if (d >= 0) {
+      px[d] = x[d]; py[d] = y[d];
+      let dx = this.drag.tx - x[d], dy = this.drag.ty - y[d]; const m = Math.hypot(dx, dy), cap = 0.32;
+      if (m > cap) { dx *= cap / m; dy *= cap / m; } x[d] += dx; y[d] += dy;
+    }
+    // gentle magnet: free pieces that fit drift together when close
+    for (let i = 0; i < n; i++) {
+      if (P[i] >= 0 || t[i] === 'P') continue;
+      for (let j = i + 3; j < n; j++) {
+        if (P[j] >= 0 || !fits(t[i], t[j]) || this.cool[i + ',' + j] > now) continue;
+        const dx = x[j] - x[i], dy = y[j] - y[i], r = Math.hypot(dx, dy);
+        if (r < 1.9 && r > 1.0) { const f = 0.045 * (r - 1) / r, wi = i === d ? 0 : 1, wj = j === d ? 0 : 1; x[i] += dx * f * wi; y[i] += dy * f * wi; x[j] -= dx * f * wj; y[j] -= dy * f * wj; }
+      }
+    }
+    const soft = this.soften > 0; if (soft) this.soften--;
+    for (let it = 0; it < 12; it++) {
+      for (let i = 0; i < n - 1; i++) this.pairFix(i, i + 1, 1, d, false);
+      for (let i = 0; i < n - 2; i++) this.pairFix(i, i + 2, soft ? 0.9 : 1.3, d, true);
+      for (let i = 0; i < n; i++) if (P[i] > i) this.pairFix(i, P[i], 1, d, false);
+      for (let i = 0; i < n; i++) for (let j = i + 3; j < n; j++) {
+        if (P[i] === j) continue;
+        const like = (t[i] === '+' && t[j] === '+') || (t[i] === '-' && t[j] === '-');
+        this.pairFix(i, j, soft ? 0.5 : like ? 1.35 : 0.92, d, true);
+      }
+      if (B) for (let i = 0; i < n; i++) { if (i === d) continue; x[i] = clamp(x[i], B.x0, B.x1); y[i] = clamp(y[i], B.y0, B.y1); }
+    }
+    // release valve: if snapped pieces have forced the chain into an impossible tangle, the most strained connection pops apart
+    let worst = 0, wb = -1;
+    for (let i = 0; i < n - 1; i++) { const e = Math.abs(Math.hypot(x[i + 1] - x[i], y[i + 1] - y[i]) - 1); if (e > worst) { worst = e; wb = i; } }
+    this.strain = worst > 0.2 ? (this.strain || 0) + 1 : 0;
+    if (this.strain > 30) {
+      let pick = -1, ps = -1;
+      for (let i = 0; i < n; i++) {
+        const j = P[i]; if (j <= i) continue;
+        const near = Math.min(Math.abs(i - wb), Math.abs(i - wb - 1), Math.abs(j - wb), Math.abs(j - wb - 1)) <= 1 ? 1 : 0;
+        const sc = Math.abs(Math.hypot(x[j] - x[i], y[j] - y[i]) - 1) + near;
+        if (sc > ps) { ps = sc; pick = i; }
+      }
+      this.strain = 0; if (pick >= 0) this.unlock(pick); else this.soften = 25;   // no connection to blame: a jam, so let pieces squeeze past briefly
+    }
+    for (let i = 0; i < n; i++) {
+      if (P[i] >= 0 || t[i] === 'P') continue;
+      for (let j = i + 3; j < n; j++) {
+        if (P[i] >= 0) break;
+        if (P[j] >= 0 || !fits(t[i], t[j]) || this.cool[i + ',' + j] > now) continue;
+        if (Math.hypot(x[j] - x[i], y[j] - y[i]) < 1.12) this.lock(i, j);
+      }
+    }
+  },
+
+  worldFromEvent(e) { const r = $('#boardCanvas').getBoundingClientRect(), v = this.view; return { x: (e.clientX - r.left - v.ox) / v.s, y: (e.clientY - r.top - v.oy) / v.s }; },
+  onDown(e) {
+    if (!this.view) return false;
+    const w = this.worldFromEvent(e); let bi = -1, bd = 0.62 * 0.62;
+    for (let i = 0; i < this.n; i++) { const dd = (this.x[i] - w.x) ** 2 + (this.y[i] - w.y) ** 2; if (dd < bd) { bd = dd; bi = i; } }
+    if (bi < 0) return false;
+    this.kbdUsed = false; this.selected = bi;
+    this.drag = { i: bi, tx: this.x[bi], ty: this.y[bi], ox: w.x - this.x[bi], oy: w.y - this.y[bi], sx: e.clientX, sy: e.clientY, t0: performance.now(), moved: false, snap: this.snapshot() };
+    return true;
+  },
+  onMove(e) {
+    const dr = this.drag; if (!dr || dr.kbd || !this.bounds) return;
+    if (!dr.moved && Math.hypot(e.clientX - dr.sx, e.clientY - dr.sy) > 6) {
+      dr.moved = true; if (this.t0 == null) this.t0 = performance.now();
+      if (!this.hintGone) { this.hintGone = true; $('#boardHint').style.opacity = 0; }
+    }
+    if (dr.moved) { const w = this.worldFromEvent(e); dr.tx = clamp(w.x - dr.ox, this.bounds.x0, this.bounds.x1); dr.ty = clamp(w.y - dr.oy, this.bounds.y0, this.bounds.y1); }
+  },
+  onUp() {
+    const dr = this.drag; if (!dr || dr.kbd) return; this.drag = null;
+    if (!dr.moved && performance.now() - dr.t0 < 450) { if (this.partner[dr.i] >= 0) { this.pushUndo(dr.snap); this.moves++; this.unlock(dr.i); } }
+    else if (dr.moved) { this.pushUndo(dr.snap); this.moves++; }
+    this.updateScore();
+  },
+  onKey(e) {
+    const k = e.key; let used = true;
+    if (k === '[' || k === ',') this.selected = (this.selected - 1 + this.n) % this.n;
+    else if (k === ']' || k === '.') this.selected = (this.selected + 1) % this.n;
+    else if (k === 'u' || k === 'U') this.undo();
+    else if (k === 'Enter' || k === ' ') { if (this.partner[this.selected] >= 0) { this.pushUndo(this.snapshot()); this.moves++; this.unlock(this.selected); } }
+    else if (k.startsWith('Arrow') && this.bounds) {
+      const dv = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[k], i = this.selected;
+      if (!this.drag) this.drag = { i, kbd: true, moved: true, snap: this.snapshot(), tx: this.x[i], ty: this.y[i] };
+      if (this.drag.kbd) {
+        this.drag.tx = clamp(this.drag.tx + dv[0] * 0.5, this.bounds.x0, this.bounds.x1); this.drag.ty = clamp(this.drag.ty + dv[1] * 0.5, this.bounds.y0, this.bounds.y1);
+        this.drag.until = performance.now() + 400; if (this.t0 == null) this.t0 = performance.now();
+      }
+    } else used = false;
+    if (used) {
+      this.kbdUsed = true; e.preventDefault();
+      const i = this.selected, p = this.partner[i];
+      $('#liveScore').textContent = `Piece ${i + 1} of ${this.n} selected: ${AA[this.t[i]].name.toLowerCase()}${p >= 0 ? ', snapped to piece ' + (p + 1) : ''}. ${this.lockCount()} of ${this.L.best} connections.`;
+    }
+  },
+
+  tick(dt) {
+    const cv = $('#boardCanvas'), { ctx, w, h } = fitCanvas(cv), W = this.world, now = performance.now();
+    const s = Math.min(w / W.w, h / W.h, 112), ox = w / 2 - W.cx * s, oy = h / 2 - W.cy * s;
+    this.view = { s, ox, oy };
+    this.bounds = { x0: (14 - ox) / s + 0.45, x1: (w - 14 - ox) / s - 0.45, y0: (14 - oy) / s + 0.45, y1: (h - 14 - oy) / s - 0.45 };
+    if (this.drag && this.drag.kbd && now > this.drag.until) { const dr = this.drag; this.drag = null; this.pushUndo(dr.snap); this.moves++; this.updateScore(); }
+    this.step();
+    const n = this.n, x = this.x, y = this.y, t = this.t, P = this.partner;
+    for (let i = 0; i < n; i++) { let da = sideAngle(x, y, P, i) - this.ang[i]; da = Math.atan2(Math.sin(da), Math.cos(da)); this.ang[i] += da * (reduceMotion ? 1 : 0.3); }
+    if (this.glow > 0) this.glow = Math.max(0, this.glow - dt * 0.6);
+    if (this.t0 != null && now - this.lastUi > 250) { this.lastUi = now; $('#timeTxt').textContent = fmtTime(this.celebrated ? this.solvedTime : (now - this.t0) / 1000); }
+    else if (this.t0 == null) $('#timeTxt').textContent = '0:00';
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = 'rgba(234,246,244,0.025)'; roundRect(ctx, 8, 8, w - 16, h - 16, 18); ctx.fill();
+    const X = i => ox + x[i] * s, Y = i => oy + y[i] * s;
+    ctx.save(); ctx.lineCap = ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(234,246,244,0.5)'; ctx.lineWidth = Math.max(3, s * 0.14);
+    ctx.beginPath(); for (let i = 0; i < n; i++) { if (i) ctx.lineTo(X(i), Y(i)); else ctx.moveTo(X(i), Y(i)); } ctx.stroke(); ctx.restore();
+    const pulse = this.celebrated && !reduceMotion ? 0.3 + 0.3 * Math.sin(now / 420) : 0;
+    drawSnapLinks(ctx, X, Y, s, t, P, Math.max(this.glow, pulse));
+    const di = this.drag ? this.drag.i : (this.kbdUsed && document.activeElement === cv ? this.selected : -1);
+    const hintA = 0.55 + 0.45 * Math.sin(now / 180);
+    for (let i = 0; i < n; i++) {
+      const hint = di >= 0 && P[di] < 0 && P[i] < 0 && Math.abs(i - di) >= 3 && fits(t[di], t[i]) ? hintA : 0;
+      drawPiece(ctx, X(i), Y(i), s, t[i], this.ang[i], { mood: P[i] >= 0 ? 2 : 0, hint, ring: i === di, label: Settings.aaNames });
+    }
+    this.flashes = this.flashes.filter(f => now - f.t < 600);
+    this.flashes.forEach(f => {
+      const a = (now - f.t) / 600; ctx.save(); ctx.globalAlpha = 1 - a; ctx.strokeStyle = f.col; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(ox + f.x * s, oy + f.y * s, s * (0.3 + a * 0.6), 0, TAU); ctx.stroke(); ctx.restore();
+    });
+  },
+  showPeek() {
+    const L = this.L, box = $('#peekBox');
+    if (!box.hidden) { box.hidden = true; $('#peekBtn').textContent = 'Peek at a best fold'; return; }
+    if (!this.celebrated) this.peeked = true;
+    box.hidden = false; $('#peekBtn').textContent = 'Hide the best fold';
+    $('#peekText').textContent = 'One way to make every connection. Other arrangements can work too.';
+    requestAnimationFrame(() => {
+      const { ctx, w, h } = fitCanvas($('#peekCanvas')); ctx.clearRect(0, 0, w, h);
+      const fp = L.foldPos, mx = Math.max(...fp.map(p => p.x)), my = Math.max(...fp.map(p => p.y));
+      const s = Math.min((w - 30) / (mx + 1.2), (h - 30) / (my + 1.2), 64), ox = (w - s * mx) / 2, oy = (h - s * my) / 2;
+      const xs = Float64Array.from(fp, p => p.x), ys = Float64Array.from(fp, p => p.y), part = new Int16Array(L.n).fill(-1);
+      L.pairs.forEach(([a, b]) => { part[a] = b; part[b] = a; });
+      const X = i => ox + xs[i] * s, Y = i => oy + ys[i] * s, t = L.seq.split('');
+      ctx.strokeStyle = 'rgba(234,246,244,0.5)'; ctx.lineWidth = Math.max(2, s * 0.14); ctx.lineJoin = ctx.lineCap = 'round';
+      ctx.beginPath(); fp.forEach((_, i) => { i ? ctx.lineTo(X(i), Y(i)) : ctx.moveTo(X(i), Y(i)); }); ctx.stroke();
+      drawSnapLinks(ctx, X, Y, s, t, part, 0);
+      fp.forEach((_, i) => drawPiece(ctx, X(i), Y(i), s, t[i], sideAngle(xs, ys, part, i), { mood: part[i] >= 0 ? 2 : 0 }));
+    });
+  }
+};
+
+/* board input goes to whichever puzzle is open */
+(function () {
+  const cv = $('#boardCanvas');
+  cv.addEventListener('pointerdown', e => { if (Play.active && Play.active.onDown(e)) { cv.setPointerCapture(e.pointerId); e.preventDefault(); } });
+  cv.addEventListener('pointermove', e => { if (Play.active) Play.active.onMove(e); });
+  const end = e => { if (Play.active) Play.active.onUp(e); };
+  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  cv.addEventListener('keydown', e => { if (Play.active) Play.active.onKey(e); });
+  $('#undoBtn').addEventListener('click', () => Play.active.undo());
+  $('#resetBtn').addEventListener('click', () => Play.active.resetState());
+  $('#peekBtn').addEventListener('click', () => Play.active.showPeek());
+  $('#nextBtn').addEventListener('click', () => { const nx = Play.next(); if (nx) Play.open(nx); });
+  $('#mdBtn').addEventListener('click', () => { if (Play.active !== Game) return; Lab.loadSequence(Game.L.seq, { lattice: Game.pos, note: `Started from your fold of “${Game.L.name}”` }); LabTabs.set('fold'); go('lab'); });
+  $('#aaNames').checked = Settings.aaNames;
+  $('#aaNames').addEventListener('change', e => { Settings.aaNames = e.target.checked; store.set('aaNames', Settings.aaNames); });
+  $('#fameForm').addEventListener('submit', e => {
+    e.preventDefault(); const A = Play.active;
+    const nm = $('#fameName').value.replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 14);
+    if (!nm) { $('#fameName').focus(); return; }
+    Fame.add({ name: nm, level: A.L.key, time: A.solvedTime, moves: A.moves, at: Date.now() });
+    A.famed = true; $('#fameForm').hidden = true; $('#fameDone').hidden = false;
+  });
+})();
+enterHooks.play = () => { if (!Play.active) Snap.load(SNAP_LEVELS[0]); };
+
+
+/* =====================================================================
+   Simulation lab
+   ===================================================================== */
+const Lab = {
+  md: null, view: makeView(), running: true, spf: 30, mode: 'pull', exp: null, results: { slow: [], fast: [] },
+  histE: [], histC: [], frame: 0, grabbing: false, pointer: null, hover: { E: null, C: null }, contactsNow: 0,
+  init() {
+    this.md = new ChainMD(LEVELS[8].seq); this.md.p.kT = 0.22; this.md.thermalise();
+    const sel = $('#seqSel');
+    const opts = LEVELS.map(L => [L.seq, `Level ${L.id}: ${L.name} (${L.n} beads)`]);
+    opts.push(['H'.repeat(20), 'All oily (20 beads)'], ['P'.repeat(20), 'All water-loving (20 beads)'], ['random', 'Random (24 beads)']);
+    sel.innerHTML = opts.map(([v, t]) => `<option value="${v}">${esc(t)}</option>`).join('') + '<option value="custom" hidden>Your own sequence</option>';
+    sel.value = LEVELS[8].seq;
+    sel.addEventListener('change', () => {
+      let v = sel.value; if (v === 'custom') return;
+      if (v === 'random') { v = Array.from({ length: 24 }, () => Math.random() < 0.5 ? 'H' : 'P').join(''); }
+      this.loadSequence(v, { note: '' });
+    });
+    const temp = $('#tempSl'), eps = $('#epsSl'), spd = $('#spdSl');
+    temp.addEventListener('input', () => { this.md.p.kT = +temp.value; this.syncOutputs(); });
+    eps.addEventListener('input', () => { this.md.p.eps = +eps.value; this.syncOutputs(); });
+    spd.addEventListener('input', () => { this.spf = +spd.value; this.syncOutputs(); });
+    $('#pauseBtn').addEventListener('click', () => { this.running = !this.running; $('#pauseBtn').textContent = this.running ? 'Pause' : 'Play'; });
+    $('#heatBtn').addEventListener('click', () => { this.stopExp(); this.setT(1.2); this.note('Hot! The random kicks from the water are now strong enough to pull the oily beads apart.'); });
+    $('#unfoldBtn').addEventListener('click', () => { this.stopExp(); this.md.initExtended(); this.view.init = false; this.clearHist(); this.note(''); });
+    $('#slowBtn').addEventListener('click', () => this.startExp('slow'));
+    $('#fastBtn').addEventListener('click', () => this.startExp('fast'));
+    $('#longerBtn').addEventListener('click', () => { if (this.md.n < 48) this.loadSequence(this.md.seq + (Math.random() < 0.5 ? 'H' : 'P'), { custom: true }); });
+    $('#shorterBtn').addEventListener('click', () => { if (this.md.n > 4) this.loadSequence(this.md.seq.slice(0, -1), { custom: true }); });
+    $$('.lab-tool button').forEach(b => b.addEventListener('click', () => this.setMode(b.dataset.mode)));
+    this.bindCanvas(); this.bindPlot('#plotE', 'E'); this.bindPlot('#plotC', 'C');
+    this.renderChips(); this.syncOutputs();
+  },
+  setMode(m) { this.mode = m; $$('.lab-tool button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === m))); this.note(m === 'mutate' ? 'Tap a bead to mutate it: oily becomes water-loving, and the other way round.' : ''); },
+  setT(v) { this.md.p.kT = v; $('#tempSl').value = v; this.syncOutputs(); },
+  note(t) { $('#labNote').textContent = t; },
+  syncOutputs() {
+    const kT = this.md.p.kT;
+    const word = kT < 0.14 ? 'very cold' : kT < 0.32 ? 'cool' : kT < 0.6 ? 'warm' : 'hot';
+    $('#tempOut').textContent = `${word}, kT = ${kT.toFixed(2)}`;
+    $('#epsOut').textContent = `ε = ${this.md.p.eps.toFixed(2)}`;
+    $('#spdOut').textContent = `${this.spf} steps per frame`;
+  },
+  loadSequence(seq, opt = {}) {
+    this.stopExp();
+    this.md.setSequence(seq, true);
+    if (opt.lattice) this.md.initFromLattice(opt.lattice);
+    this.view.init = false; this.clearHist(); this.renderChips();
+    const sel = $('#seqSel'); sel.value = [...sel.options].some(o => o.value === seq && !o.hidden) ? seq : 'custom';
+    this.note(opt.note || '');
+  },
+  renderChips() {
+    const box = $('#chips'); box.innerHTML = '';
+    Array.from(this.md.isH).forEach((h, i) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'chip' + (h ? ' h' : '');
+      b.setAttribute('aria-label', `Bead ${i + 1}: ${h ? 'oily' : 'water-loving'}. Tap to mutate.`);
+      b.addEventListener('click', () => this.mutate(i)); box.appendChild(b);
+    });
+  },
+  mutate(i) {
+    this.md.setType(i, !this.md.isH[i]); Sound.tick(); this.renderChips();
+    const sel = $('#seqSel'); sel.value = [...sel.options].some(o => o.value === this.md.seq && !o.hidden) ? this.md.seq : 'custom';
+  },
+  clearHist() { this.histE = []; this.histC = []; },
+  startExp(kind) {
+    this.exp = { kind, phase: 'melt', t0: this.md.time };
+    $('#tempSl').disabled = true; $('#slowBtn').disabled = $('#fastBtn').disabled = true;
+    this.note('Melting the chain first…');
+  },
+  stopExp() { if (!this.exp) return; this.exp = null; $('#tempSl').disabled = false; $('#slowBtn').disabled = $('#fastBtn').disabled = false; },
+  runExp() {
+    const e = this.exp; if (!e) return; const t = this.md.time - e.t0;
+    const HOT = 1.3, COLD = 0.12, MELT = 40, COOL = e.kind === 'slow' ? 600 : 0, SETTLE = 60;
+    if (e.phase === 'melt') { this.setT(HOT); if (t > MELT) { e.phase = 'cool'; e.t0 = this.md.time; this.note(e.kind === 'slow' ? 'Cooling slowly…' : 'Cooled instantly! Now let it settle…'); } }
+    else if (e.phase === 'cool') {
+      this.setT(COOL ? HOT + (COLD - HOT) * Math.min(1, t / COOL) : COLD);
+      if (t > COOL + SETTLE) {
+        const c = this.md.contacts().length; this.results[e.kind].push(c); this.stopExp(); Sound.contact(c);
+        this.note(`${e.kind === 'slow' ? 'Slow' : 'Instant'} cooling finished with ${c} oily contacts.`); this.showResults();
+      }
+    }
+  },
+  showResults() {
+    const r = this.results, avg = a => a.length ? (a.reduce((x, y) => x + y, 0) / a.length) : null;
+    const line = (k, label) => r[k].length ? `<p>${label}: ${r[k].join(', ')} contacts${r[k].length > 1 ? ` (average ${avg(r[k]).toFixed(1)})` : ''}</p>` : '';
+    let html = line('slow', 'Slow cooling') + line('fast', 'Instant cooling');
+    if (r.slow.length && r.fast.length) html += `<p class="small" style="margin-top:8px">Cooling slowly gives the chain time to escape tangles and find a better fold. Scientists use the same trick, called simulated annealing. Try each a few times: every run is different because the kicks are random.</p>`;
+    else html += `<p class="small" style="margin-top:8px">Now try the other way and compare.</p>`;
+    $('#expResults').innerHTML = html;
+  },
+  bindCanvas() {
+    const cv = $('#labCanvas');
+    const world = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left - r.width / 2) / this.view.s + this.view.cx, y: (e.clientY - r.top - r.height / 2) / this.view.s + this.view.cy }; };
+    const hit = w => { let bi = -1, bd = 0.85 * 0.85; for (let i = 0; i < this.md.n; i++) { const d = (this.md.x[i] - w.x) ** 2 + (this.md.y[i] - w.y) ** 2; if (d < bd) { bd = d; bi = i; } } return bi; };
+    cv.addEventListener('pointerdown', e => {
+      if (LabTabs.mode === 'drug') { DrugLab.onDown(e); return; }
+      const w = world(e), i = hit(w); if (i < 0) return;
+      if (this.mode === 'mutate') { this.mutate(i); return; }
+      this.md.grab = { i, x: w.x, y: w.y, force: 0 }; this.grabbing = true; cv.setPointerCapture(e.pointerId); e.preventDefault();
+    });
+    cv.addEventListener('pointermove', e => { if (LabTabs.mode === 'drug') { DrugLab.onMove(e); return; } if (!this.md.grab) return; const w = world(e); this.md.grab.x = w.x; this.md.grab.y = w.y; });
+    const end = () => { this.md.grab = null; this.grabbing = false; DrugLab.onUp(); };
+    cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  },
+  bindPlot(sel, key) {
+    const cv = $(sel);
+    cv.addEventListener('pointermove', e => { const r = cv.getBoundingClientRect(); this.hover[key] = (e.clientX - r.left) / r.width; });
+    cv.addEventListener('pointerleave', () => { this.hover[key] = null; });
+  },
+  tick(dt) {
+    const md = this.md;
+    if (this.running) { this.runExp(); md.step(this.exp ? Math.max(this.spf, 60) : this.spf); }
+    const cv = $('#labCanvas'), { ctx, w, h } = fitCanvas(cv);
+    ctx.clearRect(0, 0, w, h);
+    // temperature tint: water warms up as temperature rises
+    const hot = clamp((md.p.kT - 0.1) / 1.2, 0, 1);
+    ctx.fillStyle = `rgba(255,122,107,${0.10 * hot})`; ctx.fillRect(0, 0, w, h);
+    updateView(this.view, md, w * 0.86, (h - 90) * 0.86, { minExt: 10, maxS: 48, freeze: this.grabbing, k: 0.04 });
+    const ox = w / 2, oy = h / 2;
+    if (md.grab) {
+      const g = md.grab, bx = ox + (md.x[g.i] - this.view.cx) * this.view.s, by = oy + (md.y[g.i] - this.view.cy) * this.view.s;
+      const px = ox + (g.x - this.view.cx) * this.view.s, py = oy + (g.y - this.view.cy) * this.view.s;
+      ctx.save(); ctx.strokeStyle = 'rgba(234,246,244,0.8)'; ctx.lineWidth = 2; ctx.setLineDash([6, 5]);
+      ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(px, py); ctx.stroke(); ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(px, py, 9, 0, TAU); ctx.stroke(); ctx.restore();
+    }
+    const contacts = drawMD(ctx, md, this.view, ox, oy, { faces: Settings.faces, ring: md.grab ? md.grab.i : -1 });
+    const c = contacts.length;
+    this.contactsNow = c;
+    this.frame++;
+    if (this.running && this.frame % 3 === 0) {
+      this.histE.push(md.potential()); this.histC.push(c);
+      if (this.histE.length > 240) { this.histE.shift(); this.histC.shift(); }
+    }
+    if (this.frame % 6 === 0) {
+      $('#rTime').textContent = md.time.toFixed(0) + ' τ';
+      $('#rSteps').textContent = md.steps.toLocaleString('en-GB');
+      $('#rCont').textContent = c;
+    }
+    this.drawPlot('#plotE', this.histE, '#5CC8D6', 'E', v => v.toFixed(1).replace('-', '−'));
+    this.drawPlot('#plotC', this.histC, '#F5B041', 'C', v => String(Math.round(v)));
+  },
+  drawPlot(sel, data, col, key, fmt) {
+    const { ctx, w, h } = fitCanvas($(sel)); ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = '#0B2233'; roundRect(ctx, 0, 0, w, h, 10); ctx.fill();
+    const nowEl = key === 'E' ? $('#eNow') : $('#cNow');
+    if (data.length < 2) { nowEl.textContent = ''; return; }
+    let lo = Math.min(...data), hi = Math.max(...data); if (key === 'C') { lo = 0; hi = Math.max(hi, 3); }
+    if (hi - lo < 1e-6) { hi += 1; lo -= 1; } const pad = (hi - lo) * 0.12; lo -= key === 'C' ? 0 : pad; hi += pad;
+    const X = i => 8 + (w - 16) * i / 239, Y = v => h - 8 - (h - 16) * (v - lo) / (hi - lo);
+    ctx.strokeStyle = 'rgba(168,197,204,0.12)'; ctx.lineWidth = 1;
+    for (let k = 1; k < 3; k++) { const y = 8 + (h - 16) * k / 3; ctx.beginPath(); ctx.moveTo(8, y); ctx.lineTo(w - 8, y); ctx.stroke(); }
+    ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.beginPath();
+    data.forEach((v, i) => { i ? ctx.lineTo(X(i), Y(v)) : ctx.moveTo(X(i), Y(v)); }); ctx.stroke();
+    const last = data.length - 1; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(X(last), Y(data[last]), 4, 0, TAU); ctx.fill();
+    let shown = data[last];
+    const hv = this.hover[key];
+    if (hv != null) {
+      const i = clamp(Math.round((hv * w - 8) / (w - 16) * 239), 0, last); shown = data[i];
+      ctx.strokeStyle = 'rgba(234,246,244,0.5)'; ctx.beginPath(); ctx.moveTo(X(i), 4); ctx.lineTo(X(i), h - 4); ctx.stroke();
+      ctx.fillStyle = '#EAF6F4'; ctx.beginPath(); ctx.arc(X(i), Y(data[i]), 4, 0, TAU); ctx.fill();
+    }
+    nowEl.textContent = (hv != null ? 'then ' : 'now ') + fmt(shown);
+  }
+};
+enterHooks.lab = () => { Lab.syncOutputs(); };
+
+/* =====================================================================
+   Lab tabs: protein folding / antibiotic design
+   ===================================================================== */
+const LabTabs = {
+  mode: 'fold',
+  set(m) {
+    this.mode = m;
+    $$('#labTabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === m)));
+    $('#foldPane').hidden = m !== 'fold'; $('#drugPane').hidden = m !== 'drug';
+    $('.lab-stage').classList.toggle('drug', m === 'drug');
+    $('#labCanvas').setAttribute('aria-label', m === 'drug'
+      ? 'Two enzymes side by side, the bacterial one and the human one, each with the test molecule in its pocket.'
+      : 'Live molecular dynamics simulation of a protein chain. Drag beads to pull them.');
+    if (Lab.md) Lab.md.grab = null; DrugLab.onUp();
+  }
+};
+$$('#labTabs button').forEach(b => b.addEventListener('click', () => { LabTabs.set(b.dataset.tab); history.replaceState(null, '', '#' + (b.dataset.tab === 'drug' ? 'drug' : 'lab')); }));
+
+/* =====================================================================
+   Antibiotic lab: a small molecule in an enzyme pocket (2D Langevin MD)
+   ===================================================================== */
+// interaction strength between a molecule part and a pocket amino acid (in units of ε; negative = repel)
+function pairEps(a, b) {
+  if (a === 'N' || b === 'N') return 0;
+  if (a === 'O' && b === 'O') return 1.1;
+  if ((a === '+' && b === '-') || (a === '-' && b === '+')) return 1.54;
+  if ((a === '+' && b === '+') || (a === '-' && b === '-')) return -0.88;
+  if (a === 'P' && b === 'P') return 0.5;
+  if ((a === 'P' && (b === '+' || b === '-')) || (b === 'P' && (a === '+' || a === '-'))) return 0.5;
+  return 0;
+}
+const POCKET_IDX = { L: 22, F: 19, R: 16 };   // left wall, floor, right wall of the pocket
+const POCKETS = {
+  bact: { L: '-', F: 'O', R: 'O' },
+  human: { L: '-', F: 'P', R: 'P' },
+  resist: { L: '+', F: 'O', R: 'O' }
+};
+const LIBRARY = [
+  { name: 'Candidate A', d: ['P', 'P', 'P'], note: 'water-loving all over' },
+  { name: 'Candidate B', d: ['+', 'P', 'P'], note: 'a positive end and a water-loving tail' },
+  { name: 'Candidate C', d: ['O', 'O', 'O'], note: 'oily all over' },
+  { name: 'Candidate D', d: ['+', 'O', 'O'], note: 'a positive end and an oily tail' }
+];
+const DOCK = [[-0.935, -0.54], [0, -1.08], [0.935, -0.54]], DOCK_COM = [0, -0.72];
+const PASS_BACT = 85, PASS_HUMAN = 50, REPLICAS = 8;
+
+class PocketSim {
+  constructor() {
+    const P = [], T = [];
+    for (let k = 0; k < 13; k++) { const a = (150 + 20 * k) * Math.PI / 180; P.push([3.2 * Math.cos(a), 3.2 * Math.sin(a)]); T.push(k % 2 ? 'P' : 'N'); }
+    for (let k = 0; k < 13; k++) { const a = (390 - 20 * k) * Math.PI / 180; P.push([2.2 * Math.cos(a), 2.2 * Math.sin(a)]); T.push('N'); }
+    this.np = 26; this.n = 29; this.native = P.concat(DOCK); this.type = T.concat(['P', 'P', 'P']);
+    ['x', 'y', 'vx', 'vy', 'fx', 'fy'].forEach(k => this[k] = new Float64Array(this.n));
+    const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+    this.bonds = [];
+    for (let i = 0; i < 25; i++) this.bonds.push([i, i + 1, dist(P[i], P[i + 1]), 150]);
+    for (let i = 0; i < 26; i++) for (let j = i + 2; j < 26; j++) { const d = dist(P[i], P[j]); if (d < 2.3) this.bonds.push([i, j, d, 12]); }  // elastic network keeps the fold
+    this.bonds.push([26, 27, 1.08, 150], [27, 28, 1.08, 150]);
+    this.nb = this.bonds.length; this.bI = Int32Array.from(this.bonds, b => b[0]); this.bJ = Int32Array.from(this.bonds, b => b[1]);
+    this.bR = Float64Array.from(this.bonds, b => b[2]); this.bK = Float64Array.from(this.bonds, b => b[3]); this.eps = new Float64Array(78);
+    this.p = { kT: 0.3, dt: 0.008, gamma: 1, kr: 1.5, ka: 12, wallR: 3.4, wallY: 1.0 };
+    this.grab = null; this.reset();
+  }
+  setPocket(pk) { this.type[POCKET_IDX.L] = pk.L; this.type[POCKET_IDX.F] = pk.F; this.type[POCKET_IDX.R] = pk.R; this.tab(); }
+  setDrug(d) { for (let k = 0; k < 3; k++) this.type[26 + k] = d[k]; this.tab(); }
+  tab() { if (!this.eps) return; for (let a = 0; a < 3; a++) for (let b = 0; b < 26; b++) this.eps[a * 26 + b] = pairEps(this.type[26 + a], this.type[b]); }
+  thermalise() { const s = Math.sqrt(this.p.kT); for (let i = 0; i < this.n; i++) { this.vx[i] = gauss() * s; this.vy[i] = gauss() * s; } }
+  reset() { for (let i = 0; i < this.n; i++) { this.x[i] = this.native[i][0]; this.y[i] = this.native[i][1]; } this.thermalise(); this.forces(); }
+  dock() { for (let k = 0; k < 3; k++) { this.x[26 + k] = DOCK[k][0]; this.y[26 + k] = DOCK[k][1]; this.vx[26 + k] = this.vy[26 + k] = 0; } this.forces(); }
+  forces() {
+    const { x, y, fx, fy, p, type } = this; fx.fill(0); fy.fill(0);
+    const bI = this.bI, bJ = this.bJ, bR = this.bR, bK = this.bK, E = this.eps;
+    for (let q = 0; q < this.nb; q++) {
+      const i = bI[q], j = bJ[q], dx = x[j] - x[i], dy = y[j] - y[i], r = Math.sqrt(dx * dx + dy * dy) || 1e-9, f = -bK[q] * (r - bR[q]) / r;
+      fx[j] += f * dx; fy[j] += f * dy; fx[i] -= f * dx; fy[i] -= f * dy;
+    }
+    for (let i = 0; i < 26; i++) { fx[i] -= p.kr * (x[i] - this.native[i][0]); fy[i] -= p.kr * (y[i] - this.native[i][1]); }
+    { // keep the molecule bent at about 120 degrees: U = ka (cos θ − cos θ0)²
+      const ax = x[26] - x[27], ay = y[26] - y[27], bx = x[28] - x[27], by = y[28] - y[27];
+      const la = Math.hypot(ax, ay) || 1e-9, lb = Math.hypot(bx, by) || 1e-9, c = (ax * bx + ay * by) / (la * lb), g = 2 * p.ka * (c + 0.5), iab = 1 / (la * lb);
+      const fax = -g * (bx * iab - c * ax / (la * la)), fay = -g * (by * iab - c * ay / (la * la));
+      const fbx = -g * (ax * iab - c * bx / (lb * lb)), fby = -g * (ay * iab - c * by / (lb * lb));
+      fx[26] += fax; fy[26] += fay; fx[28] += fbx; fy[28] += fby; fx[27] -= fax + fbx; fy[27] -= fay + fby;
+    }
+    const rc2 = 6.25, rmin2 = 1.2599210498948732, ic6 = 1 / (rc2 * rc2 * rc2), Ushift = 4 * (ic6 * ic6 - ic6);
+    for (let a = 26; a < 29; a++) for (let b = 0; b < 26; b++) {
+      const dx = x[b] - x[a], dy = y[b] - y[a], r2 = dx * dx + dy * dy; if (r2 > rc2) continue;
+      const eps = E[(a - 26) * 26 + b]; if (!eps && r2 > rmin2) continue;
+      const inv2 = 1 / Math.max(r2, 0.36), s6 = inv2 * inv2 * inv2;
+      const f = (r2 < rmin2 ? 24 : eps * 24) * (2 * s6 * s6 - s6) * inv2;
+      fx[b] += f * dx; fy[b] += f * dy; fx[a] -= f * dx; fy[a] -= f * dy;
+    }
+    for (let a = 26; a < 29; a++) {
+      const dx = x[a], dy = y[a] - p.wallY, r = Math.hypot(dx, dy);
+      if (r > p.wallR) { const f = -4 * (r - p.wallR) / r; fx[a] += f * dx; fy[a] += f * dy; }
+    }
+    if (this.grab) {
+      const g = this.grab; let gx = 20 * (g.x - x[g.i]), gy = 20 * (g.y - y[g.i]); const m = Math.hypot(gx, gy);
+      if (m > 50) { gx *= 50 / m; gy *= 50 / m; } fx[g.i] += gx; fy[g.i] += gy;
+    }
+  }
+  step(ns) {
+    const { x, y, vx, vy, fx, fy, n, p } = this, dt = p.dt, h = 0.5 * dt, c1 = Math.exp(-p.gamma * dt), c2 = Math.sqrt((1 - c1 * c1) * p.kT);
+    for (let s = 0; s < ns; s++) {
+      for (let i = 0; i < n; i++) { vx[i] += h * fx[i]; vy[i] += h * fy[i]; x[i] += h * vx[i]; y[i] += h * vy[i]; }
+      for (let i = 0; i < n; i++) { vx[i] = c1 * vx[i] + c2 * gauss(); vy[i] = c1 * vy[i] + c2 * gauss(); x[i] += h * vx[i]; y[i] += h * vy[i]; }
+      this.forces();
+      for (let i = 0; i < n; i++) {
+        vx[i] += h * fx[i]; vy[i] += h * fy[i];
+        const v2 = vx[i] * vx[i] + vy[i] * vy[i]; if (v2 > 400) { const k = 20 / Math.sqrt(v2); vx[i] *= k; vy[i] *= k; }
+      }
+    }
+    if (!Number.isFinite(x[27])) this.reset();
+  }
+  bound() {
+    const cx = (this.x[26] + this.x[27] + this.x[28]) / 3, cy = (this.y[26] + this.y[27] + this.y[28]) / 3;
+    return Math.hypot(cx - DOCK_COM[0], cy - DOCK_COM[1]) < 0.8;
+  }
+}
+function drawTyped(ctx, x, y, r, t, opt = {}) {
+  if (t === 'O') { drawBead(ctx, x, y, r, true, { mood: opt.mood == null ? -1 : opt.mood }); return; }
+  if (t === 'P') { drawBead(ctx, x, y, r, false, {}); return; }
+  const T = AA[t];
+  ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fillStyle = T.dark; ctx.fill();
+  const lw = Math.max(1.5, r * 0.22); ctx.lineWidth = lw; ctx.strokeStyle = T.col; ctx.beginPath(); ctx.arc(x, y, r - lw / 2, 0, TAU); ctx.stroke();
+  if (t === '+' || t === '-') { ctx.fillStyle = T.col; ctx.font = `800 ${Math.round(r * 1.35)}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(t === '+' ? '+' : '−', x, y + r * 0.07); }
+}
+const partCls = t => ({ O: 'O', P: 'P', '+': 'pos', '-': 'neg' }[t]);
+const partSym = t => ({ O: '', P: '', '+': '+', '-': '−' }[t]);
+
+const DrugLab = {
+  sims: [], reps: [], drug: null, stage: 0, mutated: false, assay: null, last: null, grab: null, panels: [], frame: 0, mutAt: 0,
+  init() {
+    this.reps = [0, 1].map(() => Array.from({ length: REPLICAS }, () => new PocketSim()));
+    this.sims = this.reps.map(r => r[0]);
+    $('#assayBtn').addEventListener('click', () => this.startAssay());
+    $('#evolveBtn').addEventListener('click', () => this.evolve());
+    $('#drugResetBtn').addEventListener('click', () => this.reset());
+    this.reset();
+  },
+  reset() {
+    this.stage = 0; this.mutated = false; this.assay = null; this.last = null; this.drug = LIBRARY[0].d.slice();
+    this.sims.forEach(s => s.reset()); this.apply(); $('#assayOut').innerHTML = ''; this.setBusy(false); this.renderMission();
+  },
+  apply() {
+    const pk = [this.mutated ? POCKETS.resist : POCKETS.bact, POCKETS.human];
+    this.reps.forEach((g, k) => g.forEach(s => { s.setPocket(pk[k]); s.setDrug(this.drug); }));
+    this.renderDesigner(); this.renderLibrary();
+  },
+  redock() { this.sims.forEach(s => s.dock()); },
+  renderDesigner() {
+    const box = $('#designer'); box.innerHTML = '';
+    this.drug.forEach((t, k) => {
+      if (k) { const b = document.createElement('span'); b.className = 'bondline'; box.appendChild(b); }
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'part t-' + partCls(t); b.textContent = partSym(t);
+      b.setAttribute('aria-label', `Part ${k + 1}: ${AA[t].name.toLowerCase()}. Tap to change it.`);
+      b.disabled = !!this.assay; b.addEventListener('click', () => this.cycle(k)); box.appendChild(b);
+    });
+    const lib = LIBRARY.find(L => L.d.join('') === this.drug.join(''));
+    $('#drugName').textContent = lib ? `${lib.name}: ${lib.note}.` : 'Your own design.';
+  },
+  cycle(k) {
+    if (this.assay) return; const order = ['O', '+', '-', 'P'];
+    this.drug[k] = order[(order.indexOf(this.drug[k]) + 1) % 4]; this.apply(); this.redock(); Sound.tick();
+  },
+  renderLibrary() {
+    const cur = this.drug.join('');
+    $('#library').innerHTML = LIBRARY.map((L, i) => `<button type="button" class="libbtn" data-lib="${i}" ${this.assay ? 'disabled' : ''} aria-pressed="${L.d.join('') === cur}" aria-label="${esc(L.name)}: ${esc(L.note)}"><span class="dots" aria-hidden="true">${L.d.map(t => `<i class="d t-${partCls(t)}">${partSym(t)}</i>`).join('')}</span>${esc(L.name.replace('Candidate ', ''))}</button>`).join('');
+    $$('#library button').forEach(b => b.addEventListener('click', () => { if (this.assay) return; this.drug = LIBRARY[+b.dataset.lib].d.slice(); this.apply(); this.redock(); Sound.tick(); }));
+  },
+  setBusy(b) {
+    $('#assayBtn').disabled = b; $('#assayBtn').textContent = b ? 'Testing…' : 'Test this molecule';
+    $$('#designer button, #library button').forEach(x => x.disabled = b); $('#evolveBtn').disabled = b; $('#drugResetBtn').disabled = b;
+  },
+  startAssay() {
+    if (this.assay) return;
+    this.onUp(); this.reps.forEach(g => g.forEach(s => { s.reset(); s.dock(); }));
+    this.assay = { t: 0, T: 500, inside: [0, 0], n: 0 }; this.setBusy(true); this.renderAssay(false);
+  },
+  renderAssay(final) {
+    const a = this.assay || this.last; if (!a) return;
+    const pc = k => Math.round(100 * a.inside[k] / Math.max(1, a.n)), b = pc(0), h = pc(1);
+    const row = (label, v, ok, okTxt, badTxt) => `<div class="res"><div class="res-h"><span>${label}</span><b>${v}%</b></div><div class="bar"><i style="width:${v}%"></i></div>` +
+      (final ? `<p class="verdict ${ok ? 'ok' : 'bad'}">${ok ? '✔ ' + okTxt : '✘ ' + badTxt}</p>` : '') + '</div>';
+    $('#assayOut').innerHTML = `<p class="small" style="margin:0">${final ? 'Result: share of the time the molecule stayed in each pocket' : 'Testing: share of the time in each pocket so far…'}</p>` +
+      row(this.mutated ? 'Bacterial enzyme (resistant)' : 'Bacterial enzyme', b, b >= PASS_BACT, 'Blocks the bacterial enzyme', b >= 40 ? 'Falls out too often' : 'Falls straight out') +
+      row('Human enzyme', h, h <= PASS_HUMAN, 'Leaves the human enzyme alone', 'Sticks to the human enzyme: side effects');
+  },
+  finishAssay() {
+    const a = this.assay; this.last = a; this.assay = null; this.setBusy(false); this.renderAssay(true);
+    const b = 100 * a.inside[0] / a.n, h = 100 * a.inside[1] / a.n, win = b >= PASS_BACT && h <= PASS_HUMAN;
+    if (win) { Sound.win(); if (this.stage === 0) this.stage = 1; else if (this.stage === 2) this.stage = 3; } else Sound.lose();
+    this.renderMission();
+  },
+  evolve() {
+    if (this.assay || this.stage !== 1) return;
+    this.mutated = true; this.stage = 2; this.mutAt = performance.now(); this.apply(); this.renderMission(); Sound.bonk(); this.startAssay();
+  },
+  renderMission() {
+    const m = $('#mission'), ev = $('#evolveBtn');
+    const goals = `<ul><li>Stays in the bacterial pocket at least ${PASS_BACT}% of the time</li><li>Stays in the human pocket ${PASS_HUMAN}% of the time or less</li></ul>`;
+    m.innerHTML = [
+      `<p class="m-step">Mission 1 of 2</p><p><strong>Find a molecule that blocks the bacterial enzyme but leaves the human one alone.</strong> Test the four candidates from the library, or tap the parts of the molecule to design your own.</p>${goals}`,
+      `<p class="m-step">Mission 1 complete</p><p><strong>That's a promising antibiotic!</strong> But bacteria multiply fast, and every so often a mutation changes one of their amino acids. What happens if one changes inside the pocket?</p>`,
+      `<p class="m-step">Mission 2 of 2</p><p><strong>The bacteria have evolved resistance.</strong> A mutation swapped the negative amino acid at the edge of their pocket (aspartate) for a positive one (lysine). Redesign your molecule so it blocks the resistant enzyme and still leaves the human one alone.</p>${goals}`,
+      `<p class="m-step">Both missions complete</p><p><strong>You beat resistance!</strong> Real medicines go through this cycle of designing, testing and redesigning for years, and computer simulations help speed it up. Keep experimenting, or start again for the next visitor.</p>`
+    ][this.stage];
+    ev.hidden = this.stage !== 1; ev.classList.toggle('primary', this.stage === 1);
+  },
+  onDown(e) {
+    if (this.assay) return;
+    const r = $('#labCanvas').getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+    this.panels.forEach((P, k) => {
+      if (mx < P.px0 || mx > P.px0 + P.pw || my < P.py0 || my > P.py0 + P.ph) return;
+      const wx = (mx - P.X0) / P.s, wy = -(my - P.Y0) / P.s, sim = this.sims[k]; let bi = -1, bd = 0.8 * 0.8;
+      for (let i = 26; i < 29; i++) { const d = (sim.x[i] - wx) ** 2 + (sim.y[i] - wy) ** 2; if (d < bd) { bd = d; bi = i; } }
+      if (bi >= 0) { sim.grab = { i: bi, x: wx, y: wy }; this.grab = { k }; $('#labCanvas').setPointerCapture(e.pointerId); e.preventDefault(); }
+    });
+  },
+  onMove(e) {
+    if (!this.grab) return; const P = this.panels[this.grab.k], r = $('#labCanvas').getBoundingClientRect(), sim = this.sims[this.grab.k];
+    sim.grab.x = (e.clientX - r.left - P.X0) / P.s; sim.grab.y = -(e.clientY - r.top - P.Y0) / P.s;
+  },
+  onUp() { if (!this.grab) return; this.sims[this.grab.k].grab = null; this.grab = null; },
+  tick() {
+    const ns = this.assay ? 160 : 40;
+    if (this.assay) this.reps.forEach(g => g.forEach(s => s.step(ns))); else this.sims.forEach(s => s.step(ns));
+    if (this.assay) {
+      const a = this.assay; a.t += ns * this.sims[0].p.dt; a.n += REPLICAS;
+      this.reps.forEach((g, k) => g.forEach(s => { if (s.bound()) a.inside[k]++; }));
+      if (this.frame % 8 === 0) this.renderAssay(false);
+      if (a.t >= a.T) this.finishAssay();
+    }
+    this.frame++; this.draw();
+  },
+  draw() {
+    const cv = $('#labCanvas'), { ctx, w, h } = fitCanvas(cv); ctx.clearRect(0, 0, w, h);
+    const side = w >= 640 && w / h > 1.05; this.panels = [];
+    for (let k = 0; k < 2; k++) {
+      const pw = side ? w / 2 : w, ph = side ? h : h / 2, px0 = side ? k * pw : 0, py0 = side ? 0 : k * ph;
+      const s = Math.min((pw - 24) / 10.2, (ph - 70) / 10.3), X0 = px0 + pw / 2, Y0 = py0 + 44 + 6.0 * s;
+      const P = { px0, py0, pw, ph, s, X0, Y0 }; this.panels.push(P); this.drawPanel(ctx, k, P);
+    }
+    ctx.strokeStyle = 'rgba(234,246,244,0.1)'; ctx.lineWidth = 1; ctx.beginPath();
+    if (side) { ctx.moveTo(w / 2, 16); ctx.lineTo(w / 2, h - 16); } else { ctx.moveTo(16, h / 2); ctx.lineTo(w - 16, h / 2); } ctx.stroke();
+  },
+  drawPanel(ctx, k, P) {
+    const sim = this.sims[k], s = P.s, SX = i => P.X0 + sim.x[i] * s, SY = i => P.Y0 - sim.y[i] * s, now = performance.now();
+    ctx.fillStyle = '#EAF6F4'; ctx.font = `700 ${Math.round(clamp(s * 0.4, 14, 18))}px ${FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText(k === 0 ? (this.mutated ? 'Bacterial enzyme (resistant)' : 'Bacterial enzyme') : 'Human enzyme', P.px0 + 16, P.py0 + 14);
+    // the pocket
+    ctx.save(); ctx.setLineDash([4, 5]); ctx.strokeStyle = 'rgba(168,197,204,0.35)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(P.X0 + DOCK_COM[0] * s, P.Y0 - DOCK_COM[1] * s, 0.8 * s, 0, TAU); ctx.stroke(); ctx.restore();
+    // protein
+    ctx.save(); ctx.lineCap = ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(234,246,244,0.35)'; ctx.lineWidth = Math.max(2, s * 0.16);
+    ctx.beginPath(); for (let i = 0; i < 26; i++) { if (i) ctx.lineTo(SX(i), SY(i)); else ctx.moveTo(SX(i), SY(i)); } ctx.stroke(); ctx.restore();
+    const keys = [POCKET_IDX.L, POCKET_IDX.F, POCKET_IDX.R];
+    for (let i = 0; i < 26; i++) drawTyped(ctx, SX(i), SY(i), s * 0.43, sim.type[i], { mood: keys.includes(i) ? 1 : -1 });
+    if (k === 0 && this.mutated) {
+      const a = Math.min(1, (now - this.mutAt) / 3000), i = POCKET_IDX.L;
+      ctx.save(); ctx.strokeStyle = '#FF7A6B'; ctx.lineWidth = 3; ctx.globalAlpha = 1 - 0.6 * a;
+      ctx.beginPath(); ctx.arc(SX(i), SY(i), s * (0.62 + 0.25 * Math.abs(Math.sin(now / 300)) * (1 - a)), 0, TAU); ctx.stroke(); ctx.restore();
+    }
+    if (s >= 24) {
+      ctx.font = `700 ${Math.round(clamp(s * 0.3, 11, 14))}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      keys.forEach(i => {
+        const t = sim.type[i], nx = sim.native[i][0], ny = sim.native[i][1], m = Math.hypot(nx, ny);
+        const mut = k === 0 && this.mutated && i === POCKET_IDX.L, f0 = (m + 0.5) / m, f1 = 3.55 / m, f2 = 3.95 / m;
+        ctx.save(); ctx.strokeStyle = 'rgba(168,197,204,0.35)'; ctx.lineWidth = 1; ctx.setLineDash([2, 3]);
+        ctx.beginPath(); ctx.moveTo(P.X0 + nx * f0 * s, P.Y0 - ny * f0 * s); ctx.lineTo(P.X0 + nx * f1 * s, P.Y0 - ny * f1 * s); ctx.stroke(); ctx.restore();
+        ctx.fillStyle = mut ? '#FF9A8F' : '#A8C5CC';
+        ctx.fillText(AA[t].short, P.X0 + nx * f2 * s, P.Y0 - ny * f2 * s);
+      });
+    }
+    // the drug molecule (white outline marks it as the medicine)
+    ctx.save(); ctx.strokeStyle = '#EAF6F4'; ctx.lineWidth = Math.max(3, s * 0.16); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(SX(26), SY(26)); ctx.lineTo(SX(27), SY(27)); ctx.lineTo(SX(28), SY(28)); ctx.stroke(); ctx.restore();
+    for (let i = 26; i < 29; i++) {
+      drawTyped(ctx, SX(i), SY(i), s * 0.4, sim.type[i], { mood: sim.bound() ? 2 : 0 });
+      ctx.strokeStyle = '#EAF6F4'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(SX(i), SY(i), s * 0.4 + 2.5, 0, TAU); ctx.stroke();
+    }
+    if (sim.grab) {
+      const g = sim.grab, bx = SX(g.i), by = SY(g.i), qx = P.X0 + g.x * s, qy = P.Y0 - g.y * s;
+      ctx.save(); ctx.strokeStyle = 'rgba(234,246,244,0.8)'; ctx.lineWidth = 2; ctx.setLineDash([6, 5]);
+      ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(qx, qy); ctx.stroke(); ctx.restore();
+    }
+    const inside = sim.bound();
+    ctx.fillStyle = inside ? '#9BE7B0' : '#A8C5CC'; ctx.font = `600 ${Math.round(clamp(s * 0.33, 12, 15))}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(inside ? 'Molecule is in the pocket' : 'Molecule has left the pocket', P.X0, P.py0 + P.ph - 14);
+  }
+};
+
+/* =====================================================================
+   Science page widgets
+   ===================================================================== */
+function updateLevinthal() {
+  const n = +$('#levSl').value; $('#levOut').textContent = n + ' amino acids';
+  const lg = n * Math.log10(3);
+  const e = Math.floor(lg), m = Math.pow(10, lg - e);
+  $('#levShapes').innerHTML = lg < 6 ? Math.round(Math.pow(3, n)).toLocaleString('en-GB') : supPow(m.toFixed(1), e);
+  const ts = lg - 13; // log10 seconds at 10^13 tries per second
+  const universe = Math.log10(13.8e9 * 3.156e7);
+  let txt;
+  const sec = Math.pow(10, ts);
+  if (ts < -6) txt = 'less than a microsecond';
+  else if (ts < -3) txt = `about ${Math.round(sec * 1e6)} microseconds`;
+  else if (ts < 0) txt = `about ${Math.round(sec * 1e3)} milliseconds`;
+  else if (ts < 2) txt = `about ${Math.round(sec)} seconds`;
+  else if (ts < 5) txt = `about ${Math.round(sec / 3600 * 10) / 10} hours`;
+  else if (ts < 7.5) txt = `about ${Math.round(sec / 86400)} days`;
+  else if (ts < universe) txt = `about ${bigWords(sec / 3.156e7)} years`;
+  else {
+    const r = ts - universe, te = Math.floor(ts), re = Math.floor(r);
+    const ratio = r < 3 ? Math.round(Math.pow(10, r)).toLocaleString('en-GB') : supPow(Math.pow(10, r - re).toFixed(1), re);
+    txt = `${supPow(Math.pow(10, ts - te).toFixed(1), te)} seconds. That's about ${ratio} times the age of the universe`;
+  }
+  $('#levTime').innerHTML = `Trying ten trillion shapes every second, checking them all would take ${txt}.`;
+}
+function updateMdCalc(t) {
+  const fs = t * 1e15, steps = fs / CONFIG.timestepFs;
+  $('#mdSteps').innerHTML = bigWords(steps) + ' steps';
+  const days = (t * 1e9) / CONFIG.gpuNsPerDay;
+  let dur;
+  if (days < 1 / 24) dur = `about ${Math.max(1, Math.round(days * 1440))} minutes`;
+  else if (days < 2) dur = `about ${Math.round(days * 24)} hours`;
+  else if (days < 365) dur = `about ${Math.round(days)} days`;
+  else dur = `about ${bigWords(days / 365.25)} years`;
+  $('#mdCost').textContent = `With ${CONFIG.timestepFs}-femtosecond steps. For a small protein in water, one modern graphics card (GPU) might simulate roughly ${CONFIG.gpuNsPerDay} nanoseconds per day, so this would take ${dur}.`;
+}
+const Funnel = {
+  x: 0.97, t: 0, state: 'search', foldedAt: null, escapes: 0, T: 0.08, trail: [],
+  E(x) { const a = Math.abs(x); return 1.35 * Math.pow(a, 1.2) + 0.16 * Math.cos(9.5 * Math.PI * x) * (0.35 + 0.65 * a) - 0.75 * Math.exp(-(x * x) / (2 * 0.045 * 0.045)); },
+  dE(x) { const h = 1e-4; return (this.E(x + h) - this.E(x - h)) / (2 * h); },
+  drop() { this.x = Math.random() < 0.5 ? -0.97 : 0.97; this.t = 0; this.state = 'search'; this.foldedAt = null; this.escapes = 0; this.trail = []; },
+  tick(dt) {
+    const cv = $('#funnelCanvas'); if (!cv.getBoundingClientRect().height) return;
+    const T = this.T, sub = 30, h = 0.0006;
+    for (let s = 0; s < sub; s++) {
+      this.x += -this.dE(this.x) * h + Math.sqrt(2 * T * h) * gauss();
+      if (this.x > 1) this.x = 2 - this.x; if (this.x < -1) this.x = -2 - this.x;
+    }
+    this.t += dt;
+    const inNative = Math.abs(this.x) < 0.07;
+    if (this.state === 'search' && inNative) { this.state = 'folded'; this.foldedAt = this.t; }
+    else if (this.state === 'folded' && Math.abs(this.x) > 0.2) { this.state = 'search'; this.escapes++; }
+    let msg;
+    if (this.state === 'folded') msg = `Folded! It found the bottom after ${this.foldedAt.toFixed(1)} seconds.`;
+    else if (this.escapes) msg = `It shook itself out of the folded state${this.escapes > 1 ? ' ' + this.escapes + ' times' : ''}. Too hot to stay folded.`;
+    else if (this.t > 5 && T < 0.035) msg = 'Stuck in a trap. It\'s too cold to jiggle out of the bump.';
+    else msg = `Searching… ${this.t.toFixed(1)} seconds`;
+    $('#funStatus').textContent = msg;
+    const { ctx, w, h: H } = fitCanvas(cv); ctx.clearRect(0, 0, w, H);
+    const pad = 22, X = x => pad + (x + 1) / 2 * (w - 2 * pad);
+    let lo = 1e9, hi = -1e9; for (let i = 0; i <= 200; i++) { const v = this.E(-1 + i / 100); lo = Math.min(lo, v); hi = Math.max(hi, v); }
+    const Y = v => 46 + (H - 76) * (hi - v) / (hi - lo);
+    ctx.beginPath(); ctx.moveTo(X(-1), H);
+    for (let i = 0; i <= 400; i++) { const x = -1 + i / 200; ctx.lineTo(X(x), Y(this.E(x))); }
+    ctx.lineTo(X(1), H); ctx.closePath(); ctx.fillStyle = '#143A55'; ctx.fill();
+    ctx.beginPath(); for (let i = 0; i <= 400; i++) { const x = -1 + i / 200; i ? ctx.lineTo(X(x), Y(this.E(x))) : ctx.moveTo(X(x), Y(this.E(x))); }
+    ctx.strokeStyle = '#5CC8D6'; ctx.lineWidth = 2.5; ctx.stroke();
+    ctx.fillStyle = '#A8C5CC'; ctx.font = '600 13px ' + getComputedStyle(document.body).fontFamily; ctx.textAlign = 'center';
+    ctx.fillText('Folded', X(0), H - 8); ctx.textAlign = 'left'; ctx.fillText('Unfolded', 8, 16); ctx.textAlign = 'right'; ctx.fillText('Unfolded', w - 8, 16);
+    const bx = X(this.x), by = Y(this.E(this.x)) - 11;
+    drawBead(ctx, bx, by, 11, true, { mood: this.state === 'folded' ? 2 : 0 });
+  }
+};
+function initLearn() {
+  $('#levSl').addEventListener('input', updateLevinthal); updateLevinthal();
+  $$('#mdTimeSeg button').forEach(b => b.addEventListener('click', () => {
+    $$('#mdTimeSeg button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); updateMdCalc(+b.dataset.t);
+  }));
+  updateMdCalc(1e-6);
+  const fs = $('#funSl'); const syncF = () => { Funnel.T = +fs.value; const T = Funnel.T; $('#funOut').textContent = T < 0.035 ? 'cold' : T < 0.13 ? 'just right' : 'hot'; };
+  fs.addEventListener('input', syncF); syncF();
+  $('#funDrop').addEventListener('click', () => Funnel.drop());
+  $('#aboutHead').textContent = 'Who made this';
+  $('#aboutBody').innerHTML = `<p><strong>${esc(CONFIG.groupName)}</strong>: ${esc(CONFIG.groupTagline)}</p>` + CONFIG.aboutParagraphs.map(p => `<p>${esc(p)}</p>`).join('') +
+    (CONFIG.groupWebsite ? `<p><a href="${esc(CONFIG.groupWebsite)}" target="_blank" rel="noopener">Visit our website</a></p>` : '');
+}
+enterHooks.learn = () => { if (Funnel.state === 'search' && Funnel.t === 0) Funnel.drop(); };
+
+/* =====================================================================
+   Hall of fame
+   ===================================================================== */
+const Fame = {
+  list: store.get('fame', []).map(e => typeof e.level === 'number' ? { ...e, level: 'g' + e.level } : e),
+  save() { store.set('fame', this.list); },
+  add(e) { this.list.push(e); this.save(); },
+  remove(idx) { this.list.splice(idx, 1); this.save(); },
+  render() {
+    const body = $('#fameBody');
+    if (!this.list.length) { body.innerHTML = `<div class="empty"><h3>No one's on the board yet</h3><p>Solve any puzzle with full stars to add your name.</p><button class="btn primary" data-go="levels">Go to the puzzles</button></div>`; return; }
+    const byLevel = {}; this.list.forEach(e => (byLevel[e.level] = byLevel[e.level] || []).push(e));
+    const order = [...SNAP_LEVELS, ...LEVELS].map(L => L.key);
+    body.innerHTML = Object.keys(byLevel).sort((a, b) => order.indexOf(a) - order.indexOf(b)).map(key => {
+      const L = findLevel(key); if (!L) return '';
+      const top = byLevel[key].sort((a, b) => a.time - b.time).slice(0, 5);
+      return `<section class="fame-level"><h3>${esc(L.name)} <small>${levelLabel(L)}</small></h3><ol class="fame-list">` +
+        top.map((e, k) => `<li><span class="rank">${k + 1}</span><span class="nm">${esc(e.name)}</span><span>${fmtTime(e.time)}</span><span class="mv">${e.moves} moves</span></li>`).join('') + '</ol></section>';
+    }).join('');
+  },
+  renderAdmin() {
+    const ul = $('#fameAdmin');
+    if (!this.list.length) { ul.innerHTML = '<li class="small">No entries yet.</li>'; return; }
+    ul.innerHTML = this.list.map((e, i) => `<li><span>${esc(e.name)}, ${esc((findLevel(e.level) || { name: e.level }).name)}, ${fmtTime(e.time)}</span><button class="btn sm quiet" data-rm="${i}">Remove</button></li>`).join('');
+  }
+};
+enterHooks.fame = () => Fame.render();
+
+/* =====================================================================
+   Settings, sound toggle, idle reset
+   ===================================================================== */
+function syncSoundBtn() {
+  const b = $('#soundBtn'); b.setAttribute('aria-pressed', String(Sound.on));
+  b.querySelector('.on').style.display = Sound.on ? '' : 'none'; b.querySelector('.off').style.display = Sound.on ? 'none' : '';
+  $('#soundLabel').textContent = Sound.on ? 'Sound on' : 'Sound off';
+}
+$('#soundBtn').addEventListener('click', () => { Sound.on = !Sound.on; store.set('sound', Sound.on); syncSoundBtn(); if (Sound.on) Sound.tick(); });
+$('#settingsBtn').addEventListener('click', () => {
+  $('#setSound').checked = Sound.on; $('#setFaces').checked = Settings.faces; $('#setIdle').value = String(Settings.idle);
+  Fame.renderAdmin(); $('#settingsDlg').showModal();
+});
+$('#closeSet').addEventListener('click', () => $('#settingsDlg').close());
+$('#setSound').addEventListener('change', e => { Sound.on = e.target.checked; store.set('sound', Sound.on); syncSoundBtn(); });
+$('#setFaces').addEventListener('change', e => { Settings.faces = e.target.checked; store.set('faces', Settings.faces); });
+$('#setIdle').addEventListener('change', e => { Settings.idle = +e.target.value; store.set('idle', Settings.idle); });
+$('#newPlayerBtn').addEventListener('click', () => { newPlayer(); $('#settingsDlg').close(); go('home'); });
+$('#fullBtn').addEventListener('click', () => { if (document.fullscreenElement) document.exitFullscreen(); else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {}); });
+$('#clearFameBtn').addEventListener('click', () => { if (confirm('Remove every name from the hall of fame?')) { Fame.list = []; Fame.save(); Fame.renderAdmin(); if (current === 'fame') Fame.render(); } });
+$('#fameAdmin').addEventListener('click', e => { const b = e.target.closest('[data-rm]'); if (!b) return; Fame.remove(+b.dataset.rm); Fame.renderAdmin(); if (current === 'fame') Fame.render(); });
+
+function newPlayer() {
+  progress.clear(); Snap.load(SNAP_LEVELS[0]); DrugLab.reset(); LabTabs.set('fold');
+  Lab.loadSequence(LEVELS[8].seq, {}); Lab.results = { slow: [], fast: [] }; $('#expResults').innerHTML = ''; Lab.setT(0.22);
+}
+const Idle = {
+  last: Date.now(), timer: null, left: 0,
+  poke() { this.last = Date.now(); if (this.timer) { clearInterval(this.timer); this.timer = null; $('#idleOverlay').hidden = true; } },
+  check() {
+    if (!Settings.idle || current === 'home' || this.timer) return;
+    if (Date.now() - this.last > Settings.idle * 60000) {
+      this.left = 15; $('#idleCount').textContent = this.left; $('#idleOverlay').hidden = false;
+      this.timer = setInterval(() => {
+        this.left--; $('#idleCount').textContent = this.left;
+        if (this.left <= 0) { clearInterval(this.timer); this.timer = null; $('#idleOverlay').hidden = true; if ($('#settingsDlg').open) $('#settingsDlg').close(); newPlayer(); go('home'); this.last = Date.now(); }
+      }, 1000);
+    }
+  }
+};
+['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(ev => window.addEventListener(ev, () => Idle.poke(), { passive: true, capture: true }));
+setInterval(() => Idle.check(), 1000);
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+$('#heroT1').textContent = CONFIG.titleLine1; $('#heroT2').textContent = CONFIG.titleLine2;
+$('#brandTitle').textContent = CONFIG.titleLine1 + ' ' + CONFIG.titleLine2;
+document.title = CONFIG.titleLine1 + ' ' + CONFIG.titleLine2;
+$('#heroGroup').innerHTML = `<strong>${esc(CONFIG.groupName)}</strong>. ${esc(CONFIG.groupTagline)}`;
+syncSoundBtn();
+FONT = getComputedStyle(document.body).fontFamily;
+Hero.init(); Lab.init(); DrugLab.init(); initLearn();
+Snap.load(SNAP_LEVELS[0]);
+go((location.hash || '#home').slice(1), false);
+
+let lastT = performance.now();
+function frame(t) {
+  const dt = Math.min(0.05, Math.max(0, (t - lastT) / 1000)); lastT = t;
+  try {
+    if (current === 'home') Hero.tick(dt);
+    else if (current === 'play') Play.active.tick(dt);
+    else if (current === 'lab') (LabTabs.mode === 'drug' ? DrugLab : Lab).tick(dt);
+    else if (current === 'learn') Funnel.tick(dt);
+  } catch (err) { console.error(err); }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
