@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" role="img" aria-labelledby="title description">
+  <title id="title">Antibiotic Architects</title>
+  <desc id="description">Molecule-building game illustration with coloured atoms and an enzyme pocket.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#163e5a"/>
+      <stop offset="1" stop-color="#091d2d"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#bg)"/>
+  <path d="M80 470C140 390 120 260 230 210C320 170 390 220 430 155C475 82 620 115 700 210C760 282 720 430 650 474Z" fill="#1d4b66" stroke="#5cc8d6" stroke-width="18"/>
+  <path d="M220 450C320 420 360 335 455 342C535 348 560 430 640 410" fill="none" stroke="#eaf6f4" stroke-width="28" stroke-linecap="round" opacity=".18"/>
+  <g stroke="#eaf6f4" stroke-width="16" stroke-linecap="round">
+    <path d="M285 300L365 235L450 290L530 220"/>
+    <path d="M365 235L390 155"/>
+  </g>
+  <g>
+    <circle cx="285" cy="300" r="42" fill="#7aa2ff"/>
+    <circle cx="365" cy="235" r="42" fill="#f5b041"/>
+    <circle cx="450" cy="290" r="42" fill="#ff7a6b"/>
+    <circle cx="530" cy="220" r="42" fill="#9be7b0"/>
+    <circle cx="390" cy="155" r="34" fill="#5cc8d6"/>
+  </g>
+  <text x="400" y="535" fill="#eaf6f4" font-family="Arial, sans-serif" font-size="54" font-weight="700" text-anchor="middle">Antibiotic Architects</text>
+</svg>
