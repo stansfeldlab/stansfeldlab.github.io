@@ -1,13 +1,13 @@
 {
   "release": "2026-11-16",
-  "updated": "2026-11-27",
-  "entries": 9519,
+  "updated": "2026-11-28",
+  "entries": 9527,
   "groups": {
     "mpm": 10,
     "TCDB": 2021,
     "mpstruc": 3167,
     "Pfam": 1102,
-    "UniProt": 2193,
+    "UniProt": 2195,
     "organism": 349,
     "topology": 53,
     "ligand": 424
