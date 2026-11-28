@@ -8,7 +8,7 @@ MemProtMD is a database of every membrane protein structure in the Protein Data 
 - **Citation:** Newport TD, Sansom MSP, Stansfeld PJ (2019). The MemProtMD database: a resource for membrane-embedded protein structures and their lipid interactions. *Nucleic Acids Research* 47(D1):D390–D397. [doi:10.1093/nar/gky1047](https://doi.org/10.1093/nar/gky1047)
 - **Updates:** new PDB membrane protein structures are simulated as they are released, typically weekly.
 
-> **Draft.** The bucket name and region below (`s3://memprotmd`, `us-west-2`) are placeholders until the bucket is created.
+> **Draft.** The bucket name and region below (`s3://memprotmd`, `eu-north-1`) are placeholders until the bucket is created.
 
 ## Accessing the data
 
@@ -20,7 +20,7 @@ aws s3 cp --no-sign-request s3://memprotmd/catalog/entries.tsv .
 aws s3 sync --no-sign-request s3://memprotmd/simulations/1a0s_default_dppc/ 1a0s/
 ```
 
-Every object can also be read over HTTPS, for example `https://memprotmd.s3.us-west-2.amazonaws.com/catalog/entries.tsv`.
+Every object can also be read over HTTPS, for example `https://memprotmd.s3.eu-north-1.amazonaws.com/catalog/entries.tsv`.
 
 ## Layout
 
